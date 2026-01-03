@@ -1,96 +1,140 @@
 # Webserv
 
-Scaffolded project structure and runtime workflow.
+Lightweight HTTP server project scaffold. This README documents the repository layout, runtime workflow, build/run instructions, and quick troubleshooting.
 
-Project layout
+## Project layout
 
+Top-level layout (key files):
+
+```
 Webserv/
 ├─ src/
-│   ├─ main.cpp                     # نقطة البداية: تنشئ Server أو MultiServer إذا تعدد البورت
+│   ├─ main.cpp
 │   ├─ server/
-│   │   ├─ Server.hpp                # إدارة sockets + bind + listen + poll + multi-port
-│   │   ├─ Server.cpp
-│   │   ├─ PollManager.hpp           # إدارة جميع fd + poll events + epoll-ready
-│   │   ├─ PollManager.cpp
-│   │   ├─ Client.hpp                # fd + buffer + state + keep-alive + request queue
-│   │   └─ Client.cpp
-│   ├─ http/
-│   │   ├─ HttpRequest.hpp           # parsing request, method, headers, body
-│   │   ├─ HttpRequest.cpp
-│   │   ├─ HttpResponse.hpp          # build response, headers, body, chunked
-│   │   ├─ HttpResponse.cpp
-│   │   ├─ Router.hpp                # route request → Controllers
-│   │   └─ Router.cpp
-│   ├─ controllers/
-│   │   ├─ BaseController.hpp        # interface: handleRequest(HttpRequest)
-│   │   ├─ BaseController.cpp
-│   │   ├─ StaticController.hpp      # serve static files
-│   │   ├─ StaticController.cpp
-│   │   ├─ ErrorController.hpp       # 404 / 500
-│   │   ├─ ErrorController.cpp
-│   │   ├─ ApiController.hpp         # dynamic JSON output
-│   │   ├─ ApiController.cpp
-│   │   └─ UploadController.hpp      # file uploads, multipart/form-data
-│   │       UploadController.cpp
-│   └─ utils/
-│       ├─ Logger.hpp                # log connections, errors, requests
-│       ├─ Logger.cpp
-│       ├─ FileManager.hpp           # read/write files safely
-│       └─ FileManager.cpp
-├─ include/                           # common headers
-├─ tests/                             # unit / integration tests
+│   │   ├─ Server.hpp
+  │   │   ├─ Server.cpp
+  │   │   ├─ PollManager.hpp
+  │   │   ├─ PollManager.cpp
+  │   │   ├─ Client.hpp
+  │   │   └─ Client.cpp
+  │   ├─ http/
+  │   │   ├─ HttpRequest.hpp
+  │   │   ├─ HttpRequest.cpp
+  │   │   ├─ HttpResponse.hpp
+  │   │   ├─ HttpResponse.cpp
+  │   │   ├─ Router.hpp
+  │   │   └─ Router.cpp
+  │   ├─ controllers/
+  │   │   ├─ BaseController.hpp
+  │   │   ├─ BaseController.cpp
+  │   │   ├─ StaticController.hpp
+  │   │   ├─ StaticController.cpp
+  │   │   ├─ ErrorController.hpp
+  │   │   ├─ ErrorController.cpp
+  │   │   ├─ ApiController.hpp
+  │   │   ├─ ApiController.cpp
+  │   │   └─ UploadController.hpp
+  │   │       UploadController.cpp
+  │   └─ utils/
+  │       ├─ Logger.hpp
+  │       ├─ Logger.cpp
+  │       ├─ FileManager.hpp
+  │       └─ FileManager.cpp
+├─ include/
+├─ tests/
 ├─ CMakeLists.txt
 └─ README.md
+```
 
-Runtime workflow
+## Runtime workflow
 
-1. Server Start
-	- socket() → create server_fd
-	- setsockopt(SO_REUSEADDR)
-	- bind()
-	- fcntl(O_NONBLOCK)
-	- listen()
+1. Server start
+   - `socket()` → create server socket
+   - set `SO_REUSEADDR` (and optionally `SO_REUSEPORT`)
+   - `bind()` to port(s)
+   - `fcntl()` → set non-blocking
+   - `listen()`
 
-2. Poll Loop (PollManager)
-	- poll() or epoll_wait()
-	- check all fd
+2. Poll loop (`PollManager`)
+   - `poll()` / `epoll_wait()` to monitor fds
 
-3. Accept New Clients
-	- if server_fd ready → accept()
-	- create Client object
-	- add to PollManager
-	- initialize buffers & state
-	- set fd non-blocking
+3. Accept new clients
+   - `accept()` incoming connections
+   - create `Client` object, set non-blocking, add to poll
 
-4. Read Requests
-	- poll detects client_fd ready for reading
-	- read into buffer
-	- if bytes_read == 0 → client disconnected → close & remove
-	- parse HttpRequest
-	- store in Client request queue (for keep-alive)
+4. Read requests
+   - read into client buffer
+   - parse `HttpRequest` and enqueue for processing
 
-5. Route Request
-	- Router chooses controller:
-		 - StaticController → files
-		 - ApiController → dynamic JSON
-		 - UploadController → handle multipart/form-data
-		 - ErrorController → 404 / 500
-	- Controller returns HttpResponse
+5. Route & handle
+   - `Router` dispatches to controllers (`StaticController`, `ApiController`, `UploadController`, `ErrorController`)
+   - controller builds `HttpResponse`
 
-6. Write Response
-	- put response in Client.outputBuffer
-	- poll monitors fd for write (POLLOUT)
-	- write() response fully
-	- if keep-alive → reset Client state → wait for next request
-	- if close → close fd & remove from PollManager
+6. Write responses
+   - write response to socket (handle partial writes)
+   - respect `Connection: keep-alive` or close
 
-7. Logging & Utilities
-	- Logger logs each request/response/error
-	- FileManager ensures safe file read/write
+7. Logging & utilities
+   - `Logger` for requests/errors
+   - `FileManager` for safe file I/O
 
-8. Repeat
-	- Poll loop continues indefinitely
-	- supports multiple ports if Server holds multiple server_fd
-	- supports hundreds of clients simultaneously
+## Build & run (quick)
+
+Manual single-file build (if your `main.cpp` is at project root):
+
+```bash
+g++ -std=c++98 main.cpp -o server
+./server
+```
+
+If using the scaffolded `src/` tree with CMake (recommended for multi-file builds):
+
+```bash
+mkdir -p build && cd build
+cmake ..
+make
+./webserv    # or the target name you set in CMakeLists
+```
+
+Note: ensure `src/CMakeLists.txt` exists and lists sources; the top-level `CMakeLists.txt` in this scaffold references `src/`.
+
+## Troubleshooting: port already in use
+
+If the server fails to `bind()` because the port is in use, either stop the other process or pick a different port.
+
+Find the process using a port (example for port 8080):
+
+```bash
+ss -ltnp | grep :8080
+sudo lsof -i :8080
+```
+
+Stop the process (use the PID from the commands above):
+
+```bash
+kill <PID>
+# or if necessary:
+sudo kill -9 <PID>
+```
+
+Or change the server listening port in configuration or source (`htons(...)`) and recompile.
+
+Note: `SO_REUSEADDR` allows reusing addresses in `TIME_WAIT`, but it does not allow two different processes to listen on the same TCP port.
+
+## Contributing
+
+- Follow the repository layout and add unit tests under `tests/`.
+- Open a PR with clear description and targeted changes.
+
+## License
+
+Add your preferred license file to the repo (e.g., `LICENSE`).
+
+---
+
+If you'd like, I can:
+- generate a `src/CMakeLists.txt` to build the scaffolded sources, or
+- make `main.cpp` accept a `--port` argument and env var for runtime configuration.
+Tell me which and I'll implement it.
 
 

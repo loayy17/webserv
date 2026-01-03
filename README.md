@@ -42,7 +42,6 @@ Webserv/
 │       └─ FileManager.cpp
 ├─ include/
 ├─ tests/
-├─ CMakeLists.txt
 └─ README.md
 ```
 

@@ -5,5 +5,5 @@ void Logger::info(const char* msg) {
     std::cout << "INFO: " << msg << std::endl;
 }
 void Logger::error(const char* msg) {
-    std::cerr << "ERROR: " << msg << std::endl;
+    std::cerr << "\033[31mERROR: " << msg << "\033[0m" << std::endl;
 }

@@ -49,7 +49,6 @@ bool Server::startListening() {
 }
 
 bool Server::init() {
-    if()
     if (!createSocket() || !configureSocket() || !bindSocket() || !startListening()) {
         if (server_fd != INVALID_FD) {
             close(server_fd);

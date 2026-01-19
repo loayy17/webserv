@@ -1,13 +1,15 @@
 #include "Server.hpp"
+#include <arpa/inet.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cstring>
 #include "../utils/Logger.hpp"
 
-Server::Server() : server_fd(INVALID_FD), port(8080), running(false) {}
+Server::Server(ServerConfig cfg) : server_fd(-1), running(false), config(cfg) {}
 
-Server::Server(uint16_t port) : server_fd(INVALID_FD), port(port), running(false) {}
+Server::Server() : server_fd(-1), running(false), config(ServerConfig()) {}
+
 Server::~Server() {
     stop();
 }
@@ -15,7 +17,7 @@ Server::~Server() {
 bool Server::createSocket() {
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
-        Logger::error("Failed to create socket");
+        std::cout << "[ERROR]: Failed to create socket" << std::endl;
         return false;
     }
     return true;
@@ -23,7 +25,7 @@ bool Server::createSocket() {
 bool Server::configureSocket() {
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        Logger::error("Failed to set SO_REUSEADDR");
+        std::cout << "[ERROR]: Failed to set SO_REUSEADDR" << std::endl;
         return false;
     }
     return true;
@@ -31,18 +33,19 @@ bool Server::configureSocket() {
 bool Server::bindSocket() {
     sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
-    addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port        = htons(port);
+    addr.sin_family       = AF_INET;
+    const char* interface = config.getInterface() == "localhost" ? "127.0.0.1" : config.getInterface().c_str();
+    inet_pton(AF_INET, interface, &addr.sin_addr);
+    addr.sin_port = htons(config.getPort());
     if (bind(server_fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        Logger::error("Failed to bind socket");
+        std::cout << "[ERROR]: Failed to bind socket" << std::endl;
         return false;
     }
     return true;
 }
 bool Server::startListening() {
     if (listen(server_fd, 10) < 0) {
-        Logger::error("Failed to listen on socket");
+        std::cout << "[ERROR]: Failed to listen on socket" << std::endl;
         return false;
     }
     return true;
@@ -50,21 +53,20 @@ bool Server::startListening() {
 
 bool Server::init() {
     if (!createSocket() || !configureSocket() || !bindSocket() || !startListening()) {
-        if (server_fd != INVALID_FD) {
+        if (server_fd != -1) {
             close(server_fd);
-            server_fd = INVALID_FD;
+            server_fd = -1;
         }
         return false;
     }
     running = true;
-    Logger::info("Server started");
     return true;
 }
 
 void Server::stop() {
-    if (server_fd != INVALID_FD) {
+    if (server_fd != -1) {
         close(server_fd);
-        server_fd = INVALID_FD;
+        server_fd = -1;
     }
     running = false;
 }
@@ -72,20 +74,20 @@ void Server::stop() {
 bool Server::createNonBlockingSocket(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
-        Logger::error("Failed to get socket flags");
+        std::cout << "[ERROR]: Failed to get socket flags" << std::endl;
         return false;
     }
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-        Logger::error("Failed to set non-blocking mode");
+        std::cout << "[ERROR]: Failed to set non-blocking mode" << std::endl;
         return false;
     }
     return true;
 }
 
 int Server::acceptConnection(sockaddr_in* client_addr) {
-    if (!running || server_fd == INVALID_FD) {
-        Logger::error("Cannot accept connection: server not running");
-        return INVALID_FD;
+    if (!running || server_fd == -1) {
+        std::cout << "[ERROR]: Cannot accept connection: server not running" << std::endl;
+        return -1;
     }
 
     sockaddr_in  addr;
@@ -94,17 +96,27 @@ int Server::acceptConnection(sockaddr_in* client_addr) {
     int          client_fd = accept(server_fd, (sockaddr*)addr_ptr, &addr_len);
     if (client_fd < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            Logger::error("Failed to accept connection");
+            std::cout << "[ERROR]: Failed to accept connection" << std::endl;
         }
-        return INVALID_FD;
+        return -1;
     }
     if (!createNonBlockingSocket(client_fd)) {
         close(client_fd);
-        return INVALID_FD;
+        return -1;
     }
     return client_fd;
 }
 
 int Server::getFd() const {
     return server_fd;
+}
+int Server::getPort() const {
+    return config.getPort();
+}
+bool Server::isRunning() const {
+    return running;
+}
+
+ServerConfig Server::getConfig() const {
+    return config;
 }

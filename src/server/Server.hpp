@@ -5,12 +5,13 @@
 #include <netinet/in.h>
 #include <stdint.h>
 #include <iostream>
+#include "../config/ServerConfig.hpp"
 class Server {
    private:
-    static const int INVALID_FD = -1;
     int              server_fd;
-    uint16_t         port;
+    int              port;
     bool             running;
+    ServerConfig     config;
 
     bool createSocket();
     bool configureSocket();
@@ -22,7 +23,8 @@ class Server {
 
    public:
     Server();
-    explicit Server(uint16_t port);
+    Server(ServerConfig config);
+    Server(int port);
     ~Server();
 
     bool init();
@@ -30,7 +32,10 @@ class Server {
     int  acceptConnection(sockaddr_in* client_addr = 0);
 
     // getters
-    int getFd() const;
+    int          getFd() const;
+    int          getPort() const;
+    bool         isRunning() const;
+    ServerConfig getConfig() const;
 };
 
 #endif

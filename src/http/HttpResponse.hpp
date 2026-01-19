@@ -16,7 +16,7 @@ class HttpResponse {
     void        setStatus(int code, const std::string& message);
     void        addHeader(const std::string& key, const std::string& value);
     void        setBody(const std::string& content);
-    std::string toString() const;
+    std::string httpToString() const;
 };
 
 #endif

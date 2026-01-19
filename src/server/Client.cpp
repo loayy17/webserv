@@ -1,7 +1,6 @@
 #include "Client.hpp"
 #include <errno.h>
-
-Client::Client() : client_fd(-1) {}
+#include <unistd.h>
 
 Client::Client(int fd) : client_fd(fd) {}
 
@@ -13,10 +12,12 @@ ssize_t Client::receiveData() {
     char    tmp[1024];
     ssize_t total = 0;
     ssize_t n;
+    
     while ((n = read(client_fd, tmp, sizeof(tmp))) > 0) {
         buffer.append(tmp, n);
         total += n;
     }
+    
     if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
         return total > 0 ? total : 1;
     }
@@ -29,10 +30,6 @@ ssize_t Client::sendData(const std::string& data) {
 
 std::string Client::getBuffer() const {
     return buffer;
-}
-
-void Client::clearBuffer() {
-    buffer.clear();
 }
 
 void Client::closeConnection() {

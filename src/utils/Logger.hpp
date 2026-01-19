@@ -1,9 +1,1 @@
-#ifndef LOGGER_HPP
-#define LOGGER_HPP
-#include <iostream>
-class Logger {
-   public:
-    static void info(const std::string& message);
-    static void error(const std::string& message);
-};
-#endif
+// TODO: make all print message using Logger class to make all logs in same format

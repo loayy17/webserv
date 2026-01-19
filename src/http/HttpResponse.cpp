@@ -16,19 +16,17 @@ void HttpResponse::addHeader(const std::string& key, const std::string& value) {
 
 void HttpResponse::setBody(const std::string& content) {
     body = content;
-    addHeader("Content-Length", ::toString(content.length()));
+    addHeader("Content-Length", toString(content.length()));
 }
 
-std::string HttpResponse::toString() const {
+std::string HttpResponse::httpToString() const {
     std::string response = "HTTP/1.1 ";
-    response += ::toString(statusCode);
+    response += toString(statusCode);
     response += " " + statusMessage + "\r\n";
     for (std::map<std::string, std::string>::const_iterator it = headers.begin(); it != headers.end(); ++it) {
         response += it->first + ": " + it->second + "\r\n";
     }
 
-    response += "\r\n";
-    response += body;
-
+    response += "\r\n" + body;
     return response;
 }

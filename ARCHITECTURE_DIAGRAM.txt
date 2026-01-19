@@ -1,0 +1,372 @@
+# Webserv Architecture Diagram
+
+## System Overview
+┌─────────────────────────────────────────────────────────────────────┐
+│                          WEBSERV HTTP SERVER                         │
+└─────────────────────────────────────────────────────────────────────┘
+
+## Component Hierarchy
+
+┌──────────────────────────────────────────────────────────────────────┐
+│                            main.cpp                                   │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │ • Parse command line arguments                                  │  │
+│  │ • Load configuration file                                       │  │
+│  │ • Create ServerManager                                          │  │
+│  │ • Setup signal handlers (SIGINT, SIGTERM, SIGPIPE)            │  │
+│  │ • Run event loop                                                │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────┬─────────────────────────────────────┘
+                                 │
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                         ServerManager                                 │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │ Responsibilities:                                              │  │
+│  │ • Initialize servers from configuration                        │  │
+│  │ • Manage event loop with poll()                                │  │
+│  │ • Accept new client connections                                │  │
+│  │ • Handle client data (read/write)                              │  │
+│  │ • Process HTTP requests                                        │  │
+│  │ • Coordinate all components                                    │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────────────┐   │
+│  │ PollManager │  │ Server List  │  │ Client Management          │   │
+│  │             │  │              │  │                            │   │
+│  │ • addFd()   │  │ • Server 1   │  │ • map<fd, Client*>         │   │
+│  │ • removeFd()│  │ • Server 2   │  │ • map<fd, Server*>         │   │
+│  │ • poll()    │  │ • Server N   │  │ • Accept/Close/Handle      │   │
+│  └─────────────┘  └──────────────┘  └────────────────────────────┘   │
+└────────────────────────────────┬─────────────────────────────────────┘
+                                 │
+                ┌────────────────┼────────────────┐
+                │                │                │
+                ▼                ▼                ▼
+┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+│   PollManager    │  │      Server      │  │      Client      │
+│                  │  │                  │  │                  │
+│ • vector<pollfd> │  │ • server_fd      │  │ • client_fd      │
+│ • addFd()        │  │ • port           │  │ • buffer         │
+│ • removeFd()     │  │ • config         │  │ • receiveData()  │
+│ • poll()         │  │ • init()         │  │ • sendData()     │
+│ • hasEvent()     │  │ • accept()       │  │ • close()        │
+│ • getFd()        │  │ • stop()         │  │                  │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
+                                 │
+                                 ▼
+                      ┌──────────────────┐
+                      │  ServerConfig    │
+                      │                  │
+                      │ • port           │
+                      │ • server_name    │
+                      │ • root           │
+                      │ • locations[]    │
+                      └──────────────────┘
+
+## Data Flow - New Connection
+
+┌─────────┐
+│ Browser │
+└────┬────┘
+     │ TCP SYN
+     ▼
+┌─────────────────┐
+│ Server Socket   │ (listening on port)
+│ (fd: 3)         │
+└────┬────────────┘
+     │ POLLIN event detected
+     ▼
+┌─────────────────────────┐
+│ ServerManager           │
+│ • poll() returns        │
+│ • hasEvent(0, POLLIN)   │
+│ • isServerSocket(3)     │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ Server::accept()        │
+│ • accept() syscall      │
+│ • returns client_fd: 7  │
+│ • set O_NONBLOCK        │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ Create Client           │
+│ • new Client(7)         │
+│ • clients[7] = client   │
+│ • clientToServer[7]     │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ PollManager::addFd()    │
+│ • addFd(7, POLLIN)      │
+│ • Monitor for data      │
+└─────────────────────────┘
+
+## Data Flow - HTTP Request/Response
+
+┌─────────┐
+│ Browser │ GET / HTTP/1.1
+└────┬────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ Client Socket (fd: 7)   │
+│ • Data available        │
+└────┬────────────────────┘
+     │ POLLIN event
+     ▼
+┌─────────────────────────┐
+│ ServerManager           │
+│ • poll() returns        │
+│ • hasEvent(N, POLLIN)   │
+│ • getFd(N) = 7          │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ handleClientData(7)     │
+│ • Find client by fd     │
+│ • client->receiveData() │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ Client::receiveData()   │
+│ • read() from socket    │
+│ • Append to buffer      │
+│ • Return bytes read     │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ processRequest()        │
+│ • Get buffer            │
+│ • Check complete req    │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ HttpRequest::parse()    │
+│ • Parse method          │
+│ • Parse URI             │
+│ • Parse headers         │
+│ • Parse body            │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ Generate Response       │
+│ • Get server config     │
+│ • Build HTML            │
+│ • Create HttpResponse   │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ HttpResponse::toString()│
+│ • Status line           │
+│ • Headers               │
+│ • Body                  │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ sendResponse()          │
+│ • client->sendData()    │
+│ • write() to socket     │
+└────┬────────────────────┘
+     │
+     ▼
+┌─────────────────────────┐
+│ closeClientConnection() │
+│ • Remove from poll      │
+│ • Close socket          │
+│ • Delete client         │
+│ • Erase from maps       │
+└─────────────────────────┘
+
+## Event Loop Flow
+
+┌─────────────────────────────────────────────────────────────┐
+│                    ServerManager::run()                     │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │ while(running)│
+                    └───────┬───────┘
+                            │
+                            ▼
+            ┌───────────────────────────────┐
+            │ poll(fds, timeout=100ms)      │
+            └───────┬───────────────────────┘
+                    │
+                    ▼
+            ┌───────────────┐
+            │ Events ready? │
+            └───┬───────┬───┘
+                │       │
+            NO  │       │ YES
+                │       │
+                ▼       ▼
+            Continue  ┌─────────────────────────┐
+                      │ For each fd with event  │
+                      └────────┬────────────────┘
+                               │
+                ┌──────────────┴──────────────┐
+                │                             │
+                ▼                             ▼
+    ┌───────────────────┐         ┌──────────────────┐
+    │ Server Socket?    │         │ Client Socket?   │
+    └────────┬──────────┘         └────────┬─────────┘
+             │                              │
+             ▼                              ▼
+    ┌───────────────────┐         ┌──────────────────┐
+    │ acceptConnection()│         │ handleClientData()│
+    └────────┬──────────┘         └────────┬─────────┘
+             │                              │
+             ▼                              ▼
+    ┌───────────────────┐         ┌──────────────────┐
+    │ Create Client     │         │ Read Request     │
+    │ Add to poll       │         │ Process          │
+    │ Store mapping     │         │ Send Response    │
+    └───────────────────┘         │ Close Connection │
+                                  └──────────────────┘
+
+## SOLID Principles Visualization
+
+┌─────────────────────────────────────────────────────────────┐
+│              Single Responsibility Principle                │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ServerManager  →  Orchestration                            │
+│  PollManager    →  I/O Multiplexing                         │
+│  Server         →  Socket Management                        │
+│  Client         →  Connection Management                    │
+│  HttpRequest    →  Request Parsing                          │
+│  HttpResponse   →  Response Generation                      │
+│  ConfigParser   →  Configuration Parsing                    │
+│                                                             │
+│  Each class has ONE clear responsibility                    │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│              Open/Closed Principle                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  PollManager can be extended to:                            │
+│    • epoll (Linux)                                          │
+│    • kqueue (BSD/macOS)                                     │
+│    • IOCP (Windows)                                         │
+│                                                             │
+│  Without modifying existing code                            │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│              Interface Segregation Principle                │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  PollManager:                                               │
+│    ✓ addFd(), removeFd(), poll(), hasEvent()                │
+│    ✗ No unused methods                                      │
+│                                                              │
+│  Server:                                                    │
+│    ✓ init(), stop(), accept(), getters                     │
+│    ✗ No HTTP knowledge                                      │
+│                                                             │
+│  Client:                                                    │
+│    ✓ send(), receive(), close()                             │
+│    ✗  No server knowledge                                   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│              Dependency Inversion Principle                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  High-level: ServerManager                                  │
+│       ↓ depends on abstractions                             │
+│  Low-level: Server, Client, PollManager                     │
+│                                                             │
+│  Not: ServerManager → Concrete implementations              │
+│  But: ServerManager → Interfaces/Abstractions               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+## Memory Management
+
+┌─────────────────────────────────────────────────────────────┐
+│                    Ownership Model                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ServerManager owns:                                        │
+│    • vector<Server*> servers                                │
+│    • map<int, Client*> clients                              │
+│                                                             │
+│  Lifecycle:                                                 │
+│    1. new in initialize() / acceptConnection()              │
+│    2. use during run()                                      │
+│    3. delete in shutdown() / closeConnection()              │
+│                                                             │
+│  RAII: Destructors handle cleanup automatically             │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+## Error Handling Strategy
+
+┌─────────────────────────────────────────────────────────────┐
+│                    Error Propagation                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  System Call → Check return value → Log error → Handle      │
+│                                                             │
+│  Example:                                                   │
+│    int fd = accept(...)                                     │
+│    if (fd < 0) {                                            │
+│        Logger::error("accept failed");                      │
+│        return -1;  // Propagate error                       │
+│    }                                                        │
+│                                                             │
+│  No exceptions (C++98)                                      │
+│  Return codes checked at every level                        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+## Configuration Flow
+
+┌─────────┐
+│ .conf   │
+│ file    │
+└────┬────┘
+     │
+     ▼
+┌─────────────────┐
+│ ConfigParser    │
+│ • parse()       │
+│ • validate()    │
+└────┬────────────┘
+     │
+     ▼
+┌─────────────────┐
+│ ServerConfig[]  │
+│ • port          │
+│ • server_name   │
+│ • locations[]   │
+└────┬────────────┘
+     │
+     ▼
+┌─────────────────┐
+│ ServerManager   │
+│ • initialize()  │
+└────┬────────────┘
+     │
+     ▼
+┌─────────────────┐
+│ Server objects  │
+│ • One per config│
+└─────────────────┘

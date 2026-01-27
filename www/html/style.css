@@ -1,0 +1,106 @@
+
+        :root {
+            --bg: #0f1724;
+            --card: #0b1220;
+            --muted: #94a3b8;
+            --accent: #06b6d4;
+            --text: #e6eef8
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            font-family: Inter, Segoe UI, Helvetica, Arial;
+            margin: 0;
+            background: linear-gradient(180deg, #071024 0%, #081320 100%);
+            color: var(--text);
+            line-height: 1.5
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 24px
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 16px
+        }
+
+        .avatar {
+            width: 96px;
+            height: 96px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent), #7c3aed);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #06202a
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 26px
+        }
+
+        p.lead {
+            color: var(--muted);
+            margin: 6px 0 18px
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 18px
+        }
+
+        .card {
+            background: var(--card);
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(2, 6, 23, 0.6)
+        }
+
+        .section {
+            margin-bottom: 14px
+        }
+
+        h2 {
+            margin: 0 0 8px;
+            font-size: 16px
+        }
+
+        ul {
+            margin: 0;
+            padding-left: 16px
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 14px
+        }
+
+        .contact-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-top: 1px dashed rgba(255, 255, 255, 0.03)
+        }
+
+        footer {
+            margin-top: 18px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        @media(max-width:820px) {
+            .grid {
+                grid-template-columns: 1fr
+            }
+        }

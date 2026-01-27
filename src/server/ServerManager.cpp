@@ -1,58 +1,41 @@
 #include "ServerManager.hpp"
-#include <iostream>
-#include "../http/HttpRequest.hpp"
-#include "../http/HttpResponse.hpp"
-#include "../utils/Logger.hpp"
-#include "../utils/Utils.hpp"
 
-ServerManager::ServerManager() : running(false) {}
+ServerManager::ServerManager(const std::vector<ServerConfig>& _configs) : running(false), serverConfigs(_configs) {}
 
 ServerManager::~ServerManager() {
     shutdown();
 }
 
-bool ServerManager::initialize(const std::vector<ServerConfig>& configs) {
-    if (configs.empty()) {
-        std::cout << "[ERROR]: No server configurations provided" << std::endl;
-        return false;
-    }
-
-    if (!initializeServers(configs) || servers.empty()) {
-        std::cout << "[ERROR]: Failed to initialize servers" << std::endl;
-        return false;
-    }
-
-    std::cout << "[INFO]: Successfully initialized " + typeToString(servers.size()) + " server(s)" << std::endl;
+bool ServerManager::initialize() {
+    if (serverConfigs.empty())
+        return Logger::error("[ERROR]: No server configurations provided");
+    if (!initializeServers(serverConfigs) || servers.empty())
+        return Logger::error("[ERROR]: Failed to initialize servers");
+    Logger::info("[INFO]: All servers initialized successfully");
     running = true;
-    return true;
+    return Logger::info("[INFO]: ServerManager initialized");
 }
 
 bool ServerManager::initializeServers(const std::vector<ServerConfig>& configs) {
     for (size_t i = 0; i < configs.size(); i++) {
         Server* server = new Server(configs[i]);
-
         if (!server->init()) {
-            std::cout << "[ERROR]: Failed to start server on port " + typeToString(configs[i].getPort()) << std::endl;
+            Logger::error("[ERROR]: Failed to start server on port " + typeToString(configs[i].getPort()));
             delete server;
             continue;
         }
-
         pollManager.addFd(server->getFd(), POLLIN);
         servers.push_back(server);
-
         std::string name = configs[i].getServerName().empty() ? "default" : configs[i].getServerName();
         Logger::info("[INFO]: Server '" + name + "' listening on port " + typeToString(configs[i].getPort()));
     }
     return !servers.empty();
 }
 
-void ServerManager::run() {
-    if (!running) {
-        Logger::error("[ERROR]: ServerManager not initialized");
-        return;
-    }
+bool ServerManager::run() {
+    if (!running)
+        return Logger::error("[ERROR]: Cannot run server manager");
 
-    Logger::info("[INFO]: Server manager started");
     while (running) {
         int eventCount = pollManager.pollConnections(100);
         if (eventCount <= 0)
@@ -76,16 +59,15 @@ void ServerManager::run() {
     }
 }
 
-void ServerManager::acceptNewConnection(Server* server) {
+bool ServerManager::acceptNewConnection(Server* server) {
     int clientFd = server->acceptConnection();
     if (clientFd < 0)
-        return;
-
+        return Logger::error("[ERROR]: Failed to accept new connection");
     Client* client           = new Client(clientFd);
     clients[clientFd]        = client;
     clientToServer[clientFd] = server;
     pollManager.addFd(clientFd, POLLIN);
-    Logger::info("[INFO]: Connection accepted on port " + typeToString(server->getPort()));
+    return Logger::info("[INFO]: Connection accepted on port " + typeToString(server->getPort()));
 }
 
 void ServerManager::handleClientData(int clientFd) {
@@ -95,11 +77,9 @@ void ServerManager::handleClientData(int clientFd) {
         closeClientConnection(clientFd);
         return;
     }
-
     Server* server = clientToServer[clientFd];
-    if (server) {
+    if (server)
         processRequest(client, server);
-    }
     closeClientConnection(clientFd);
 }
 
@@ -109,39 +89,26 @@ void ServerManager::processRequest(Client* client, Server* server) {
         return;
 
     HttpRequest request;
-    request.parse(buffer);
+    if (!request.parse(buffer)) {
+        Logger::error("[ERROR]: Failed to parse HTTP request");
+        HttpResponse bad;
+        bad.setStatus(400, "Bad Request");
+        bad.addHeader("Content-Type", "text/plain");
+        bad.addHeader("Connection", "close");
+        std::string body = "Bad Request";
+        bad.addHeader("Content-Length", typeToString(body.size()));
+        bad.setBody(body);
+        client->sendData(bad.httpToString());
+        return;
+    }
     std::cout << "[INFO]: Request: " + request.getUri() + " on port " + typeToString(server->getPort()) << std::endl;
 
     HttpResponse response;
     ServerConfig config = server->getConfig();
-
-    // Build HTML response
-    std::string html = "<!DOCTYPE html><html><head><title>Webserv</title>";
-    html += "<style>body{font-family:Arial;margin:40px;background:#f5f5f5;}";
-    html += ".container{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}";
-    html += "h1{color:#2c3e50;border-bottom:3px solid #3498db;padding-bottom:10px;}";
-    html += ".info{background:#ecf0f1;padding:15px;border-radius:5px;margin:10px 0;}";
-    html += ".label{font-weight:bold;color:#2c3e50;} .value{color:#3498db;}</style></head><body>";
-    html += "<div class='container'><h1>🚀 Welcome to " + (config.getServerName().empty() ? "Webserv" : config.getServerName()) + "</h1>";
-    html += "<p>Your HTTP server is running successfully!</p><div class='info'>";
-    html += "<div><span class='label'>Port:</span> <span class='value'>" + typeToString(config.getPort()) + "</span></div>";
-
-    if (!config.getServerName().empty()) {
-        html += "<div><span class='label'>Server Name:</span> <span class='value'>" + config.getServerName() + "</span></div>";
-    }
-    if (!config.getRoot().empty()) {
-        html += "<div><span class='label'>Root:</span> <span class='value'>" + config.getRoot() + "</span></div>";
-    }
-
-    html += "<div><span class='label'>Locations:</span> <span class='value'>" + typeToString(config.getLocations().size()) + "</span></div>";
-    html += "</div></div></body></html>";
-
-    response.setStatus(200, "OK");
-    response.addHeader("Content-Type", "text/html; charset=utf-8");
-    response.addHeader("Connection", "close");
-    response.addHeader("Server", "Webserv/1.0");
-    response.setBody(html);
-
+    Router       router(serverConfigs, request);
+    router.processRequest();
+    // ? continue tomorrow...
+    //TODO:
     client->sendData(response.httpToString());
 }
 
@@ -152,7 +119,6 @@ void ServerManager::closeClientConnection(int clientFd) {
             break;
         }
     }
-
     clients[clientFd]->closeConnection();
     delete clients[clientFd];
     clients.erase(clientFd);
@@ -169,11 +135,9 @@ Server* ServerManager::findServerByFd(int serverFd) const {
 }
 
 bool ServerManager::isServerSocket(int fd) const {
-    for (size_t i = 0; i < servers.size(); i++) {
-        if (servers[i]->getFd() == fd) {
+    for (size_t i = 0; i < servers.size(); i++)
+        if (servers[i]->getFd() == fd)
             return true;
-        }
-    }
     return false;
 }
 

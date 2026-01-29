@@ -18,10 +18,14 @@ class LocationConfig {
     bool setIndexes(const std::vector<std::string>& i);
     void setUploadEnabled(bool v);
     void setUploadPath(const std::string& p);
+    bool setUploadPath(const std::vector<std::string>& p);
     void setCgiEnabled(bool v);
     void setCgiPath(const std::string& p);
+    bool setCgiPath(const std::vector<std::string>& p);
     void setCgiExtension(const std::string& e);
+    bool setCgiExtension(const std::vector<std::string>& e);
     void setRedirect(const std::string& r);
+    bool setRedirect(const std::vector<std::string>& r);
 
     void setClientMaxBody(const std::string& c);
     bool setClientMaxBody(const std::vector<std::string>& c);

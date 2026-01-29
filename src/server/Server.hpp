@@ -2,16 +2,21 @@
 #define SERVER_HPP
 
 #include <fcntl.h>
+#include <netdb.h>
 #include <netinet/in.h>
-#include <stdint.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <cstring>
 #include <iostream>
+#include <sstream>
 #include "../config/ServerConfig.hpp"
+
 class Server {
    private:
-    int              server_fd;
-    int              port;
-    bool             running;
-    ServerConfig     config;
+    int          server_fd;
+    int          port;
+    bool         running;
+    ServerConfig config;
 
     bool createSocket();
     bool configureSocket();
@@ -20,11 +25,10 @@ class Server {
     bool createNonBlockingSocket(int fd);
     Server(const Server&);
     Server& operator=(const Server&);
+    Server();
 
    public:
-    Server();
     Server(ServerConfig config);
-    Server(int port);
     ~Server();
 
     bool init();

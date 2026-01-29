@@ -1,5 +1,4 @@
 #include <csignal>
-#include <cstring>
 #include <iostream>
 #include "config/ConfigParser.hpp"
 #include "server/ServerManager.hpp"
@@ -17,14 +16,8 @@ void signalHandler(int signum) {
 }
 
 void setupSignals() {
-    struct sigaction sa;
-    std::memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = signalHandler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-
-    sigaction(SIGINT, &sa, NULL);
-    sigaction(SIGTERM, &sa, NULL);
+    signal(SIGINT, signalHandler);
+    signal(SIGTERM, signalHandler);
     signal(SIGPIPE, SIG_IGN);
 }
 
@@ -55,8 +48,8 @@ int main(int ac, char** av) {
     }
 
     std::cout << "\n========================================" << std::endl;
-    std::cout << "  Servers: " << serverManager.getServerCount() << std::endl;
-    std::cout << "  Status: Running" << std::endl;
+    Logger::info("  Servers: " + typeToString(serverManager.getServerCount()));
+    Logger::info("Server Manager is running...");
     std::cout << "========================================\n" << std::endl;
 
     setupSignals();
@@ -68,4 +61,3 @@ int main(int ac, char** av) {
 
     return 0;
 }
-

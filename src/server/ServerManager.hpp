@@ -1,6 +1,7 @@
 #ifndef SERVER_MANAGER_HPP
 #define SERVER_MANAGER_HPP
 
+#include <unistd.h>
 #include <iostream>
 #include <map>
 #include <vector>
@@ -17,6 +18,7 @@
 
 class ServerManager {
    private:
+    static const int                CLIENT_TIMEOUT = 30;
     bool                            running;
     PollManager                     pollManager;
     std::vector<Server*>            servers;
@@ -26,7 +28,9 @@ class ServerManager {
 
     bool    initializeServers(const std::vector<ServerConfig>& configs);
     bool    acceptNewConnection(Server* server);
-    void    handleClientData(int clientFd);
+    void    handleClientRead(int clientFd);
+    void    handleClientWrite(int clientFd);
+    void    checkTimeouts(int timeout);
     void    closeClientConnection(int clientFd);
     Server* findServerByFd(int serverFd) const;
     bool    isServerSocket(int fd) const;

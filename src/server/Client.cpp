@@ -1,8 +1,9 @@
 #include "Client.hpp"
-#include <errno.h>
-#include <unistd.h>
+#include "../utils/Utils.hpp"
 
-Client::Client(int fd) : client_fd(fd) {}
+Client::Client(int fd) : client_fd(fd) {
+    lastActivity = getCurrentTime();
+}
 
 Client::~Client() {
     closeConnection();
@@ -12,24 +13,36 @@ ssize_t Client::receiveData() {
     char    tmp[1024];
     ssize_t total = 0;
     ssize_t n;
-    
-    while ((n = read(client_fd, tmp, sizeof(tmp))) > 0) {
-        buffer.append(tmp, n);
+    while ((n = read(client_fd, tmp, 1024)) > 0) {
+        storeReceiveData.append(tmp, n);
         total += n;
     }
-    
-    if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        return total > 0 ? total : 1;
+    if (total > 0)
+        updateTime(lastActivity);
+    return total > 0 ? total : n;
+}
+
+ssize_t Client::sendData() {
+    if (storeSendData.empty())
+        return 0;
+    ssize_t sent = write(client_fd, storeSendData.c_str(), storeSendData.size());
+    if (sent > 0) {
+        storeSendData.erase(0, sent);
+        updateTime(lastActivity);
     }
-    return n;
+    return sent;
 }
 
-ssize_t Client::sendData(const std::string& data) {
-    return write(client_fd, data.c_str(), data.size());
+void Client::queueResponse(const std::string& data) {
+    storeSendData = data;
 }
 
-std::string Client::getBuffer() const {
-    return buffer;
+void Client::clearStoreReceiveData() {
+    storeReceiveData.clear();
+}
+
+bool Client::isTimedOut(int timeout) const {
+    return getDifferentTime(lastActivity, getCurrentTime()) > timeout;
 }
 
 void Client::closeConnection() {
@@ -37,6 +50,14 @@ void Client::closeConnection() {
         close(client_fd);
         client_fd = -1;
     }
+}
+
+std::string Client::getStoreReceiveData() const {
+    return storeReceiveData;
+}
+
+std::string Client::getStoreSendData() const {
+    return storeSendData;
 }
 
 int Client::getFd() const {

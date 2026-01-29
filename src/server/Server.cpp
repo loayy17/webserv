@@ -1,10 +1,4 @@
 #include "Server.hpp"
-#include <arpa/inet.h>
-#include <errno.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <cstring>
-#include "../utils/Logger.hpp"
 
 Server::Server(ServerConfig cfg) : server_fd(-1), running(false), config(cfg) {}
 
@@ -31,24 +25,27 @@ bool Server::configureSocket() {
     return true;
 }
 bool Server::bindSocket() {
-    sockaddr_in addr;
-    std::memset(&addr, 0, sizeof(addr));
-    addr.sin_family       = AF_INET;
+    struct addrinfo hints, *res;
+    std::memset(&hints, 0, sizeof(hints));
+    hints.ai_family       = AF_INET;
+    hints.ai_socktype     = SOCK_STREAM;
+    hints.ai_flags        = AI_PASSIVE;
     const char* interface = config.getInterface() == "localhost" ? "127.0.0.1" : config.getInterface().c_str();
-    inet_pton(AF_INET, interface, &addr.sin_addr);
-    addr.sin_port = htons(config.getPort());
-    if (bind(server_fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        std::cout << "[ERROR]: Failed to bind socket" << std::endl;
-        return false;
-    }
-    return true;
+    const char* portStr   = typeToString<int>(config.getPort()).c_str();
+    if (getaddrinfo(interface, portStr, &hints, &res) != 0)
+        return Logger::error("[ERROR]: getaddrinfo failed");
+    int bindResult = bind(server_fd, res->ai_addr, res->ai_addrlen);
+    freeaddrinfo(res);
+    if (bindResult < 0)
+        return Logger::error("[ERROR]: Failed to bind socket to " + config.getInterface() + ":" + typeToString<int>(config.getPort()));
+
+    return Logger::info("[INFO]: Socket bound to " + config.getInterface() + ":" + typeToString<int>(config.getPort()));
 }
 bool Server::startListening() {
     if (listen(server_fd, 10) < 0) {
-        std::cout << "[ERROR]: Failed to listen on socket" << std::endl;
-        return false;
+        return Logger::error("[ERROR]: Failed to listen on socket");
     }
-    return true;
+    return Logger::info("[INFO]: Server is listening on socket");
 }
 
 bool Server::init() {
@@ -57,10 +54,16 @@ bool Server::init() {
             close(server_fd);
             server_fd = -1;
         }
-        return false;
+        return Logger::error("[ERROR]: Server initialization failed");
     }
+    if (!createNonBlockingSocket(server_fd)) {
+        close(server_fd);
+        server_fd = -1;
+        return Logger::error("[ERROR]: Server initialization failed");
+    }
+
     running = true;
-    return true;
+    return Logger::info("[INFO]: Server initialized on port " + typeToString<int>(config.getPort()));
 }
 
 void Server::stop() {
@@ -74,19 +77,17 @@ void Server::stop() {
 bool Server::createNonBlockingSocket(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
-        std::cout << "[ERROR]: Failed to get socket flags" << std::endl;
-        return false;
+        return Logger::error("[ERROR]: Failed to get socket flags");
     }
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
-        std::cout << "[ERROR]: Failed to set non-blocking mode" << std::endl;
-        return false;
+        return Logger::error("[ERROR]: Failed to set non-blocking mode");
     }
     return true;
 }
 
 int Server::acceptConnection(sockaddr_in* client_addr) {
     if (!running || server_fd == -1) {
-        std::cout << "[ERROR]: Cannot accept connection: server not running" << std::endl;
+        return Logger::error("[ERROR]: Cannot accept connection: server not running");
         return -1;
     }
 
@@ -95,13 +96,12 @@ int Server::acceptConnection(sockaddr_in* client_addr) {
     sockaddr_in* addr_ptr  = client_addr ? client_addr : &addr;
     int          client_fd = accept(server_fd, (sockaddr*)addr_ptr, &addr_len);
     if (client_fd < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            std::cout << "[ERROR]: Failed to accept connection" << std::endl;
-        }
+        Logger::error("[ERROR]: Failed to accept new connection");
         return -1;
     }
     if (!createNonBlockingSocket(client_fd)) {
         close(client_fd);
+        Logger::error("[ERROR]: Failed to set non-blocking mode for client socket");
         return -1;
     }
     return client_fd;

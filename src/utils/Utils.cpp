@@ -1,4 +1,13 @@
 #include "Utils.hpp"
+time_t getCurrentTime() {
+    return time(NULL);
+}
+void updateTime(time_t& t) {
+    t = getCurrentTime();
+}
+time_t getDifferentTime(const time_t& start, const time_t& end) {
+    return end - start;
+}
 
 std::string toUpperWords(const std::string& str) {
     std::string result = str;

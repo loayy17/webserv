@@ -18,7 +18,15 @@ bool ServerManager::initialize() {
 
 bool ServerManager::initializeServers(const std::vector<ServerConfig>& configs) {
     for (size_t i = 0; i < configs.size(); i++) {
-        Server* server = new Server(configs[i]);
+        Server* server = NULL;
+
+        try {
+            server = new Server(configs[i]);
+        } catch (const std::bad_alloc& e) {
+            Logger::error("[ERROR]: Memory allocation failed for server");
+            continue;
+        }
+
         if (!server->init()) {
             Logger::error("[ERROR]: Failed to start server on port " + typeToString(configs[i].getPort()));
             delete server;
@@ -38,23 +46,31 @@ bool ServerManager::run() {
 
     while (running) {
         int eventCount = pollManager.pollConnections(100);
+        checkTimeouts(CLIENT_TIMEOUT);
         if (eventCount <= 0)
             continue;
 
         for (size_t i = 0; i < pollManager.size() && eventCount > 0; i++) {
-            if (!pollManager.hasEvent(i, POLLIN))
-                continue;
-
             int fd = pollManager.getFd(i);
 
-            if (isServerSocket(fd)) {
-                Server* server = findServerByFd(fd);
-                if (server)
-                    acceptNewConnection(server);
-            } else if (clients.find(fd) != clients.end()) {
-                handleClientData(fd);
+            // Handle read events
+            if (pollManager.hasEvent(i, POLLIN)) {
+                if (isServerSocket(fd)) {
+                    Server* server = findServerByFd(fd);
+                    if (server)
+                        acceptNewConnection(server);
+                } else if (clients.find(fd) != clients.end()) {
+                    handleClientRead(fd);
+                }
+                eventCount--;
             }
-            eventCount--;
+            // Handle write events
+            if (pollManager.hasEvent(i, POLLOUT)) {
+                if (clients.find(fd) != clients.end()) {
+                    handleClientWrite(fd);
+                }
+                eventCount--;
+            }
         }
     }
     return true;
@@ -64,31 +80,76 @@ bool ServerManager::acceptNewConnection(Server* server) {
     int clientFd = server->acceptConnection();
     if (clientFd < 0)
         return Logger::error("[ERROR]: Failed to accept new connection");
-    Client* client           = new Client(clientFd);
+
+    Client* client = NULL;
+    try {
+        client = new Client(clientFd);
+    } catch (const std::bad_alloc& e) {
+        Logger::error("[ERROR]: Memory allocation failed for client");
+        close(clientFd);
+        return false;
+    }
     clients[clientFd]        = client;
     clientToServer[clientFd] = server;
-    pollManager.addFd(clientFd, POLLIN);
+    pollManager.addFd(clientFd, POLLIN | POLLOUT);
     return Logger::info("[INFO]: Connection accepted on port " + typeToString(server->getPort()));
 }
 
-void ServerManager::handleClientData(int clientFd) {
+void ServerManager::handleClientRead(int clientFd) {
     Client* client = clients[clientFd];
 
     if (client->receiveData() <= 0) {
         closeClientConnection(clientFd);
         return;
     }
+    Logger::info("[INFO]: Data received from client");
     Server* server = clientToServer[clientFd];
     if (server)
         processRequest(client, server);
-    closeClientConnection(clientFd);
+}
+
+void ServerManager::handleClientWrite(int clientFd) {
+    Client* client = clients[clientFd];
+
+    if (client->getStoreSendData().empty())
+        return;
+
+    ssize_t sent = client->sendData();
+    if (sent < 0) {
+        closeClientConnection(clientFd);
+        return;
+    }
+
+    // If all data sent, close connection
+    if (client->getStoreSendData().empty()) {
+        closeClientConnection(clientFd);
+    }
+}
+
+void ServerManager::checkTimeouts(int timeout) {
+    std::vector<int> toClose;
+
+    for (std::map<int, Client*>::iterator it = clients.begin(); it != clients.end(); ++it) {
+        if (it->second->isTimedOut(timeout)) {
+            toClose.push_back(it->first);
+        }
+    }
+
+    for (size_t i = 0; i < toClose.size(); i++) {
+        Logger::info("[INFO]: Client timeout, closing connection");
+        closeClientConnection(toClose[i]);
+    }
 }
 
 void ServerManager::processRequest(Client* client, Server* server) {
-    std::string buffer = client->getBuffer();
-    if (buffer.find("\r\n\r\n") == std::string::npos)
+    std::string buffer = client->getStoreReceiveData();
+    Logger::info("[INFO]: Processing request for client fd " + typeToString(client->getFd()));
+    if (buffer.find("\r\n\r\n") == std::string::npos) {
+        Logger::info("[INFO]: Incomplete HTTP request, waiting for more data");
         return;
-
+    }
+    Logger::info("[INFO]: Processing HTTP request");
+    Logger::info("[DEBUG]: Request Data:\n" + buffer);
     HttpRequest request;
     if (!request.parse(buffer)) {
         Logger::error("[ERROR]: Failed to parse HTTP request");
@@ -99,18 +160,18 @@ void ServerManager::processRequest(Client* client, Server* server) {
         std::string body = "Bad Request";
         bad.addHeader("Content-Length", typeToString(body.size()));
         bad.setBody(body);
-        client->sendData(bad.httpToString());
+        client->queueResponse(bad.httpToString());
+        client->clearStoreReceiveData();
         return;
     }
-    std::cout << "[INFO]: Request: " + request.getUri() + " on port " + typeToString(server->getPort()) << std::endl;
+    Logger::info("[INFO]: Request: " + request.getUri() + " on port " + typeToString(server->getPort()));
 
     HttpResponse response;
     ServerConfig config = server->getConfig();
     Router       router(serverConfigs, request);
     router.processRequest();
-    // ? continue tomorrow...
-    //TODO:
-    client->sendData(response.httpToString());
+    client->queueResponse(response.httpToString());
+    client->clearStoreReceiveData();
 }
 
 void ServerManager::closeClientConnection(int clientFd) {

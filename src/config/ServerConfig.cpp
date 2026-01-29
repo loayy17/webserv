@@ -1,8 +1,39 @@
 #include "ServerConfig.hpp"
 
 
-ServerConfig::ServerConfig()
-    : port(-1), interface(""), locations(), serverName(""), root(""), indexes(std::vector<std::string>(1, "index.html")), clientMaxBodySize("") {}
+ServerConfig::ServerConfig() :
+    port(-1),
+    interface(""),
+    locations(),
+    serverName(""),
+    root(""),
+    indexes(std::vector<std::string>(1, "index.html")),
+    clientMaxBodySize("")
+{}
+
+ServerConfig::ServerConfig(const ServerConfig& other) :
+    port(other.port),
+    interface(other.interface),
+    locations(other.locations),
+    serverName(other.serverName),
+    root(other.root),
+    indexes(other.indexes),
+    clientMaxBodySize(other.clientMaxBodySize)
+{}
+
+ServerConfig &ServerConfig::operator=(const ServerConfig &other)
+{
+    if (this != &other) {
+        port              = other.port;
+        interface         = other.interface;
+        locations         = other.locations;
+        serverName        = other.serverName;
+        root              = other.root;
+        indexes           = other.indexes;
+        clientMaxBodySize = other.clientMaxBodySize;
+    }
+    return *this;
+}
 
 ServerConfig::~ServerConfig() {
     locations.clear();

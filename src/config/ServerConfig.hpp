@@ -7,9 +7,11 @@
 #include "LocationConfig.hpp"
 
 class ServerConfig {
-   public:
-    ServerConfig();
-    ~ServerConfig();
+    public:
+        ServerConfig();
+        ServerConfig(const ServerConfig& other);
+        ServerConfig &operator=(const ServerConfig& other);
+        ~ServerConfig();
 
     // setters
     bool setIndexes(const std::vector<std::string>& i);

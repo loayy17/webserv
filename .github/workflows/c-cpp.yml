@@ -18,15 +18,21 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential
+      # Configuration parse tester
     - name: Build config tester
-      run: make config_test
-
+      run: make config_tester  
     - name: Run config tests
       run: ./tests/config_tester.sh ./config_tester
+    #  http tester
+    - name: Build request tester
+      run: make request_tester  
+    - name: Run request tests
+      run: ./tests/request_tester.sh ./config_tester
+    # router tester
     - name: Build router tester
-      run: make router_test
-
+      run: make router_tester
     - name: Run router tests
       run: ./tests/router_tester.sh ./router_tester
+      
     - name: Build webserv
       run: make

@@ -1,5 +1,18 @@
 #include "Server.hpp"
 
+Server::Server(const Server& other) : server_fd(other.server_fd), port(other.port), running(other.running), config(other.config) {}
+
+Server& Server::operator=(const Server& other) {
+    if (this != &other) {
+        server_fd = other.server_fd;
+        port      = other.port;
+        running   = other.running;
+        config    = other.config;
+    }
+    return *this;
+}
+
+
 Server::Server(ServerConfig cfg) : server_fd(-1), running(false), config(cfg) {}
 
 Server::Server() : server_fd(-1), running(false), config(ServerConfig()) {}
@@ -7,7 +20,6 @@ Server::Server() : server_fd(-1), running(false), config(ServerConfig()) {}
 Server::~Server() {
     stop();
 }
-
 bool Server::createSocket() {
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {

@@ -36,6 +36,7 @@ ServerConfig &ServerConfig::operator=(const ServerConfig &other)
 }
 
 ServerConfig::~ServerConfig() {
+    indexes.clear();
     locations.clear();
 }
 // setters

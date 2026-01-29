@@ -11,6 +11,9 @@
 
 class Router {
    public:
+    Router();
+    Router(const Router& other);
+    Router& operator=(const Router& other);
     Router(const std::vector<ServerConfig>& servers, const HttpRequest& request);
     ~Router();
     const LocationConfig* bestMatchLocation(const std::vector<LocationConfig>& locationsMatchServer) const;

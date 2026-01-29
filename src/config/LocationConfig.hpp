@@ -6,6 +6,9 @@
 #include "../utils/Utils.hpp"
 class LocationConfig {
    public:
+    LocationConfig();
+    LocationConfig(const LocationConfig& other);
+    LocationConfig &operator=(const LocationConfig& other);
     LocationConfig(const std::string& p);
     ~LocationConfig();
 
@@ -46,7 +49,6 @@ class LocationConfig {
     std::vector<std::string> getAllowedMethods() const;
 
    private:
-    LocationConfig();
     // required location parameters
     std::string path;
     // optional location parameters

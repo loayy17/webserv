@@ -11,6 +11,53 @@
 /* Body Section */
 // hello world
 
+HttpRequest::HttpRequest()
+    : method(""),
+      uri(""),
+      httpVersion(""),
+      queryString(""),
+      fragment(""),
+      headers(),
+      body(""),
+      contentType(""),
+      contentLength(0),
+      host(""),
+      port(-1) {}
+
+HttpRequest::HttpRequest(const HttpRequest &other)
+    : method(other.method),
+      uri(other.uri),
+      httpVersion(other.httpVersion),
+      queryString(other.queryString),
+      fragment(other.fragment),
+      headers(other.headers),
+      body(other.body),
+      contentType(other.contentType),
+      contentLength(other.contentLength),
+      host(other.host),
+      port(other.port) {}
+
+HttpRequest &HttpRequest::operator=(const HttpRequest &other) {
+    if (this != &other) {
+        method       = other.method;
+        uri          = other.uri;
+        httpVersion  = other.httpVersion;
+        queryString  = other.queryString;
+        fragment     = other.fragment;
+        headers      = other.headers;
+        body         = other.body;
+        contentType  = other.contentType;
+        contentLength= other.contentLength;
+        host         = other.host;
+        port         = other.port;
+    }
+    return *this;
+}
+
+HttpRequest::~HttpRequest() {
+    headers.clear();
+}
+
 bool HttpRequest::parse(const std::string& raw) {
     size_t headerEnd = raw.find("\r\n\r\n");
     if (headerEnd == std::string::npos)

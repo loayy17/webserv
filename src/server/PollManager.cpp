@@ -1,8 +1,19 @@
 #include "PollManager.hpp"
 
+PollManager::PollManager(const PollManager& other) : fds(other.fds) {}
+
+PollManager& PollManager::operator=(const PollManager& other) {
+    if (this != &other) {
+        fds = other.fds;
+    }
+    return *this;
+}
+
 PollManager::PollManager() {}
 
-PollManager::~PollManager() {}
+PollManager::~PollManager() {
+    fds.clear();
+}
 
 void PollManager::addFd(int fd, int events) {
     if (fd < 0) return;

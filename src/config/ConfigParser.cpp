@@ -2,13 +2,56 @@
 #include <cstdlib>
 #include "../utils/Logger.hpp"
 
+ConfigParser::ConfigParser() :
+    file(""),
+    servers(),
+    scope(NONE),
+    curr_index(0),
+    httpClientMaxBody(""),
+    lines(),
+    serverDirectives(),
+    locationDirectives()
+{
+}
+
+ConfigParser::ConfigParser(const ConfigParser &other)
+    : file(other.file),
+      servers(other.servers),
+      scope(other.scope),
+      curr_index(other.curr_index),
+      httpClientMaxBody(other.httpClientMaxBody),
+      lines(other.lines),
+      serverDirectives(other.serverDirectives),
+      locationDirectives(other.locationDirectives)
+{
+}
+
+ConfigParser &ConfigParser::operator=(const ConfigParser &other)
+{
+    if (this != &other)
+    {
+        file               = other.file;
+        servers            = other.servers;
+        scope              = other.scope;
+        curr_index         = other.curr_index;
+        httpClientMaxBody  = other.httpClientMaxBody;
+        lines              = other.lines;
+        serverDirectives   = other.serverDirectives;
+        locationDirectives = other.locationDirectives;
+    }
+    return *this;
+}
+
 ConfigParser::ConfigParser(const std::string &f) : file(f), scope(NONE), curr_index(0)
 {
     if (!convertFileToLines(file, lines))
         Logger::error("Failed to read configuration file: " + file);
 }
 
-ConfigParser::~ConfigParser() {}
+ConfigParser::~ConfigParser() {
+    servers.clear();
+    lines.clear();
+}
 
 bool ConfigParser::getNextLine(std::string &out)
 {

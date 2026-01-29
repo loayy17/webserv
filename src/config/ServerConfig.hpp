@@ -9,7 +9,7 @@
 class ServerConfig {
     public:
         ServerConfig();
-        ServerConfig(const ServerConfig& other);
+        ServerConfig(const ServerConfig &other);
         ServerConfig &operator=(const ServerConfig& other);
         ~ServerConfig();
 

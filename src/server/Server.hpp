@@ -23,11 +23,11 @@ class Server {
     bool bindSocket();
     bool startListening();
     bool createNonBlockingSocket(int fd);
-    Server(const Server&);
-    Server& operator=(const Server&);
-    Server();
 
    public:
+    Server();
+    Server(const Server&);
+    Server& operator=(const Server&);
     Server(ServerConfig config);
     ~Server();
 

@@ -1,5 +1,26 @@
 #include "ServerManager.hpp"
 
+ServerManager::ServerManager() : running(false), serverConfigs() {}
+
+ServerManager::ServerManager(const ServerManager& other)
+    : running(other.running),
+      pollManager(other.pollManager),
+      servers(other.servers),
+      serverConfigs(other.serverConfigs),
+      clients(other.clients),
+      clientToServer(other.clientToServer) {}
+
+ServerManager& ServerManager::operator=(const ServerManager& other) {
+    if (this != &other) {
+        running        = other.running;
+        pollManager    = other.pollManager;
+        servers        = other.servers;
+        clients        = other.clients;
+        clientToServer = other.clientToServer;
+    }
+    return *this;
+}
+
 ServerManager::ServerManager(const std::vector<ServerConfig>& _configs) : running(false), serverConfigs(_configs) {}
 
 ServerManager::~ServerManager() {

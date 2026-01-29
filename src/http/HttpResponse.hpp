@@ -13,6 +13,8 @@ class HttpResponse {
 
    public:
     HttpResponse();
+    HttpResponse(const HttpResponse& other);
+    HttpResponse& operator=(const HttpResponse& other);
     ~HttpResponse();
 
     void        setStatus(int code, const std::string& message);

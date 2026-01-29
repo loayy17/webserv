@@ -21,6 +21,10 @@ class HttpRequest {
     int                                port;          // Port from Host header
 
    public:
+    HttpRequest();
+    HttpRequest(const HttpRequest &other);
+    HttpRequest &operator=(const HttpRequest &other);
+    ~HttpRequest();
     // Parsing
     bool parse(const std::string& raw);
     bool parseHeaders(const std::string& headerSection);

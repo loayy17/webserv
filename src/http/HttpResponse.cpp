@@ -1,8 +1,26 @@
 #include "HttpResponse.hpp"
 
+HttpResponse::HttpResponse(const HttpResponse& other)
+    : statusCode(other.statusCode),
+      statusMessage(other.statusMessage),
+      headers(other.headers),
+      body(other.body) {}
+
+HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
+    if (this != &other) {
+        statusCode    = other.statusCode;
+        statusMessage = other.statusMessage;
+        headers       = other.headers;
+        body          = other.body;
+    }
+    return *this;
+}
+
 HttpResponse::HttpResponse() : statusCode(200), statusMessage("OK") {}
 
-HttpResponse::~HttpResponse() {}
+HttpResponse::~HttpResponse() {
+    headers.clear();
+}
 
 void HttpResponse::setStatus(int code, const std::string& message) {
     statusCode    = code;

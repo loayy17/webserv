@@ -24,3 +24,16 @@ MimeTypes::~MimeTypes() {}
 std::string MimeTypes::getMimeType() const {
     return mimeType;
 }
+
+MimeTypes::MimeTypes() : extension(""), mimeType("application/octet-stream") {}
+
+MimeTypes::MimeTypes(const MimeTypes& other)
+    : extension(other.extension), mimeType(other.mimeType) {}
+
+MimeTypes &MimeTypes::operator=(const MimeTypes& other) {
+    if (this != &other) {
+        extension = other.extension;
+        mimeType  = other.mimeType;
+    }
+    return *this;
+}

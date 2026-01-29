@@ -36,12 +36,12 @@ class ServerManager {
     bool    isServerSocket(int fd) const;
     void    processRequest(Client* client, Server* server);
 
+   public:
+    ServerManager();    
+    ServerManager(const std::vector<ServerConfig>& configs);
     ServerManager(const ServerManager&);
     ServerManager& operator=(const ServerManager&);
-
-   public:
-    ServerManager(const std::vector<ServerConfig>& configs);
-    ~ServerManager();
+    ~ServerManager();    
 
     bool   initialize();
     bool   run();

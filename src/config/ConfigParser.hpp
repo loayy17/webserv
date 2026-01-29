@@ -10,6 +10,9 @@
 
 class ConfigParser {
    public:
+    ConfigParser();
+    ConfigParser(const ConfigParser& other  );
+    ConfigParser &operator=(const ConfigParser& other);
     ConfigParser(const std::string& f);
     ~ConfigParser();
 

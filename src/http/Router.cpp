@@ -1,5 +1,51 @@
 #include "Router.hpp"
 
+Router::Router() 
+    : _servers(),
+      _request(),
+      isPathFound(false),
+      pathRootUri(""),
+      matchedPath(""),
+      remainingPath(""),
+      matchLocation(NULL),
+      matchServer(NULL),
+      redirectUrl(""),
+      isRedirect(false),
+      statusCode(0),
+      errorMessage("") {}
+
+Router::Router(const Router& other)
+    : _servers(other._servers),
+    _request(other._request),
+    isPathFound(other.isPathFound),
+    pathRootUri(other.pathRootUri),
+    matchedPath(other.matchedPath),
+    remainingPath(other.remainingPath),
+    matchLocation(other.matchLocation),
+    matchServer(other.matchServer),
+    redirectUrl(other.redirectUrl),
+    isRedirect(other.isRedirect),
+    statusCode(other.statusCode),
+    errorMessage(other.errorMessage) {}
+
+Router& Router::operator=(const Router& other) {
+    if (this != &other) {
+        _servers       = other._servers;
+        _request       = other._request;
+        isPathFound    = other.isPathFound;
+        pathRootUri    = other.pathRootUri;
+        matchedPath    = other.matchedPath;
+        remainingPath  = other.remainingPath;
+        matchLocation  = other.matchLocation;
+        matchServer    = other.matchServer;
+        redirectUrl    = other.redirectUrl;
+        isRedirect     = other.isRedirect;
+        statusCode     = other.statusCode;
+        errorMessage   = other.errorMessage;
+    }
+    return *this;
+}
+
 Router::Router(const std::vector<ServerConfig>& servers, const HttpRequest& request)
     : _servers(servers),
       _request(request),
@@ -14,7 +60,9 @@ Router::Router(const std::vector<ServerConfig>& servers, const HttpRequest& requ
       statusCode(0),
       errorMessage("") {}
 
-Router::~Router() {}
+Router::~Router() {
+    _servers.clear();
+}
 
 void Router::processRequest() {
     // TODO: client request port validation

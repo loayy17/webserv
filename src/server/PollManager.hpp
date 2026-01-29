@@ -8,10 +8,10 @@
 class PollManager {
    private:
     std::vector<struct pollfd> fds;
+    
+public:
     PollManager(const PollManager&);
     PollManager& operator=(const PollManager&);
-
-   public:
     PollManager();
     ~PollManager();
     void   addFd(int fd, int events);

@@ -12,11 +12,11 @@ class Client {
     std::string storeSendData;
     time_t      lastActivity;
 
+    public:
     Client(const Client&);
     Client& operator=(const Client&);
-
-   public:
-    explicit Client(int fd);
+    Client(int fd);
+    Client();
     ~Client();
 
     ssize_t     receiveData();

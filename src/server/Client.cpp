@@ -1,6 +1,20 @@
 #include "Client.hpp"
 #include "../utils/Utils.hpp"
 
+Client::Client() : client_fd(-1) {}
+
+Client::Client(const Client& other) : client_fd(other.client_fd), storeReceiveData(other.storeReceiveData), storeSendData(other.storeSendData), lastActivity(other.lastActivity) {}
+
+Client& Client::operator=(const Client& other) {
+    if (this != &other) {
+        client_fd = other.client_fd;
+        lastActivity = other.lastActivity;
+        storeReceiveData = other.storeReceiveData;
+        storeSendData    = other.storeSendData;
+    }
+    return *this;
+}
+
 Client::Client(int fd) : client_fd(fd) {
     lastActivity = getCurrentTime();
 }

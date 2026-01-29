@@ -1,5 +1,51 @@
 #include "LocationConfig.hpp"
 
+LocationConfig::LocationConfig()
+    : path(""),
+      root(""),
+      autoIndex(false),
+      indexes(),
+      uploadEnabled(false),
+      uploadPath(""),
+      cgiEnabled(false),
+      cgiPath(""),
+      cgiExtension(""),
+      redirect(""),
+      allowedMethods() {}
+
+LocationConfig::LocationConfig(const LocationConfig &other)
+    : path(other.path),
+      root(other.root),
+      autoIndex(other.autoIndex),
+      indexes(other.indexes),
+      uploadEnabled(other.uploadEnabled),
+      uploadPath(other.uploadPath),
+      cgiEnabled(other.cgiEnabled),
+      cgiPath(other.cgiPath),
+      cgiExtension(other.cgiExtension),
+      redirect(other.redirect),
+      clientMaxBody(other.clientMaxBody),
+      allowedMethods(other.allowedMethods) {}
+
+LocationConfig &LocationConfig::operator=(const LocationConfig &other)
+{
+    if (this != &other) {
+        path           = other.path;
+        root           = other.root;
+        autoIndex      = other.autoIndex;
+        indexes        = other.indexes;
+        uploadEnabled  = other.uploadEnabled;
+        uploadPath     = other.uploadPath;
+        cgiEnabled     = other.cgiEnabled;
+        cgiPath        = other.cgiPath;
+        cgiExtension   = other.cgiExtension;
+        redirect       = other.redirect;
+        clientMaxBody  = other.clientMaxBody;
+        allowedMethods = other.allowedMethods;
+    }
+    return *this;
+}
+
 LocationConfig::LocationConfig(const std::string &p)
     : path(p),
       root(""),
@@ -15,6 +61,7 @@ LocationConfig::LocationConfig(const std::string &p)
 
 LocationConfig::~LocationConfig()
 {
+    indexes.clear();
     allowedMethods.clear();
 }
 // setters

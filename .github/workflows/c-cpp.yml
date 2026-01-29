@@ -22,17 +22,17 @@ jobs:
     - name: Build config tester
       run: make config_tester  
     - name: Run config tests
-      run: sudo ./tests/config_tester.sh ./config_tester
+      run: ./tests/config_tester.sh ./config_tester
     #  http tester
     - name: Build request tester
       run: make request_tester  
     - name: Run request tests
-      run: sudo ./tests/request_tester.sh ./config_tester
+      run: ./tests/request_tester.sh ./config_tester
     # router tester
     - name: Build router tester
       run: make router_tester
     - name: Run router tests
-      run: sudo ./tests/router_tester.sh ./router_tester
+      run: ./tests/router_tester.sh ./router_tester
       
     - name: Build webserv
       run: make

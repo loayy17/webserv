@@ -22,7 +22,7 @@ HttpRequest::HttpRequest()
       contentType(""),
       contentLength(0),
       host(""),
-      port(-1) {}
+      port(80) {}
 
 HttpRequest::HttpRequest(const HttpRequest &other)
     : method(other.method),
@@ -123,12 +123,13 @@ bool HttpRequest::parseHeaders(const std::string& headerSection) {
     } else {
         contentLength = 0;
     }
-    std::string hostKey = headers["host"];
-    size_t      sepHost = hostKey.find(':');
-    if (sepHost == std::string::npos)
-        return Logger::error("Missing port in Host header");
-    host = hostKey.substr(0, sepHost);
-    port = stringToType<int>(hostKey.substr(sepHost + 1));
+    std::string portStr;
+    if (!splitByChar(headers["host"], host, portStr, ':'))
+    {
+        host = headers["host"];
+        return true;
+    }
+    port = stringToType<int>(portStr);
     return true;
 }
 
@@ -152,7 +153,8 @@ std::string HttpRequest::getUri() const {
     return uri;
 }
 std::string HttpRequest::getHeader(const std::string& key) const {
-    std::map<std::string, std::string>::const_iterator it = headers.find(key);
+    std::string lowerKey = toLowerWords(key);
+    std::map<std::string, std::string>::const_iterator it = headers.find(lowerKey);
     if (it != headers.end()) {
         return it->second;
     }

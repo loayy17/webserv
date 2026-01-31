@@ -17,6 +17,7 @@ class Server {
     int          port;
     bool         running;
     ServerConfig config;
+    size_t       listenIndex;
 
     bool createSocket();
     bool configureSocket();
@@ -28,7 +29,7 @@ class Server {
     Server();
     Server(const Server&);
     Server& operator=(const Server&);
-    Server(ServerConfig config);
+    Server(ServerConfig config, size_t listenIdx = 0);
     ~Server();
 
     bool init();

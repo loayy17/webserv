@@ -121,19 +121,22 @@ void Router::processRequest() {
 }
 
 const ServerConfig* Router::findServer() const {
+    int requestPort = _request.getPort();
+    std::string requestHost = _request.getHost();
+
     for (size_t i = 0; i < _servers.size(); i++) {
-        if (_servers[i].getPort() == _request.getPort()) {
-            if (_servers[i].getServerName() == _request.getHost()) {
+        if (_servers[i].hasPort(requestPort)) {
+            if (_servers[i].hasServerName(requestHost)) {
                 return &_servers[i];
             }
         }
     }
-    return getDefaultServer(_request.getPort());
+    return getDefaultServer(requestPort);
 }
 
 const ServerConfig* Router::getDefaultServer(int port) const {
     for (size_t i = 0; i < _servers.size(); i++) {
-        if (_servers[i].getPort() == port) {
+        if (_servers[i].hasPort(port)) {
             return &_servers[i];
         }
     }

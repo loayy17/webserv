@@ -32,6 +32,14 @@ std::string cleanCharEnd(const std::string& v, char c) {
     return v;
 }
 
+std::string trimSpaces(const std::string& s) {
+    size_t start = s.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos)
+        return "";
+    size_t end = s.find_last_not_of(" \t\r\n");
+    return s.substr(start, end - start + 1);
+}
+
 std::string trimSpacesComments(const std::string& s) {
     size_t start = s.find_first_not_of(" \t\r\n");
     if (start == std::string::npos || s[start] == '#')
@@ -99,6 +107,18 @@ bool splitByChar(const std::string& line, std::string& key, std::string& value, 
     key   = s.substr(0, pos);
     value = s.substr(pos + 1);
     return true;
+}
+
+bool splitByString(const std::string& line, std::vector<std::string>& values, const std::string& delimiter) {
+    size_t start = 0;
+    size_t end   = line.find(delimiter);
+    while (end != std::string::npos) {
+        values.push_back(line.substr(start, end - start));
+        start = end + delimiter.length();
+        end   = line.find(delimiter, start);
+    }
+    values.push_back(line.substr(start));
+    return !values.empty();
 }
 
 bool parseKeyValue(const std::string& line, std::string& key, std::vector<std::string>& values) {

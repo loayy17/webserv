@@ -39,24 +39,30 @@ bool ServerManager::initialize() {
 
 bool ServerManager::initializeServers(const std::vector<ServerConfig>& configs) {
     for (size_t i = 0; i < configs.size(); i++) {
-        Server* server = NULL;
+        const std::vector<ListenAddress>& addresses = configs[i].getListenAddresses();
 
-        try {
-            server = new Server(configs[i]);
-        } catch (const std::bad_alloc& e) {
-            Logger::error("[ERROR]: Memory allocation failed for server");
-            continue;
-        }
+        for (size_t j = 0; j < addresses.size(); j++) {
+            Server* server = NULL;
 
-        if (!server->init()) {
-            Logger::error("[ERROR]: Failed to start server on port " + typeToString(configs[i].getPort()));
-            delete server;
-            continue;
+            try {
+                server = new Server(configs[i], j);
+            } catch (const std::bad_alloc& e) {
+                Logger::error("[ERROR]: Memory allocation failed for server");
+                continue;
+            }
+
+            if (!server->init()) {
+                Logger::error("[ERROR]: Failed to start server on " +
+                    addresses[j].interface + ":" + typeToString(addresses[j].port));
+                delete server;
+                continue;
+            }
+            pollManager.addFd(server->getFd(), POLLIN);
+            servers.push_back(server);
+            std::string name = configs[i].getServerName().empty() ? "default" : configs[i].getServerName();
+            Logger::info("[INFO]: Server '" + name + "' listening on " +
+                addresses[j].interface + ":" + typeToString(addresses[j].port));
         }
-        pollManager.addFd(server->getFd(), POLLIN);
-        servers.push_back(server);
-        std::string name = configs[i].getServerName().empty() ? "default" : configs[i].getServerName();
-        Logger::info("[INFO]: Server '" + name + "' listening on port " + typeToString(configs[i].getPort()));
     }
     return !servers.empty();
 }

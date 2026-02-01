@@ -7,12 +7,24 @@
 #include "../utils/Logger.hpp"
 #include "LocationConfig.hpp"
 
-struct ListenAddress
+class ListenAddress
 {
-    std::string interface;
-    int port;
-    ListenAddress() : interface(""), port(-1) {}
-    ListenAddress(const std::string &iface, int p) : interface(iface), port(p) {}
+public:
+    ListenAddress() : _interface(""), _port(-1), _serverFd(-1) {}
+    ListenAddress(const std::string &iface, int p) : _interface(iface), _port(p), _serverFd(-1) {}
+
+    // Getters
+    const std::string &getInterface() const { return _interface; }
+    int getPort() const { return _port; }
+    int getServerFd() const { return _serverFd; }
+
+    // Setters
+    void setServerFd(int fd) { _serverFd = fd; }
+
+private:
+    std::string _interface;
+    int _port;
+    int _serverFd;
 };
 
 class ServerConfig

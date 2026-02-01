@@ -4,25 +4,22 @@ LocationConfig::LocationConfig()
     : path(""),
       root(""),
       autoIndex(false),
+      autoIndexSet(false),
       indexes(),
-      uploadEnabled(false),
-      uploadPath(""),
-      cgiEnabled(false),
-      cgiPath(""),
-      cgiExtension(""),
+      uploadDir(""),
+      cgiPass(),
       redirect(""),
+      clientMaxBody(""),
       allowedMethods() {}
 
 LocationConfig::LocationConfig(const LocationConfig& other)
     : path(other.path),
       root(other.root),
       autoIndex(other.autoIndex),
+      autoIndexSet(other.autoIndexSet),
       indexes(other.indexes),
-      uploadEnabled(other.uploadEnabled),
-      uploadPath(other.uploadPath),
-      cgiEnabled(other.cgiEnabled),
-      cgiPath(other.cgiPath),
-      cgiExtension(other.cgiExtension),
+      uploadDir(other.uploadDir),
+      cgiPass(other.cgiPass),
       redirect(other.redirect),
       clientMaxBody(other.clientMaxBody),
       allowedMethods(other.allowedMethods) {}
@@ -32,12 +29,10 @@ LocationConfig& LocationConfig::operator=(const LocationConfig& other) {
         path           = other.path;
         root           = other.root;
         autoIndex      = other.autoIndex;
+        autoIndexSet   = other.autoIndexSet;
         indexes        = other.indexes;
-        uploadEnabled  = other.uploadEnabled;
-        uploadPath     = other.uploadPath;
-        cgiEnabled     = other.cgiEnabled;
-        cgiPath        = other.cgiPath;
-        cgiExtension   = other.cgiExtension;
+        uploadDir      = other.uploadDir;
+        cgiPass        = other.cgiPass;
         redirect       = other.redirect;
         clientMaxBody  = other.clientMaxBody;
         allowedMethods = other.allowedMethods;
@@ -49,18 +44,18 @@ LocationConfig::LocationConfig(const std::string& p)
     : path(p),
       root(""),
       autoIndex(false),
+      autoIndexSet(false),
       indexes(),
-      uploadEnabled(false),
-      uploadPath(""),
-      cgiEnabled(false),
-      cgiPath(""),
-      cgiExtension(""),
+      uploadDir(""),
+      cgiPass(),
       redirect(""),
+      clientMaxBody(""),
       allowedMethods() {}
 
 LocationConfig::~LocationConfig() {
     indexes.clear();
     allowedMethods.clear();
+    cgiPass.clear();
 }
 // setters
 bool LocationConfig::setRoot(const VectorString& r) {
@@ -79,13 +74,14 @@ void LocationConfig::setRoot(const std::string& r) {
 }
 
 bool LocationConfig::setAutoIndex(const VectorString& v) {
-    if (autoIndex != false)
-        return Logger::error("duplicate autoindex");
+    if (autoIndexSet)
+        return Logger::error("duplicate autoindex directive");
     if (v.size() != 1)
         return Logger::error("autoindex takes exactly one value");
     if (v[0] != "on" && v[0] != "off")
         return Logger::error("invalid autoindex value");
     autoIndex = (v[0] == "on");
+    autoIndexSet = true;
     return true;
 }
 
@@ -100,82 +96,57 @@ bool LocationConfig::setIndexes(const VectorString& i) {
     indexes = i;
     return true;
 }
-void LocationConfig::setUploadEnabled(bool v) {
-    uploadEnabled = v;
-}
-void LocationConfig::setUploadPath(const std::string& p) {
-    uploadPath = p;
+void LocationConfig::setUploadDir(const std::string& p) {
+    uploadDir = p;
 }
 
-bool LocationConfig::setUploadPath(const VectorString& p) {
-    if (!uploadPath.empty())
-        return Logger::error("duplicate upload_path");
+bool LocationConfig::setUploadDir(const VectorString& p) {
+    if (!uploadDir.empty())
+        return Logger::error("duplicate upload_dir directive");
     if (p.size() != 1)
-        return Logger::error("upload_path takes exactly one value");
+        return Logger::error("upload_dir takes exactly one value");
     if (p[0].empty() || p[0][0] != '/')
-        return Logger::error("upload_path must be an absolute path");
-    uploadPath = p[0];
+        return Logger::error("upload_dir must be an absolute path");
+    uploadDir = p[0];
     return true;
-}
-void LocationConfig::setCgiEnabled(bool v) {
-    cgiEnabled = v;
-}
-void LocationConfig::setCgiPath(const std::string& p) {
-    cgiPath = p;
 }
 
-bool LocationConfig::setCgiPath(const VectorString& p) {
-    if (!cgiPath.empty())
-        return Logger::error("duplicate cgi_path");
-    if (p.size() != 1)
-        return Logger::error("cgi_path takes exactly one value");
-    if (p[0].empty() || p[0][0] != '/')
-        return Logger::error("cgi_path must be an absolute path");
-    cgiPath = p[0];
+bool LocationConfig::setCgiPass(const VectorString& c) {
+    if (c.size() != 1)
+        return Logger::error("cgi_pass takes exactly one value");
+
+    const std::string& value = c[0];
+    size_t colonPos = value.find(':');
+    if (colonPos == std::string::npos)
+        return Logger::error("cgi_pass format must be .extension:/path/to/interpreter");
+
+    std::string extension = value.substr(0, colonPos);
+    std::string interpreter = value.substr(colonPos + 1);
+
+    if (extension.empty() || extension[0] != '.')
+        return Logger::error("cgi_pass extension must start with '.'");
+    if (interpreter.empty() || interpreter[0] != '/')
+        return Logger::error("cgi_pass interpreter must be an absolute path");
+
+    if (cgiPass.find(extension) != cgiPass.end())
+        return Logger::error("duplicate cgi_pass for extension: " + extension);
+
+    cgiPass[extension] = interpreter;
     return true;
-}
-void LocationConfig::setCgiExtension(const std::string& e) {
-    cgiExtension = e;
 }
 
-bool LocationConfig::setCgiExtension(const VectorString& e) {
-    if (!cgiExtension.empty())
-        return Logger::error("duplicate cgi_extension");
-    if (e.size() != 1)
-        return Logger::error("cgi_extension takes exactly one value");
-    if (e[0].empty() || e[0][0] != '.')
-        return Logger::error("cgi_extension must start with '.'");
-    cgiExtension = e[0];
-    return true;
-}
 void LocationConfig::setRedirect(const std::string& r) {
     redirect = r;
 }
 
 bool LocationConfig::setRedirect(const VectorString& r) {
     if (!redirect.empty())
-        return Logger::error("duplicate return");
-    if (r.empty() || r.size() > 2)
-        return Logger::error("return takes 1 or 2 values: [status_code] url");
-
-    std::string code;
-    std::string url;
-
-    if (r.size() == 2) {
-        code = r[0];
-        url  = r[1];
-
-        if (code != "301" && code != "302" && code != "303" && code != "307" && code != "308")
-            return Logger::error("invalid redirect status code: " + code);
-    } else {
-        code = "301";
-        url  = r[0];
-    }
-
-    if (url.empty() || url[0] != '/')
-        return Logger::error("redirect url must start with /");
-
-    redirect = code + " " + url;
+        return Logger::error("duplicate return directive");
+    if (r.size() != 1)
+        return Logger::error("return takes exactly one value");
+    if (r[0].empty() || r[0][0] != '/')
+        return Logger::error("return url must start with /");
+    redirect = r[0];
     return true;
 }
 
@@ -195,6 +166,10 @@ void LocationConfig::addAllowedMethod(const std::string& m) {
     allowedMethods.push_back(m);
 }
 bool LocationConfig::setAllowedMethods(const VectorString& v) {
+    if (!allowedMethods.empty())
+        return Logger::error("duplicate methods directive");
+    if (v.empty())
+        return Logger::error("methods requires at least one value");
     for (size_t i = 0; i < v.size(); i++) {
         std::string m = toUpperWords(v[i]);
         if (!checkAllowedMethods(m))
@@ -218,20 +193,18 @@ std::string LocationConfig::getRoot() const {
 bool LocationConfig::getAutoIndex() const {
     return autoIndex;
 }
-bool LocationConfig::getUploadEnabled() const {
-    return uploadEnabled;
+std::string LocationConfig::getUploadDir() const {
+    return uploadDir;
 }
-std::string LocationConfig::getUploadPath() const {
-    return uploadPath;
+const std::map<std::string, std::string>& LocationConfig::getCgiPass() const {
+    return cgiPass;
 }
-bool LocationConfig::getCgiEnabled() const {
-    return cgiEnabled;
+std::string LocationConfig::getCgiInterpreter(const std::string& extension) const {
+    std::map<std::string, std::string>::const_iterator it = cgiPass.find(extension);
+    return (it != cgiPass.end()) ? it->second : "";
 }
-std::string LocationConfig::getCgiPath() const {
-    return cgiPath;
-}
-std::string LocationConfig::getCgiExtension() const {
-    return cgiExtension;
+bool LocationConfig::hasCgi() const {
+    return !cgiPass.empty();
 }
 std::string LocationConfig::getRedirect() const {
     return redirect;

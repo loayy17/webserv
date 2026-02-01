@@ -108,8 +108,8 @@ bool ServerConfig::setListen(const VectorString &l)
     ListenAddress newAddr(iface, static_cast<int>(p));
     for (size_t i = 0; i < listenAddresses.size(); i++)
     {
-        if (listenAddresses[i].interface == newAddr.interface &&
-            listenAddresses[i].port == newAddr.port)
+        if (listenAddresses[i].getInterface() == newAddr.getInterface() &&
+            listenAddresses[i].getPort() == newAddr.getPort())
             return Logger::error("duplicate listen address: " + v);
     }
     listenAddresses.push_back(newAddr);
@@ -146,11 +146,11 @@ void ServerConfig::addLocation(const LocationConfig &loc)
 // getters
 int ServerConfig::getPort(size_t index) const
 {
-    return (index < listenAddresses.size()) ? listenAddresses[index].port : -1;
+    return (index < listenAddresses.size()) ? listenAddresses[index].getPort() : -1;
 }
 std::string ServerConfig::getInterface(size_t index) const
 {
-    return (index < listenAddresses.size()) ? listenAddresses[index].interface : "";
+    return (index < listenAddresses.size()) ? listenAddresses[index].getInterface() : "";
 }
 const std::vector<ListenAddress> &ServerConfig::getListenAddresses() const
 {
@@ -160,7 +160,7 @@ bool ServerConfig::hasPort(int port) const
 {
     for (size_t i = 0; i < listenAddresses.size(); i++)
     {
-        if (listenAddresses[i].port == port)
+        if (listenAddresses[i].getPort() == port)
             return true;
     }
     return false;

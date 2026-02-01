@@ -184,24 +184,20 @@ bool Router::checkBodySize(const LocationConfig& location) const {
 }
 
 bool Router::isCgiRequest(const std::string& path, const LocationConfig& location) const {
-    if (!location.getCgiEnabled()) {
+    if (!location.hasCgi())
         return false;
-    }
 
-    std::string extension = location.getCgiExtension();
-    if (extension.empty()) {
+    // Find the file extension in the path
+    size_t dotPos = path.rfind('.');
+    if (dotPos == std::string::npos)
         return false;
-    }
 
-    if (path.length() < extension.length()) {
-        return false;
-    }
-
-    return path.compare(path.length() - extension.length(), extension.length(), extension) == 0;
+    std::string extension = path.substr(dotPos);
+    return !location.getCgiInterpreter(extension).empty();
 }
 
 bool Router::isUploadRequest(const std::string& method, const LocationConfig& location) const {
-    return location.getUploadEnabled() && method == "POST";
+    return !location.getUploadDir().empty() && method == "POST";
 }
 
 // Getters

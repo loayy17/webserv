@@ -53,7 +53,7 @@ bool ServerManager::initializeServers(const std::vector<ServerConfig>& configs) 
 
             if (!server->init()) {
                 Logger::error("[ERROR]: Failed to start server on " +
-                    addresses[j].interface + ":" + typeToString(addresses[j].port));
+                    addresses[j].getInterface() + ":" + typeToString(addresses[j].getPort()));
                 delete server;
                 continue;
             }
@@ -61,7 +61,7 @@ bool ServerManager::initializeServers(const std::vector<ServerConfig>& configs) 
             servers.push_back(server);
             std::string name = configs[i].getServerName().empty() ? "default" : configs[i].getServerName();
             Logger::info("[INFO]: Server '" + name + "' listening on " +
-                addresses[j].interface + ":" + typeToString(addresses[j].port));
+                addresses[j].getInterface() + ":" + typeToString(addresses[j].getPort()));
         }
     }
     return !servers.empty();

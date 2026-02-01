@@ -171,14 +171,6 @@ bool ConfigParser::parseServer()
     }
     if (srv.getListenAddresses().empty())
         return Logger::error("server missing listen directive");
-    if (srv.getRoot().empty())
-        return Logger::error("server missing root directive");
-    if (srv.getIndexes().empty())
-        return Logger::error("server missing index directive");
-    if (srv.getClientMaxBody().empty())
-        return Logger::error("server missing client_max_body_size directive");
-    if (srv.getErrorPages().empty())
-        return Logger::error("server missing error_page directive");
     if (srv.getLocations().empty())
         return Logger::error("at least one location is required");
     servers.push_back(srv);
@@ -246,9 +238,8 @@ ConfigParser::LocationDirectiveMap ConfigParser::getLocationDirectives()
     m["client_max_body_size"] = &LocationConfig::setClientMaxBody;
     m["methods"] = &LocationConfig::setAllowedMethods;
     m["return"] = &LocationConfig::setRedirect;
-    m["cgi_path"] = &LocationConfig::setCgiPath;
-    m["cgi_extension"] = &LocationConfig::setCgiExtension;
-    m["upload_path"] = &LocationConfig::setUploadPath;
+    m["cgi_pass"] = &LocationConfig::setCgiPass;
+    m["upload_dir"] = &LocationConfig::setUploadDir;
 
     return m;
 }
@@ -294,7 +285,12 @@ bool ConfigParser::validate()
             if (locs[j].getClientMaxBody().empty())
                 locs[j].setClientMaxBody(s.getClientMaxBody());
             if (locs[j].getIndexes().empty())
-                locs[j].setIndexes(s.getIndexes());
+            {
+                if (s.getIndexes().empty())
+                    locs[j].setIndexes(VectorString(1, "index.html"));
+                else
+                    locs[j].setIndexes(s.getIndexes());
+            }
         }
     }
 

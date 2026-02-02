@@ -17,16 +17,29 @@
 #include "Server.hpp"
 
 class ServerManager {
-   private:
-    static const int                CLIENT_TIMEOUT = 30;
-    bool                            running;
-    PollManager                     pollManager;
-    std::vector<Server*>            servers;
-    const std::vector<ServerConfig> serverConfigs;
-    std::map<int, Client*>          clients;
-    std::map<int, Server*>          clientToServer;
+   public:
+    ServerManager();
+    ServerManager(const VectorServerConfig& configs);
+    ServerManager(const ServerManager&);
+    ServerManager& operator=(const ServerManager&);
+    ~ServerManager();
 
-    bool    initializeServers(const std::vector<ServerConfig>& configs);
+    bool   initialize();
+    bool   run();
+    void   shutdown();
+    size_t getServerCount() const;
+    size_t getClientCount() const;
+
+   private:
+    bool                     running;
+    PollManager              pollManager;
+    std::vector<Server*>     servers;
+    const VectorServerConfig serverConfigs;
+    MapIntClientPtr          clients;
+    MapIntServerPtr          clientToServer;
+    MapIntVectorServerConfig serverToConfigs;
+    // Internal helpers
+    bool    initializeServers(const VectorServerConfig& serversConfigs);
     bool    acceptNewConnection(Server* server);
     void    handleClientRead(int clientFd);
     void    handleClientWrite(int clientFd);
@@ -36,18 +49,9 @@ class ServerManager {
     bool    isServerSocket(int fd) const;
     void    processRequest(Client* client, Server* server);
 
-   public:
-    ServerManager();    
-    ServerManager(const std::vector<ServerConfig>& configs);
-    ServerManager(const ServerManager&);
-    ServerManager& operator=(const ServerManager&);
-    ~ServerManager();    
-
-    bool   initialize();
-    bool   run();
-    void   shutdown();
-    size_t getServerCount() const;
-    size_t getClientCount() const;
+    Server*              createServerForListener(const std::string& listenerKey, const VectorServerConfig& configs, PollManager& pollMgr);
+    ListenerToConfigsMap getListerToConfigs();
+    ListenerToConfigsMap mapListenersToConfigs(const VectorServerConfig& configs);
 };
 
 #endif

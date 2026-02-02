@@ -29,19 +29,19 @@ class LocationConfig {
     void setClientMaxBody(const std::string& c);
     bool setClientMaxBody(const VectorString& c);
 
-    void         addAllowedMethod(const std::string& m);
-    bool         setAllowedMethods(const VectorString& m);
-    std::string  getPath() const;
-    std::string  getRoot() const;
-    bool         getAutoIndex() const;
-    VectorString getIndexes() const;
-    std::string  getUploadDir() const;
-    const std::map<std::string, std::string>& getCgiPass() const;
-    std::string  getCgiInterpreter(const std::string& extension) const;
-    bool         hasCgi() const;
-    std::string  getRedirect() const;
-    std::string  getClientMaxBody() const;
-    VectorString getAllowedMethods() const;
+    void             addAllowedMethod(const std::string& m);
+    bool             setAllowedMethods(const VectorString& m);
+    std::string      getPath() const;
+    std::string      getRoot() const;
+    bool             getAutoIndex() const;
+    VectorString     getIndexes() const;
+    std::string      getUploadDir() const;
+    const MapString& getCgiPass() const;
+    std::string      getCgiInterpreter(const std::string& extension) const;
+    bool             hasCgi() const;
+    std::string      getRedirect() const;
+    std::string      getClientMaxBody() const;
+    VectorString     getAllowedMethods() const;
 
    private:
     // required location parameters
@@ -51,8 +51,8 @@ class LocationConfig {
     bool         autoIndex;      // default: false
     bool         autoIndexSet;   // tracks if autoindex directive was used
     VectorString indexes;        // default: root if not set be default "index.html"
-    std::string  uploadDir;                        // upload directory path
-    std::map<std::string, std::string> cgiPass;   // maps extension to interpreter path
+    std::string  uploadDir;      // upload directory path
+    MapString    cgiPass;        // maps extension to interpreter path
     std::string  redirect;       // default: ""
     std::string  clientMaxBody;  // default: ""
     VectorString allowedMethods; // default: GET

@@ -3,12 +3,13 @@
 
 Client::Client() : client_fd(-1) {}
 
-Client::Client(const Client& other) : client_fd(other.client_fd), storeReceiveData(other.storeReceiveData), storeSendData(other.storeSendData), lastActivity(other.lastActivity) {}
+Client::Client(const Client& other)
+    : client_fd(other.client_fd), storeReceiveData(other.storeReceiveData), storeSendData(other.storeSendData), lastActivity(other.lastActivity) {}
 
 Client& Client::operator=(const Client& other) {
     if (this != &other) {
-        client_fd = other.client_fd;
-        lastActivity = other.lastActivity;
+        client_fd        = other.client_fd;
+        lastActivity     = other.lastActivity;
         storeReceiveData = other.storeReceiveData;
         storeSendData    = other.storeSendData;
     }

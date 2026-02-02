@@ -1,6 +1,6 @@
 #include "ServerManager.hpp"
 
-ServerManager::ServerManager() : running(false), serverConfigs() {}
+ServerManager::ServerManager() : running(false), pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs() {}
 
 ServerManager::ServerManager(const ServerManager& other)
     : running(other.running),
@@ -8,20 +8,23 @@ ServerManager::ServerManager(const ServerManager& other)
       servers(other.servers),
       serverConfigs(other.serverConfigs),
       clients(other.clients),
-      clientToServer(other.clientToServer) {}
+      clientToServer(other.clientToServer),
+      serverToConfigs(other.serverToConfigs) {}
 
 ServerManager& ServerManager::operator=(const ServerManager& other) {
     if (this != &other) {
-        running        = other.running;
-        pollManager    = other.pollManager;
-        servers        = other.servers;
-        clients        = other.clients;
-        clientToServer = other.clientToServer;
+        running         = other.running;
+        pollManager     = other.pollManager;
+        servers         = other.servers;
+        clients         = other.clients;
+        clientToServer  = other.clientToServer;
+        serverToConfigs = other.serverToConfigs;
     }
     return *this;
 }
 
-ServerManager::ServerManager(const std::vector<ServerConfig>& _configs) : running(false), serverConfigs(_configs) {}
+ServerManager::ServerManager(const VectorServerConfig& _configs)
+    : running(false), pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs() {}
 
 ServerManager::~ServerManager() {
     shutdown();
@@ -37,33 +40,80 @@ bool ServerManager::initialize() {
     return Logger::info("[INFO]: ServerManager initialized");
 }
 
-bool ServerManager::initializeServers(const std::vector<ServerConfig>& configs) {
-    for (size_t i = 0; i < configs.size(); i++) {
-        const std::vector<ListenAddress>& addresses = configs[i].getListenAddresses();
-
+ListenerToConfigsMap ServerManager::getListerToConfigs() {
+    ListenerToConfigsMap listenerToConfigs;
+    for (size_t i = 0; i < serverConfigs.size(); i++) {
+        const VectorListenAddress& addresses = serverConfigs[i].getListenAddresses();
         for (size_t j = 0; j < addresses.size(); j++) {
-            Server* server = NULL;
-
-            try {
-                server = new Server(configs[i], j);
-            } catch (const std::bad_alloc& e) {
-                Logger::error("[ERROR]: Memory allocation failed for server");
-                continue;
-            }
-
-            if (!server->init()) {
-                Logger::error("[ERROR]: Failed to start server on " +
-                    addresses[j].getInterface() + ":" + typeToString(addresses[j].getPort()));
-                delete server;
-                continue;
-            }
-            pollManager.addFd(server->getFd(), POLLIN);
-            servers.push_back(server);
-            std::string name = configs[i].getServerName().empty() ? "default" : configs[i].getServerName();
-            Logger::info("[INFO]: Server '" + name + "' listening on " +
-                addresses[j].getInterface() + ":" + typeToString(addresses[j].getPort()));
+            std::string key = addresses[j].getInterface() + ":" + typeToString<int>(addresses[j].getPort());
+            listenerToConfigs[key].push_back(serverConfigs[i]);
         }
     }
+    return listenerToConfigs;
+}
+ListenerToConfigsMap ServerManager::mapListenersToConfigs(const VectorServerConfig& configs) {
+    ListenerToConfigsMap result;
+    for (size_t i = 0; i < configs.size(); i++) {
+        const VectorListenAddress& addresses = configs[i].getListenAddresses();
+        for (size_t j = 0; j < addresses.size(); j++) {
+            std::string key = addresses[j].getInterface() + ":" + typeToString<int>(addresses[j].getPort());
+            result[key].push_back(configs[i]);
+        }
+    }
+    return result;
+}
+
+Server* ServerManager::createServerForListener(const std::string& listenerKey, const VectorServerConfig& configsForListener,
+                                               PollManager& pollManager) {
+    if (configsForListener.empty())
+        return NULL;
+
+    const ServerConfig& firstConfig = configsForListener[0];
+
+    const VectorListenAddress& addresses   = firstConfig.getListenAddresses();
+    size_t                     listenIndex = 0;
+    for (size_t i = 0; i < addresses.size(); i++) {
+        std::string key = addresses[i].getInterface() + ":" + typeToString<int>(addresses[i].getPort());
+        if (key == listenerKey) {
+            listenIndex = i;
+            break;
+        }
+    }
+    Server* server = NULL;
+    try {
+        server = new Server(firstConfig, listenIndex);
+        if (!server->init())
+            throw std::runtime_error("Server init failed");
+    } catch (...) {
+        Logger::error("[ERROR]: Failed to create server for listener " + listenerKey);
+        if (server)
+            delete server;
+        return NULL;
+    }
+
+    pollManager.addFd(server->getFd(), POLLIN);
+    return server;
+}
+
+bool ServerManager::initializeServers(const VectorServerConfig& configs) {
+    ListenerToConfigsMap listenerToConfigs = mapListenersToConfigs(configs);
+
+    std::map<std::string, Server*> listenerToServerMap;
+
+    ListenerToConfigsMap::iterator it;
+    for (it = listenerToConfigs.begin(); it != listenerToConfigs.end(); ++it) {
+        const std::string&        listenerKey        = it->first;
+        const VectorServerConfig& configsForListener = it->second;
+
+        Server* server = createServerForListener(listenerKey, configsForListener, pollManager);
+        if (!server)
+            continue;
+
+        servers.push_back(server);
+        listenerToServerMap[listenerKey] = server;
+        serverToConfigs[server->getFd()] = configsForListener;
+    }
+
     return !servers.empty();
 }
 
@@ -162,7 +212,7 @@ void ServerManager::handleClientWrite(int clientFd) {
 void ServerManager::checkTimeouts(int timeout) {
     std::vector<int> toClose;
 
-    for (std::map<int, Client*>::iterator it = clients.begin(); it != clients.end(); ++it) {
+    for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
         if (it->second->isTimedOut(timeout)) {
             toClose.push_back(it->first);
         }
@@ -246,7 +296,7 @@ void ServerManager::shutdown() {
     std::cout << "[INFO]: Shutting down..." << std::endl;
     running = false;
 
-    for (std::map<int, Client*>::iterator it = clients.begin(); it != clients.end(); ++it) {
+    for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
         it->second->closeConnection();
         delete it->second;
     }

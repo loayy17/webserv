@@ -48,6 +48,9 @@ class HttpRequest {
     const MapString& getCookies() const;
     int              getErrorCode() const;
 
+    // Setters
+    void setPort(int serverPort);
+
     // Validators
     bool isComplete() const;
     bool hasBody() const;

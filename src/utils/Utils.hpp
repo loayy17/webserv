@@ -9,7 +9,6 @@
 #include "Logger.hpp"
 #include "Types.hpp"
 
-// TODO : add time utils if needed
 // Time methods
 time_t getCurrentTime();
 void   updateTime(time_t& t);

@@ -6,6 +6,7 @@
 #include <vector>
 #include "../config/LocationConfig.hpp"
 #include "../config/ServerConfig.hpp"
+#include "../utils/Utils.hpp"
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
 
@@ -14,9 +15,9 @@ class Router {
     Router();
     Router(const Router& other);
     Router& operator=(const Router& other);
-    Router(const std::vector<ServerConfig>& servers, const HttpRequest& request);
+    Router(const VectorServerConfig& servers, const HttpRequest& request);
     ~Router();
-    const LocationConfig* bestMatchLocation(const std::vector<LocationConfig>& locationsMatchServer) const;
+    const LocationConfig* bestMatchLocation(const VectorLocationConfig& locationsMatchServer) const;
     void                  processRequest();
     const ServerConfig*   findServer() const;
     std::string           resolveFilesystemPath() const;
@@ -38,18 +39,18 @@ class Router {
     const std::string&    getErrorMessage() const;
 
    private:
-    std::vector<ServerConfig> _servers;      // params from config
-    HttpRequest               _request;      // param from http request
-    bool                      isPathFound;   // is for checking if path of uri found in locations
-    std::string               pathRootUri;   // the full path after combining root and uri
-    std::string               matchedPath;   // the part of uri that matched with location path like /images
-    std::string               remainingPath; // the part of uri that is after matched path like /photo.jpg
-    const LocationConfig*     matchLocation; // the location that matched with uri
-    const ServerConfig*       matchServer;   // the server that matched with host and port
-    std::string               redirectUrl;   // the URL to redirect to if isRedirect is true
-    bool                      isRedirect;    // indicates if the request should be redirected
-    int                       statusCode;    // HTTP status code for the response
-    std::string               errorMessage;  // error message if any error occurs
+    VectorServerConfig    _servers;      // params from config
+    HttpRequest           _request;      // param from http request
+    bool                  isPathFound;   // is for checking if path of uri found in locations
+    std::string           pathRootUri;   // the full path after combining root and uri
+    std::string           matchedPath;   // the part of uri that matched with location path like /images
+    std::string           remainingPath; // the part of uri that is after matched path like /photo.jpg
+    const LocationConfig* matchLocation; // the location that matched with uri
+    const ServerConfig*   matchServer;   // the server that matched with host and port
+    std::string           redirectUrl;   // the URL to redirect to if isRedirect is true
+    bool                  isRedirect;    // indicates if the request should be redirected
+    int                   statusCode;    // HTTP status code for the response
+    std::string           errorMessage;  // error message if any error occurs
 };
 
 #endif

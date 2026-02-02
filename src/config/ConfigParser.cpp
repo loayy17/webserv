@@ -1,11 +1,9 @@
 #include "ConfigParser.hpp"
-#include <cstdlib>
-#include "../utils/Logger.hpp"
 
 ConfigParser::ConfigParser()
     : file(""), servers(), scope(NONE), curr_index(0), httpClientMaxBody(""), lines(), serverDirectives(), locationDirectives() {}
 
-ConfigParser::ConfigParser(const ConfigParser &other)
+ConfigParser::ConfigParser(const ConfigParser& other)
     : file(other.file),
       servers(other.servers),
       scope(other.scope),
@@ -15,50 +13,42 @@ ConfigParser::ConfigParser(const ConfigParser &other)
       serverDirectives(other.serverDirectives),
       locationDirectives(other.locationDirectives) {}
 
-ConfigParser &ConfigParser::operator=(const ConfigParser &other)
-{
-    if (this != &other)
-    {
-        file = other.file;
-        servers = other.servers;
-        scope = other.scope;
-        curr_index = other.curr_index;
-        httpClientMaxBody = other.httpClientMaxBody;
-        lines = other.lines;
-        serverDirectives = other.serverDirectives;
+ConfigParser& ConfigParser::operator=(const ConfigParser& other) {
+    if (this != &other) {
+        file               = other.file;
+        servers            = other.servers;
+        scope              = other.scope;
+        curr_index         = other.curr_index;
+        httpClientMaxBody  = other.httpClientMaxBody;
+        lines              = other.lines;
+        serverDirectives   = other.serverDirectives;
         locationDirectives = other.locationDirectives;
     }
     return *this;
 }
 
-ConfigParser::ConfigParser(const std::string &f) : file(f), scope(NONE), curr_index(0)
-{
+ConfigParser::ConfigParser(const std::string& f) : file(f), scope(NONE), curr_index(0) {
     if (!convertFileToLines(file, lines))
         Logger::error("Failed to read configuration file: " + file);
 }
 
-ConfigParser::~ConfigParser()
-{
+ConfigParser::~ConfigParser() {
     servers.clear();
     lines.clear();
 }
 
-bool ConfigParser::getNextLine(std::string &out)
-{
+bool ConfigParser::getNextLine(std::string& out) {
     if (curr_index >= lines.size())
         return false;
     out = lines[curr_index++];
     return true;
 }
 
-bool ConfigParser::parse()
-{
+bool ConfigParser::parse() {
     std::string line;
-    bool is_http_defined = false;
-    while (getNextLine(line))
-    {
-        if (line == "http {")
-        {
+    bool        is_http_defined = false;
+    while (getNextLine(line)) {
+        if (line == "http {") {
             if (is_http_defined)
                 return Logger::error("only one http block allowed");
             is_http_defined = true;
@@ -68,57 +58,47 @@ bool ConfigParser::parse()
             if (!parseHttp())
                 return false;
             scope = NONE;
-        }
-        else if (line == "server {")
-        {
+        } else if (line == "server {") {
             if (scope != NONE)
                 return Logger::error("server block in invalid position");
             scope = SERVER;
             if (!parseServer())
                 return false;
             scope = NONE;
-        }
-        else
+        } else
             return Logger::error("Invalid directive: " + line);
     }
     return validate();
 }
 
-bool ConfigParser::parseHttp()
-{
+bool ConfigParser::parseHttp() {
     std::string line;
-    while (getNextLine(line))
-    {
+    while (getNextLine(line)) {
         std::string t = trimSpacesComments(line);
         if (t.empty())
             continue;
-        if (t == "}")
-        {
+        if (t == "}") {
             scope = NONE;
             break;
         }
-        if (t == "server {")
-        {
+        if (t == "server {") {
             if (!parseServer())
                 return false;
             continue;
         }
-        std::string key;
+        std::string  key;
         VectorString values;
         if (!parseKeyValue(t, key, values))
             return Logger::error("invalid http directive: " + t);
 
-        if (key == "client_max_body_size")
-        {
+        if (key == "client_max_body_size") {
             if (!httpClientMaxBody.empty())
                 return Logger::error("duplicate client_max_body_size");
             httpClientMaxBody = values[0];
-        }
-        else
+        } else
             return Logger::error("Unknown http directive: " + key);
     }
-    if (servers.size() == 0)
-    {
+    if (servers.size() == 0) {
         return Logger::error("No server defined");
     }
     if (scope != NONE)
@@ -126,41 +106,36 @@ bool ConfigParser::parseHttp()
     return true;
 }
 
-ConfigParser::ServerDirectiveMap ConfigParser::getServerDirectives()
-{
-    static ConfigParser::ServerDirectiveMap m;
+ServerDirectiveMap ConfigParser::getServerDirectives() {
+    static ServerDirectiveMap m;
 
-    m["listen"] = &ServerConfig::setListen;
-    m["server_name"] = &ServerConfig::setServerName;
-    m["root"] = &ServerConfig::setRoot;
-    m["index"] = &ServerConfig::setIndexes;
+    m["listen"]               = &ServerConfig::setListen;
+    m["server_name"]          = &ServerConfig::setServerName;
+    m["root"]                 = &ServerConfig::setRoot;
+    m["index"]                = &ServerConfig::setIndexes;
     m["client_max_body_size"] = &ServerConfig::setClientMaxBody;
-    m["error_page"] = &ServerConfig::setErrorPage;
+    m["error_page"]           = &ServerConfig::setErrorPage;
 
     return m;
 }
 
-bool ConfigParser::parseServer()
-{
+bool ConfigParser::parseServer() {
     ServerConfig srv;
     scope = SERVER;
 
     std::string l;
     serverDirectives = getServerDirectives();
 
-    while (getNextLine(l))
-    {
+    while (getNextLine(l)) {
         std::string t = trimSpacesComments(l);
         if (t.empty())
             continue;
-        if (t == "}")
-        {
+        if (t == "}") {
             scope = HTTP;
             break;
         }
 
-        if (t.find("location ") == 0)
-        {
+        if (t.find("location ") == 0) {
             if (!parseLocation(srv, t))
                 return false;
             continue;
@@ -179,9 +154,8 @@ bool ConfigParser::parseServer()
     return true;
 }
 
-bool ConfigParser::parseServerDirective(const std::string &l, ServerConfig &srv)
-{
-    std::string key;
+bool ConfigParser::parseServerDirective(const std::string& l, ServerConfig& srv) {
+    std::string  key;
     VectorString values;
     if (!parseKeyValue(l, key, values))
         return Logger::error("invalid server directive: " + l);
@@ -191,9 +165,8 @@ bool ConfigParser::parseServerDirective(const std::string &l, ServerConfig &srv)
     return (srv.*(it->second))(values);
 }
 
-bool ConfigParser::parseLocation(ServerConfig &srv, const std::string &header)
-{
-    std::string loc;
+bool ConfigParser::parseLocation(ServerConfig& srv, const std::string& header) {
+    std::string  loc;
     VectorString values;
     locationDirectives = getLocationDirectives();
     if (!parseKeyValue(header, loc, values))
@@ -202,8 +175,7 @@ bool ConfigParser::parseLocation(ServerConfig &srv, const std::string &header)
         return Logger::error("Invalid location syntax");
     if (values.empty() || values[0][0] != '/')
         return Logger::error("Location path required");
-    for (size_t i = 0; i < srv.getLocations().size(); i++)
-    {
+    for (size_t i = 0; i < srv.getLocations().size(); i++) {
         if (srv.getLocations()[i].getPath() == values[0])
             return Logger::error("duplicate location path: " + values[0]);
     }
@@ -212,14 +184,11 @@ bool ConfigParser::parseLocation(ServerConfig &srv, const std::string &header)
     scope = LOCATION;
 
     std::string line;
-    while (getNextLine(line))
-    {
-        if (line == "}")
-        {
+    while (getNextLine(line)) {
+        if (line == "}") {
             scope = SERVER;
             break;
-        }
-        else if (!parseLocationDirective(line, locCfg))
+        } else if (!parseLocationDirective(line, locCfg))
             return false;
     }
     srv.addLocation(locCfg);
@@ -228,25 +197,23 @@ bool ConfigParser::parseLocation(ServerConfig &srv, const std::string &header)
     return true;
 }
 
-ConfigParser::LocationDirectiveMap ConfigParser::getLocationDirectives()
-{
-    static ConfigParser::LocationDirectiveMap m;
+LocationDirectiveMap ConfigParser::getLocationDirectives() {
+    static LocationDirectiveMap m;
 
-    m["root"] = &LocationConfig::setRoot;
-    m["autoindex"] = &LocationConfig::setAutoIndex;
-    m["index"] = &LocationConfig::setIndexes;
+    m["root"]                 = &LocationConfig::setRoot;
+    m["autoindex"]            = &LocationConfig::setAutoIndex;
+    m["index"]                = &LocationConfig::setIndexes;
     m["client_max_body_size"] = &LocationConfig::setClientMaxBody;
-    m["methods"] = &LocationConfig::setAllowedMethods;
-    m["return"] = &LocationConfig::setRedirect;
-    m["cgi_pass"] = &LocationConfig::setCgiPass;
-    m["upload_dir"] = &LocationConfig::setUploadDir;
+    m["methods"]              = &LocationConfig::setAllowedMethods;
+    m["return"]               = &LocationConfig::setRedirect;
+    m["cgi_pass"]             = &LocationConfig::setCgiPass;
+    m["upload_dir"]           = &LocationConfig::setUploadDir;
 
     return m;
 }
 
-bool ConfigParser::parseLocationDirective(const std::string &l, LocationConfig &loc)
-{
-    std::string key;
+bool ConfigParser::parseLocationDirective(const std::string& l, LocationConfig& loc) {
+    std::string  key;
     VectorString values;
     if (!parseKeyValue(l, key, values))
         return Logger::error("invalid location directive: " + l);
@@ -256,26 +223,21 @@ bool ConfigParser::parseLocationDirective(const std::string &l, LocationConfig &
     return (loc.*(it->second))(values);
 }
 
-bool ConfigParser::validate()
-{
+bool ConfigParser::validate() {
     if (servers.empty())
         return Logger::error("No server defined");
 
-    for (size_t i = 0; i < servers.size(); i++)
-    {
-        ServerConfig &s = servers[i];
-        if (httpClientMaxBody.empty() && s.getClientMaxBody().empty())
-        {
+    for (size_t i = 0; i < servers.size(); i++) {
+        ServerConfig& s = servers[i];
+        if (httpClientMaxBody.empty() && s.getClientMaxBody().empty()) {
             httpClientMaxBody = "1M";
             s.setClientMaxBody("1M");
         }
         if (!httpClientMaxBody.empty() && s.getClientMaxBody().empty())
             s.setClientMaxBody(httpClientMaxBody);
-        std::vector<LocationConfig> &locs = s.getLocations();
-        for (size_t j = 0; j < locs.size(); j++)
-        {
-            if (locs[j].getRoot().empty())
-            {
+        VectorLocationConfig& locs = s.getLocations();
+        for (size_t j = 0; j < locs.size(); j++) {
+            if (locs[j].getRoot().empty()) {
                 if (s.getRoot().empty())
                     return Logger::error("location has no root and server has no root");
                 locs[j].setRoot(s.getRoot());
@@ -284,8 +246,7 @@ bool ConfigParser::validate()
                 locs[j].addAllowedMethod("GET");
             if (locs[j].getClientMaxBody().empty())
                 locs[j].setClientMaxBody(s.getClientMaxBody());
-            if (locs[j].getIndexes().empty())
-            {
+            if (locs[j].getIndexes().empty()) {
                 if (s.getIndexes().empty())
                     locs[j].setIndexes(VectorString(1, "index.html"));
                 else
@@ -297,12 +258,10 @@ bool ConfigParser::validate()
     return true;
 }
 
-std::vector<ServerConfig> ConfigParser::getServers() const
-{
+VectorServerConfig ConfigParser::getServers() const {
     return servers;
 }
 
-std::string ConfigParser::getHttpClientMaxBody() const
-{
+std::string ConfigParser::getHttpClientMaxBody() const {
     return httpClientMaxBody;
 }

@@ -371,7 +371,61 @@ EOF
 http {
     server {
         listen localhost:8080;
+        listen 127.0.0.1:8080;
+        root /var/www;
+        location / {
+            index index.html;
+        }
+    }
+}
+EOF
+
+    # 24b. Multiple values in single listen directive (invalid)
+    cat > "$TEST_DIR/24b_multi_value_listen.conf" << 'EOF'
+http {
+    server {
+        listen localhost:8080 127.0.0.1:8080;
+        root /var/www;
+        location / {
+            index index.html;
+        }
+    }
+}
+EOF
+
+    # 24c. Wildcard and specific IP on same port (should be duplicate)
+    cat > "$TEST_DIR/24c_wildcard_and_ip.conf" << 'EOF'
+http {
+    server {
+        listen 0.0.0.0:8080;
+        listen 127.0.0.1:8080;
+        root /var/www;
+        location / {
+            index index.html;
+        }
+    }
+}
+EOF
+
+    # 24d. Same host, different ports (valid)
+    cat > "$TEST_DIR/24d_diff_ports.conf" << 'EOF'
+http {
+    server {
+        listen localhost:8080;
         listen localhost:9090;
+        root /var/www;
+        location / {
+            index index.html;
+        }
+    }
+}
+EOF
+
+    # 24e. Hostname without port (invalid format for this parser)
+    cat > "$TEST_DIR/24e_hostname_no_port.conf" << 'EOF'
+http {
+    server {
+        listen localhost;
         root /var/www;
         location / {
             index index.html;
@@ -1317,6 +1371,7 @@ run_tests() {
     test_success "Inline braces" "$TEST_DIR/11_inline_braces.conf"
     test_success "Location inherits server root" "$TEST_DIR/12_inherit_root.conf"
     test_success "Tab indentation" "$TEST_DIR/13_tabs.conf"
+    
 
     # ----------------------------------------------------------
     # FAILURE CASES
@@ -1327,7 +1382,11 @@ run_tests() {
     test_failure "No server block in http" "$TEST_DIR/21_no_server.conf" "No server defined"
     test_failure "Multiple http blocks" "$TEST_DIR/22_multiple_http.conf" "only one http block allowed"
     test_failure "Missing listen directive" "$TEST_DIR/23_no_listen.conf" "server missing listen directive"
-    test_failure "Duplicate listen directive" "$TEST_DIR/24_dup_listen.conf" "duplicate listen"
+    test_failure "Multiple listen entries (localhost and 127.0.0.1 treated independently)" "$TEST_DIR/24_dup_listen.conf"
+    test_failure "Multiple values in single listen directive" "$TEST_DIR/24b_multi_value_listen.conf" "[ERROR]: listen takes exactly one value"
+    test_success "Wildcard and IP on same port (treated independently)" "$TEST_DIR/24c_wildcard_and_ip.conf"
+    test_success "Same host different ports (valid)" "$TEST_DIR/24d_diff_ports.conf"
+    test_failure "Hostname without port in listen" "$TEST_DIR/24e_hostname_no_port.conf" "invalid listen format"
     test_failure "Invalid listen format (no colon)" "$TEST_DIR/25_invalid_listen.conf" "invalid listen format"
     test_failure "Negative port number" "$TEST_DIR/26_negative_port.conf" "invalid port"
     test_failure "Port number too high (>65535)" "$TEST_DIR/27_port_too_high.conf" "invalid port"

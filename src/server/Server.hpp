@@ -14,7 +14,6 @@
 class Server {
    private:
     int          server_fd;
-    int          port;
     bool         running;
     ServerConfig config;
     size_t       listenIndex;

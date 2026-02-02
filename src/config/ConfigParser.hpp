@@ -1,9 +1,11 @@
 #ifndef CONFIG_PARSER_HPP
 #define CONFIG_PARSER_HPP
 
+#include <cstdlib>
 #include <iostream>
 #include <map>
 #include <vector>
+#include "../utils/Logger.hpp"
 #include "../utils/Utils.hpp"
 #include "LocationConfig.hpp"
 #include "ServerConfig.hpp"
@@ -16,14 +18,9 @@ class ConfigParser {
     ConfigParser(const std::string& f);
     ~ConfigParser();
 
-    bool                      parse();
-    std::string               getHttpClientMaxBody() const;
-    std::vector<ServerConfig> getServers() const;
-
-    typedef bool (ServerConfig::*ServerSetter)(const VectorString&);
-    typedef std::map<std::string, ServerSetter> ServerDirectiveMap;
-    typedef bool (LocationConfig::*LocationSetter)(const VectorString&);
-    typedef std::map<std::string, LocationSetter> LocationDirectiveMap;
+    bool               parse();
+    std::string        getHttpClientMaxBody() const;
+    VectorServerConfig getServers() const;
 
    private:
     enum Scope { NONE, HTTP, SERVER, LOCATION };

@@ -1,6 +1,5 @@
 #include "Router.hpp"
-
-Router::Router() 
+Router::Router()
     : _servers(),
       _request(),
       isPathFound(false),
@@ -16,37 +15,37 @@ Router::Router()
 
 Router::Router(const Router& other)
     : _servers(other._servers),
-    _request(other._request),
-    isPathFound(other.isPathFound),
-    pathRootUri(other.pathRootUri),
-    matchedPath(other.matchedPath),
-    remainingPath(other.remainingPath),
-    matchLocation(other.matchLocation),
-    matchServer(other.matchServer),
-    redirectUrl(other.redirectUrl),
-    isRedirect(other.isRedirect),
-    statusCode(other.statusCode),
-    errorMessage(other.errorMessage) {}
+      _request(other._request),
+      isPathFound(other.isPathFound),
+      pathRootUri(other.pathRootUri),
+      matchedPath(other.matchedPath),
+      remainingPath(other.remainingPath),
+      matchLocation(other.matchLocation),
+      matchServer(other.matchServer),
+      redirectUrl(other.redirectUrl),
+      isRedirect(other.isRedirect),
+      statusCode(other.statusCode),
+      errorMessage(other.errorMessage) {}
 
 Router& Router::operator=(const Router& other) {
     if (this != &other) {
-        _servers       = other._servers;
-        _request       = other._request;
-        isPathFound    = other.isPathFound;
-        pathRootUri    = other.pathRootUri;
-        matchedPath    = other.matchedPath;
-        remainingPath  = other.remainingPath;
-        matchLocation  = other.matchLocation;
-        matchServer    = other.matchServer;
-        redirectUrl    = other.redirectUrl;
-        isRedirect     = other.isRedirect;
-        statusCode     = other.statusCode;
-        errorMessage   = other.errorMessage;
+        _servers      = other._servers;
+        _request      = other._request;
+        isPathFound   = other.isPathFound;
+        pathRootUri   = other.pathRootUri;
+        matchedPath   = other.matchedPath;
+        remainingPath = other.remainingPath;
+        matchLocation = other.matchLocation;
+        matchServer   = other.matchServer;
+        redirectUrl   = other.redirectUrl;
+        isRedirect    = other.isRedirect;
+        statusCode    = other.statusCode;
+        errorMessage  = other.errorMessage;
     }
     return *this;
 }
 
-Router::Router(const std::vector<ServerConfig>& servers, const HttpRequest& request)
+Router::Router(const VectorServerConfig& servers, const HttpRequest& request)
     : _servers(servers),
       _request(request),
       isPathFound(false),
@@ -116,7 +115,7 @@ void Router::processRequest() {
     if (_request.getUri().length() > matchLocation->getPath().length()) {
         remainingPath = _request.getUri().substr(matchLocation->getPath().length());
     }
-    statusCode = 200;
+
     return;
 }
 
@@ -143,7 +142,7 @@ const ServerConfig* Router::getDefaultServer(int port) const {
     return NULL;
 }
 
-const LocationConfig* Router::bestMatchLocation(const std::vector<LocationConfig>& locationsMatchServer) const {
+const LocationConfig* Router::bestMatchLocation(const VectorLocationConfig& locationsMatchServer) const {
     std::string           normalizedUri = normalizePath(_request.getUri());
     const LocationConfig* bestMatch     = NULL;
 

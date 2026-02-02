@@ -3,7 +3,7 @@
 
 #include <unistd.h>
 #include <ctime>
-#include <string>
+#include <iostream>
 
 class Client {
    private:
@@ -12,7 +12,7 @@ class Client {
     std::string storeSendData;
     time_t      lastActivity;
 
-    public:
+   public:
     Client(const Client&);
     Client& operator=(const Client&);
     Client(int fd);

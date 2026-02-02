@@ -80,7 +80,7 @@ bool LocationConfig::setAutoIndex(const VectorString& v) {
         return Logger::error("autoindex takes exactly one value");
     if (v[0] != "on" && v[0] != "off")
         return Logger::error("invalid autoindex value");
-    autoIndex = (v[0] == "on");
+    autoIndex    = (v[0] == "on");
     autoIndexSet = true;
     return true;
 }
@@ -115,12 +115,12 @@ bool LocationConfig::setCgiPass(const VectorString& c) {
     if (c.size() != 1)
         return Logger::error("cgi_pass takes exactly one value");
 
-    const std::string& value = c[0];
-    size_t colonPos = value.find(':');
+    const std::string& value    = c[0];
+    size_t             colonPos = value.find(':');
     if (colonPos == std::string::npos)
         return Logger::error("cgi_pass format must be .extension:/path/to/interpreter");
 
-    std::string extension = value.substr(0, colonPos);
+    std::string extension   = value.substr(0, colonPos);
     std::string interpreter = value.substr(colonPos + 1);
 
     if (extension.empty() || extension[0] != '.')

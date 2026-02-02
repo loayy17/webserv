@@ -8,8 +8,8 @@
 class PollManager {
    private:
     std::vector<struct pollfd> fds;
-    
-public:
+
+   public:
     PollManager(const PollManager&);
     PollManager& operator=(const PollManager&);
     PollManager();

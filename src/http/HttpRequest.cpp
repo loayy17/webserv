@@ -298,6 +298,11 @@ std::string HttpRequest::getHost() const {
 int HttpRequest::getPort() const {
     return port;
 }
+
+void HttpRequest::setPort(int serverPort) {
+    port = serverPort;
+}
+
 // Validators
 bool HttpRequest::isComplete() const {
     return !method.empty() && !uri.empty() && !httpVersion.empty();

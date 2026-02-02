@@ -33,7 +33,7 @@ int main(int ac, char** av) {
         return 1;
     }
 
-    std::vector<ServerConfig> configs = parser.getServers();
+    VectorServerConfig configs = parser.getServers();
     if (configs.empty()) {
         std::cout << "[ERROR]: No server configurations found" << std::endl;
         return 1;

@@ -1,18 +1,16 @@
 #include "Server.hpp"
 
-Server::Server(const Server& other) : server_fd(other.server_fd), port(other.port), running(other.running), config(other.config), listenIndex(other.listenIndex) {}
+Server::Server(const Server& other) : server_fd(other.server_fd), running(other.running), config(other.config), listenIndex(other.listenIndex) {}
 
 Server& Server::operator=(const Server& other) {
     if (this != &other) {
         server_fd   = other.server_fd;
-        port        = other.port;
         running     = other.running;
         config      = other.config;
         listenIndex = other.listenIndex;
     }
     return *this;
 }
-
 
 Server::Server(ServerConfig cfg, size_t listenIdx) : server_fd(-1), running(false), config(cfg), listenIndex(listenIdx) {}
 
@@ -45,7 +43,7 @@ bool Server::bindSocket() {
     hints.ai_flags        = AI_PASSIVE;
     std::string iface     = config.getInterface(listenIndex);
     int         portNum   = config.getPort(listenIndex);
-    const char* interface = iface == "localhost" ? "127.0.0.1" : iface.c_str();
+    const char* interface = iface.c_str();
     const char* portStr   = typeToString<int>(portNum).c_str();
     if (getaddrinfo(interface, portStr, &hints, &res) != 0)
         return Logger::error("[ERROR]: getaddrinfo failed");
@@ -53,7 +51,6 @@ bool Server::bindSocket() {
     freeaddrinfo(res);
     if (bindResult < 0)
         return Logger::error("[ERROR]: Failed to bind socket to " + iface + ":" + typeToString<int>(portNum));
-
     return Logger::info("[INFO]: Socket bound to " + iface + ":" + typeToString<int>(portNum));
 }
 bool Server::startListening() {

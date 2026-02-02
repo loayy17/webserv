@@ -20,4 +20,6 @@
 #define MAX_URI_LENGTH 8192
 #define MAX_HEADER_SIZE 8192
 
+// ! TIMEOUTS
+#define CLIENT_TIMEOUT 60
 #endif

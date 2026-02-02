@@ -15,6 +15,8 @@ MimeTypes::MimeTypes(const std::string& extension) : extension(extension) {
         mimeType = "image/gif";
     else if (extension == "txt")
         mimeType = "text/plain";
+    else if (extension == "ico")
+        mimeType = "image/x-icon";
     else
         mimeType = "application/octet-stream";
 }
@@ -27,10 +29,9 @@ std::string MimeTypes::getMimeType() const {
 
 MimeTypes::MimeTypes() : extension(""), mimeType("application/octet-stream") {}
 
-MimeTypes::MimeTypes(const MimeTypes& other)
-    : extension(other.extension), mimeType(other.mimeType) {}
+MimeTypes::MimeTypes(const MimeTypes& other) : extension(other.extension), mimeType(other.mimeType) {}
 
-MimeTypes &MimeTypes::operator=(const MimeTypes& other) {
+MimeTypes& MimeTypes::operator=(const MimeTypes& other) {
     if (this != &other) {
         extension = other.extension;
         mimeType  = other.mimeType;

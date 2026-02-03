@@ -11,10 +11,6 @@ class LocationConfig;
 class ListenAddress;
 class Client;
 class Server;
-typedef bool (ServerConfig::*ServerSetter)(const VectorString&);
-typedef std::map<std::string, ServerSetter> ServerDirectiveMap;
-typedef bool (LocationConfig::*LocationSetter)(const VectorString&);
-typedef std::map<std::string, LocationSetter>     LocationDirectiveMap;
 typedef std::vector<std::string>                  VectorString;
 typedef std::map<std::string, std::string>        MapString;
 typedef std::map<std::string, VectorString>       MapValueVector;
@@ -27,4 +23,9 @@ typedef std::map<int, Client*>                    MapIntClientPtr;
 typedef std::map<int, Server*>                    MapIntServerPtr;
 typedef std::map<int, VectorServerConfig>         MapIntVectorServerConfig;
 
+
+typedef bool (ServerConfig::*ServerSetter)(const VectorString&);
+typedef std::map<std::string, ServerSetter> ServerDirectiveMap;
+typedef bool (LocationConfig::*LocationSetter)(const VectorString&);
+typedef std::map<std::string, LocationSetter>     LocationDirectiveMap;
 #endif

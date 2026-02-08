@@ -1,27 +1,73 @@
 #ifndef CONSTANTS_HPP
 #define CONSTANTS_HPP
 
-// ! ERROR 200
+
+// ! HTTP STATUS CODES - 2xx Success
 #define HTTP_OK 200
+#define HTTP_CREATED 201
 
-// ! ERROR 300
+// ! HTTP STATUS CODES - 3xx Redirect
+#define HTTP_MOVED_PERMANENTLY 301
 
-// ! ERROR 400
+// ! HTTP STATUS CODES - 4xx Client Error
 #define HTTP_BAD_REQUEST 400
+#define HTTP_NOT_FOUND 404
+#define HTTP_METHOD_NOT_ALLOWED 405
 #define HTTP_LENGTH_REQUIRED 411
 #define HTTP_PAYLOAD_TOO_LARGE 413
 #define HTTP_URI_TOO_LONG 414
 
-// ! ERROR 500
+// ! HTTP STATUS CODES - 5xx Server Error
+#define HTTP_INTERNAL_SERVER_ERROR 500
 #define HTTP_NOT_IMPLEMENTED 501
 #define HTTP_VERSION_NOT_SUPPORTED 505
+
+// ! HTTP HEADER NAMES
+#define HEADER_CONTENT_TYPE "Content-Type"
+#define HEADER_CONTENT_LENGTH "Content-Length"
+#define HEADER_CONTENT_DISPOSITION "Content-Disposition"
+#define HEADER_HOST "host"
+#define HEADER_COOKIE "cookie"
+
+// ! HTTP METHODS
+#define METHOD_GET "GET"
+#define METHOD_POST "POST"
+#define METHOD_DELETE "DELETE"
+#define METHOD_PUT "PUT"
+#define METHOD_PATCH "PATCH"
+#define METHOD_HEAD "HEAD"
+#define METHOD_OPTIONS "OPTIONS"
+
+// ! HTTP VERSIONS
+#define HTTP_VERSION_1_0 "HTTP/1.0"
+#define HTTP_VERSION_1_1 "HTTP/1.1"
+
+// ! DELIMITERS
+#define CRLF "\r\n"
+#define DOUBLE_CRLF "\r\n\r\n"
+#define COLON ':'
+#define SEMICOLON ';'
+#define EQUALS '='
+#define HASH '#'
+#define QUESTION '?'
+#define DOT '.'
+#define SLASH '/'
 
 // ! MAX LIMITS
 #define MAX_URI_LENGTH 8192
 #define MAX_HEADER_SIZE 8192
+#define BUFFER_SIZE 1024
 
 // ! TIMEOUTS
 #define CLIENT_TIMEOUT 60
 
+// ! DEFAULTS
+#define DEFAULT_PORT 80
+#define DIR_PERMISSIONS 0755
+#define INVALID_FD -1
+
+// ! CGI
+#define CGI_INTERFACE "CGI/1.1"
+#define SERVER_PROTOCOL "HTTP/1.1"
 
 #endif

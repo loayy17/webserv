@@ -37,8 +37,8 @@ VectorString CgiHandler::buildEnv(const Router& router) const {
     env.push_back("PATH_INFO=" + router.getRemainingPath());
     env.push_back("SERVER_NAME=" + req.getHost());
     env.push_back("SERVER_PORT=" + typeToString<int>(req.getPort()));
-    env.push_back("GATEWAY_INTERFACE=CGI/1.1");
-    env.push_back("SERVER_PROTOCOL=HTTP/1.1");
+    env.push_back("GATEWAY_INTERFACE=" + String(CGI_INTERFACE));
+    env.push_back("SERVER_PROTOCOL=" + String(SERVER_PROTOCOL));
 
     // Headers
     const MapString& headers = req.getHeaders();
@@ -111,9 +111,11 @@ bool CgiHandler::handle(const Router& router, HttpResponse& response) const {
         return false;
 
     String scriptName, extension;
-    if (!splitByChar(router.getPathRootUri(), scriptName, extension, '.', true))
+    extension = extractFileExtension(router.getPathRootUri());
+    if (extension.empty())
         return Logger::error("Failed to parse CGI extension");
-    String interpreter = loc->getCgiInterpreter("." + extension);
+        
+    String interpreter = loc->getCgiInterpreter(extension);
     int    parentToChild[2]; // this is use for send server body (post) to child to it can access them
     int    childToParent[2]; // this is use for make server read all output from cgi child
     if (pipe(parentToChild) == -1)
@@ -183,7 +185,7 @@ bool CgiHandler::handle(const Router& router, HttpResponse& response) const {
     if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
         if (!parseCgiOutput(cgiOutput, response))
             return Logger::error("Invalid CGI output");
-        response.addHeader("Content-Length", typeToString<size_t>(response.getBody().size()));
+        response.addHeader(HEADER_CONTENT_LENGTH, typeToString<size_t>(response.getBody().size()));
         return true;
     }
     return Logger::error("CGI execution failed");

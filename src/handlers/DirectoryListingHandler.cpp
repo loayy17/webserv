@@ -92,9 +92,8 @@ bool DirectoryListingHandler::handle(const Router& router, HttpResponse& respons
 
     html += "</tbody>\n</table>\n</body>\n</html>";
 
-    response.setStatus(200, "OK");
-    response.addHeader("Content-Type", "text/html");
-    response.addHeader("Content-Length", typeToString<size_t>(html.size()));
+    response.setStatus(HTTP_OK, "OK");
+    response.setResponseHeaders("text/html", html.size());
     response.setBody(html);
 
     return true;

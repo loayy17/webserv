@@ -14,6 +14,7 @@ class HttpResponse {
 
     void   setStatus(int code, const String& msg);
     void   addHeader(const String&, const String&);
+    void   setResponseHeaders(const String& contentType, size_t contentLength);
     void   setBody(const String&);
     String getBody() const;
     String toString() const;

@@ -33,11 +33,15 @@ FileType    getFileType(const struct stat& st);
 FileType    getFileType(const String& path);
 String      sanitizeFilename(const String& filename);
 String      htmlEntities(const String& str);
+bool        ensureDirectoryExists(const String& dirPath);
+String      extractFileExtension(const String& path);
+String      extractFilenameFromHeader(const String& contentDisposition);
+bool        parseMultipartFormData(const String& body, const String& boundary, String& filename, String& fileContent);
+String      extractBoundaryFromContentType(const String& contentType);
 // vector methods
 bool checkAllowedMethods(const String& m);
 bool parseKeyValue(const String& line, String& key, VectorString& values);
 
-String findValueInVector(const VectorString& map, const String& key);
 String findValueStrInMap(const MapString& map, const String& key);
 String findValueIntInMap(const MapIntString& map, int key);
 // Path methods
@@ -86,6 +90,7 @@ template <typename K, typename V>
 bool isKeyInMap(const K& key, const std::map<K, V>& m) {
     return m.find(key) != m.end();
 }
+
 template <typename K, typename V>
 bool isKeyInVector(const K& key, const std::vector<K, V>& vector) {
     for (size_t i = 0; i < vector.size(); ++i)

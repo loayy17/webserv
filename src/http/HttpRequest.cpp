@@ -68,7 +68,7 @@ HttpRequest::~HttpRequest() {
 
 bool HttpRequest::parse(const String& raw) {
     errorCode        = 0;
-    size_t headerEnd = raw.find("\r\n\r\n");
+    size_t headerEnd = raw.find(DOUBLE_CRLF);
     if (headerEnd == String::npos) {
         errorCode = HTTP_BAD_REQUEST;
         std::cout << "header not end" << std::endl;
@@ -92,7 +92,7 @@ bool HttpRequest::parse(const String& raw) {
     return true;
 }
 bool HttpRequest::parseHeaders(const String& headerSection) {
-    size_t lineEnd = headerSection.find("\r\n");
+    size_t lineEnd = headerSection.find(CRLF);
     if (lineEnd == String::npos && (errorCode = HTTP_BAD_REQUEST)) {
         std::cout << "line end not found" << std::endl;
         return Logger::error("Failed to find end of request line");
@@ -117,7 +117,7 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
         return Logger::error("Empty method, URI, or HTTP version");
     }
     // ! Validate HTTP version (505 HTTP Version Not Supported)
-    if (httpVersion != "HTTP/1.1" && httpVersion != "HTTP/1.0") {
+    if (httpVersion != HTTP_VERSION_1_1 && httpVersion != HTTP_VERSION_1_0) {
         errorCode = HTTP_VERSION_NOT_SUPPORTED;
         return Logger::error("Unsupported HTTP version");
     }
@@ -132,14 +132,14 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
         return Logger::error("Method not implemented");
     }
 
-    if (!splitByChar(uri, uri, fragment, '#'))
+    if (!splitByChar(uri, uri, fragment, HASH))
         fragment = "";
-    if (!splitByChar(uri, uri, queryString, '?'))
+    if (!splitByChar(uri, uri, queryString, QUESTION))
         queryString = "";
 
     size_t pos = lineEnd + 2; // +2 to skip \r\n
     while (pos < headerSection.size()) {
-        lineEnd = headerSection.find("\r\n", pos);
+        lineEnd = headerSection.find(CRLF, pos);
 
         // If no more \r\n found, process remaining content as last header
         if (lineEnd == String::npos)
@@ -150,7 +150,7 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
             break;
 
         String key, value;
-        if (!splitByChar(line, key, value, ':') && (errorCode = HTTP_BAD_REQUEST))
+        if (!splitByChar(line, key, value, COLON) && (errorCode = HTTP_BAD_REQUEST))
             return Logger::error("Failed to parse header line");
 
         String headerKey = toLowerWords(trimSpaces(key));
@@ -171,7 +171,7 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
     }
 
     // ! Parse cookies if present
-    String cookieHeader = getValue(headers, String("cookie"), String());
+    String cookieHeader = getValue(headers, String(HEADER_COOKIE), String());
     if (!cookieHeader.empty())
         parseCookies(cookieHeader);
 
@@ -187,9 +187,9 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
 
     // ! Extract host and port
     String portStr;
-    String hostHeader = getValue(headers, String("host"), String());
+    String hostHeader = getValue(headers, String(HEADER_HOST), String());
     if (!hostHeader.empty()) {
-        if (!splitByChar(hostHeader, host, portStr, ':')) {
+        if (!splitByChar(hostHeader, host, portStr, COLON)) {
             host = hostHeader;
         } else {
             port = stringToType<int>(portStr);
@@ -202,7 +202,7 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
 bool HttpRequest::parseBody(const String& bodySection) {
     body = bodySection;
     // ! If method typically has a body (POST, PUT, PATCH)
-    bool methodExpectsBody = (method == "POST" || method == "PUT" || method == "PATCH");
+    bool methodExpectsBody = (method == METHOD_POST || method == METHOD_PUT || method == METHOD_PATCH);
 
     if (hasNonEmptyValue(headers, String("content-length"))) {
         // ! Content-Length is present, validate body size matches
@@ -233,8 +233,8 @@ bool HttpRequest::parseBody(const String& bodySection) {
 
 bool HttpRequest::validateHostHeader() {
     // ! HTTP/1.1 requires Host header
-    if (httpVersion == "HTTP/1.1") {
-        MapString::const_iterator it = headers.find("host");
+    if (httpVersion == HTTP_VERSION_1_1) {
+        MapString::const_iterator it = headers.find(HEADER_HOST);
         if (it == headers.end() || it->second.empty()) {
             return false;
         }
@@ -269,7 +269,7 @@ void HttpRequest::parseCookies(const String& cookieHeader) {
     splitByString(cookieHeader, cookiePairs, ";");
     for (size_t i = 0; i < cookiePairs.size(); ++i) {
         String key, value;
-        if (splitByChar(trimSpacesComments(cookiePairs[i]), key, value, '=')) {
+        if (splitByChar(trimSpacesComments(cookiePairs[i]), key, value, EQUALS)) {
             cookies[toLowerWords(trimSpacesComments(key))] = trimSpacesComments(value);
         }
     }

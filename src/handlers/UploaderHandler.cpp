@@ -1,6 +1,7 @@
-#include <sys/stat.h>
-#include <fstream>
 #include "../handlers/UploaderHandler.hpp"
+#include <sys/stat.h>
+#include <cstdlib>
+#include <fstream>
 #include "../utils/Utils.hpp"
 
 UploaderHandler::UploaderHandler() {}
@@ -8,17 +9,14 @@ UploaderHandler::~UploaderHandler() {}
 
 bool UploaderHandler::handle(const String& uploadDir, const String& filename, const String& content, HttpResponse& response) const {
     if (uploadDir.empty() || filename.empty())
-        return false;
-
-    String safeName = sanitizeFilename(filename);
-    String fullPath = joinPaths(uploadDir, safeName);
+        return Logger::error("uploader folder is empty");
+    String uploadDirStr = "." + uploadDir;
+    String safeName     = sanitizeFilename(filename);
+    String fullPath     = joinPaths(uploadDirStr, safeName);
 
     // Ensure upload directory exists
-    struct stat st;
-    if (stat(uploadDir.c_str(), &st) == -1) {
-        if (mkdir(uploadDir.c_str(), 0755) == -1)
-            return false;
-    }
+    if (!ensureDirectoryExists(uploadDirStr))
+        return Logger::error("Failed to create upload Folder");
 
     std::ofstream out(fullPath.c_str(), std::ios::binary);
     if (!out.is_open())
@@ -27,9 +25,9 @@ bool UploaderHandler::handle(const String& uploadDir, const String& filename, co
     out.write(content.c_str(), content.size());
     out.close();
 
-    response.setStatus(201, "Created");
-    response.addHeader("Content-Type", "text/plain");
-    response.addHeader("Content-Length", typeToString<size_t>(content.size()));
-    response.setBody("File uploaded successfully: " + safeName);
+    String successMsg = "File uploaded successfully: " + safeName;
+    response.setStatus(HTTP_CREATED, "Created");
+    response.setResponseHeaders("text/plain", successMsg.size());
+    response.setBody(successMsg);
     return true;
 }

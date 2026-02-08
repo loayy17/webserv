@@ -16,14 +16,12 @@ StaticFileHandler& StaticFileHandler::operator=(const StaticFileHandler& other) 
 StaticFileHandler::~StaticFileHandler() {}
 
 bool StaticFileHandler::handle(const Router& router, HttpResponse& response) const {
-    // TODO
     String path = router.getPathRootUri();
     String content;
     if (!readFileContent(path, content))
         return false;
-    response.setStatus(200, "OK");
-    response.addHeader("Content-Type", mimeTypes.get(path));
-    response.addHeader("Content-Length", typeToString<size_t>(content.size()));
+    response.setStatus(HTTP_OK, "OK");
+    response.setResponseHeaders(mimeTypes.get(path), content.size());
     response.setBody(content);
     return true;
 }

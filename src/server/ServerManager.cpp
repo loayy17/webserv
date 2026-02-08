@@ -215,29 +215,66 @@ void ServerManager::checkTimeouts(int timeout) {
     }
 }
 
-void ServerManager::processRequest(Client* client, Server* /*server*/) {
+size_t extractContentLength(std::string& buffer) {
+    String str   = "content-length:";
+    String lower = toLowerWords(buffer);
+    size_t pos   = lower.find(str);
+    if (pos == std::string::npos)
+        return 0;
+    size_t valueStart = pos + str.size();
+    size_t endContent = lower.find("\r\n", valueStart);
+    if (endContent == std::string::npos)
+        return 0;
+    String value = trimSpaces(buffer.substr(valueStart, endContent - valueStart));
+    if (value.empty())
+        return 0;
+    return stringToType<size_t>(value);
+}
+
+String checkMethod(std::string& buffer) {
+    size_t pos       = buffer.find("\r\n");
+    String firstLine = buffer.substr(0, pos);
+    if (firstLine.find("POST") == 0)
+        return "POST";
+    if (firstLine.find("GET") == 0)
+        return "GET";
+    if (firstLine.find("DELETE") == 0)
+        return "DELETE";
+    if (firstLine.find("PUT") == 0)
+        return "PUT";
+    return "";
+}
+
+void ServerManager::processRequest(Client* client, Server*) {
     String buffer = client->getStoreReceiveData();
-    if (buffer.find("\r\n\r\n") == String::npos) {
-        Logger::info("[INFO]: Incomplete HTTP request, waiting for more data");
+
+    size_t headerEnd = buffer.find("\r\n\r\n");
+    if (headerEnd == String::npos)
         return;
-    }
-    std::cout << "BUFFER" << buffer << std::endl;
+
+    size_t contentLength = extractContentLength(buffer);
+    size_t fullSize      = headerEnd + 4 + contentLength;
+
+    if (buffer.size() < fullSize)
+        return;
+
+    String fullRequest = buffer.substr(0, fullSize);
+
     HttpRequest request;
-    if (!request.parse(buffer)) {
-        Logger::error("[ERROR]: Failed to parse HTTP request");
+    if (!request.parse(fullRequest)) {
         ResponseBuilder builder;
-        HttpResponse    response = builder.buildError(400, "Bad Request");
+        HttpResponse    response = builder.buildError(HTTP_BAD_REQUEST, "Bad Request");
         client->setSendData(response.toString());
-        client->clearStoreReceiveData();
+        buffer.erase(0, fullSize);
         return;
     }
-    
+
     Router router(serverConfigs, request);
     router.processRequest();
     ResponseBuilder builder(mimeTypes);
     HttpResponse    response = builder.build(router);
     client->setSendData(response.toString());
-    client->clearStoreReceiveData();
+    buffer.erase(0, fullSize);
 }
 
 void ServerManager::closeClientConnection(int clientFd) {

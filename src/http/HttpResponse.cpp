@@ -25,6 +25,12 @@ void HttpResponse::addHeader(const String&, const String&) {
     String valueFind = getValue(headers, key, String());
     headers[key]     = valueFind.empty() ? value : valueFind + ", " + value;
 }
+
+void HttpResponse::setResponseHeaders(const String& contentType, size_t contentLength) {
+    addHeader(HEADER_CONTENT_TYPE, contentType);
+    addHeader(HEADER_CONTENT_LENGTH, typeToString<size_t>(contentLength));
+}
+
 void HttpResponse::setBody(const String& _body) {
     body = _body;
 }

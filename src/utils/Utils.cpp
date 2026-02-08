@@ -56,18 +56,11 @@ String findValueStrInMap(const MapString& map, const String& key) {
     }
     return "";
 }
+
 String findValueIntInMap(const MapIntString& map, int key) {
     MapIntString::const_iterator it = map.find(key);
     if (it != map.end()) {
         return it->second;
-    }
-    return "";
-}
-String findValueInVector(const VectorString& map, const String& key) {
-    for (size_t i = 0; i < map.size(); i++) {
-        if (map[i] == key) {
-            return map[i];
-        }
     }
     return "";
 }
@@ -119,13 +112,14 @@ bool convertFileToLines(String file, VectorString& lines) {
     ff.close();
     return true;
 }
+
 struct stat getFileStat(const String& path) {
     struct stat st;
     String      actualPath = path;
 
     if (stat(actualPath.c_str(), &st) == 0)
         return st;
-
+        
     if (actualPath.size() > 2 && actualPath[0] == '.' && actualPath[1] == '/') {
         actualPath = actualPath.substr(2);
         if (stat(actualPath.c_str(), &st) == 0)
@@ -150,15 +144,13 @@ struct stat getFileStat(const String& path) {
 FileType getFileType(const struct stat& st) {
     if (st.st_mode == 0)
         return UNKNOWN;
-
     if (S_ISDIR(st.st_mode))
         return DIRECTORY;
-
     if (S_ISREG(st.st_mode))
         return SINGLEFILE;
-
     return UNKNOWN;
 }
+
 FileType getFileType(const String& path) {
     struct stat st = getFileStat(path);
     return getFileType(st);
@@ -201,7 +193,6 @@ bool readFileContent(const String& filePath, String& content) {
     std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
     if (!file.is_open())
         return false;
-
     std::ostringstream ss;
     ss << file.rdbuf();
     content = ss.str();
@@ -210,13 +201,13 @@ bool readFileContent(const String& filePath, String& content) {
 
 bool checkAllowedMethods(const String& m) {
     VectorString methods;
-    methods.push_back("GET");
-    methods.push_back("POST");
-    methods.push_back("DELETE");
-    methods.push_back("PUT");
-    methods.push_back("PATCH");
-    methods.push_back("HEAD");
-    methods.push_back("OPTIONS");
+    methods.push_back(METHOD_GET);
+    methods.push_back(METHOD_POST);
+    methods.push_back(METHOD_DELETE);
+    methods.push_back(METHOD_PUT);
+    methods.push_back(METHOD_PATCH);
+    methods.push_back(METHOD_HEAD);
+    methods.push_back(METHOD_OPTIONS);
     return isKeyInVector(m, methods);
 }
 // ./www/html/index.html
@@ -328,4 +319,120 @@ bool pathStartsWith(const String& path, const String& prefix) {
     if (prefix.length() > path.length())
         return false;
     return path.compare(0, prefix.length(), prefix) == 0;
+}
+
+bool ensureDirectoryExists(const String& dirPath) {
+    struct stat st;
+    if (stat(dirPath.c_str(), &st) == -1) {
+        if (mkdir(dirPath.c_str(), DIR_PERMISSIONS) == -1)
+            return false;
+    }
+    return true;
+}
+
+String extractFileExtension(const String& path) {
+    size_t dotPos = path.rfind(DOT);
+    if (dotPos == String::npos)
+        return "";
+    return path.substr(dotPos);
+}
+
+String extractFilenameFromHeader(const String& contentDisposition) {
+    size_t filenamePos = contentDisposition.find("filename=");
+    if (filenamePos == String::npos)
+        return "";
+    
+    size_t start = filenamePos + 9; // length of "filename="
+    if (start >= contentDisposition.length())
+        return "";
+    
+    // Handle quoted filenames
+    if (contentDisposition[start] == '"') {
+        start++;
+        size_t end = contentDisposition.find('"', start);
+        if (end == String::npos)
+            return "";
+        return contentDisposition.substr(start, end - start);
+    }
+    
+    // Handle unquoted filenames
+    size_t end = contentDisposition.find(SEMICOLON, start);
+    if (end == String::npos)
+        end = contentDisposition.length();
+    return trimSpaces(contentDisposition.substr(start, end - start));
+}
+
+String extractBoundaryFromContentType(const String& contentType) {
+    size_t boundaryPos = contentType.find("boundary=");
+    if (boundaryPos == String::npos)
+        return "";
+    
+    size_t start = boundaryPos + 9; // length of "boundary="
+    if (start >= contentType.length())
+        return "";
+    
+    // Find end of boundary (semicolon or end of string)
+    size_t end = contentType.find(SEMICOLON, start);
+    if (end == String::npos)
+        end = contentType.length();
+    
+    return trimSpaces(contentType.substr(start, end - start));
+}
+
+bool parseMultipartFormData(const String& body, const String& boundary, String& filename, String& fileContent) {
+    if (boundary.empty() || body.empty())
+        return false;
+    
+    // Construct the boundary markers
+    String startBoundary = "--" + boundary;
+    String endBoundary = "--" + boundary + "--";
+    
+    // Find the first part
+    size_t partStart = body.find(startBoundary);
+    if (partStart == String::npos)
+        return false;
+    
+    partStart += startBoundary.length();
+    
+    // Skip CRLF after boundary
+    if (partStart + 2 <= body.length() && body.substr(partStart, 2) == CRLF)
+        partStart += 2;
+    
+    // Find the next boundary (end of this part)
+    size_t partEnd = body.find(startBoundary, partStart);
+    if (partEnd == String::npos)
+        return false;
+    
+    String part = body.substr(partStart, partEnd - partStart);
+    
+    // Find the separator between headers and content (double CRLF)
+    size_t headerEnd = part.find(DOUBLE_CRLF);
+    if (headerEnd == String::npos)
+        return false;
+    
+    String headers = part.substr(0, headerEnd);
+    String content = part.substr(headerEnd + 4); // Skip \r\n\r\n
+    
+    // Remove trailing CRLF from content
+    while (content.length() >= 2 && content.substr(content.length() - 2) == CRLF)
+        content = content.substr(0, content.length() - 2);
+    
+    // Parse headers to find Content-Disposition
+    size_t pos = 0;
+    while (pos < headers.length()) {
+        size_t lineEnd = headers.find(CRLF, pos);
+        if (lineEnd == String::npos)
+            lineEnd = headers.length();
+        
+        String line = headers.substr(pos, lineEnd - pos);
+        
+        if (toLowerWords(line).find("content-disposition") != String::npos) {
+            filename = extractFilenameFromHeader(line);
+        }
+        
+        pos = lineEnd + 2;
+    }
+    
+    fileContent = content;
+    return !filename.empty();
 }

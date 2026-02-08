@@ -20,7 +20,7 @@ HttpResponse ResponseBuilder::build(const Router& router) {
     HttpResponse response;
 
     // Error or path not found
-    if (!router.getIsPathFound() || router.getStatusCode() != 200) {
+    if (!router.getIsPathFound() || router.getStatusCode() != HTTP_OK) {
         handleError(response, router);
         return response;
     }
@@ -89,7 +89,36 @@ bool ResponseBuilder::handleUpload(HttpResponse& response, const Router& router)
 
     UploaderHandler uploader;
     std::cout << " handler  upload receive" << std::endl;
-    return uploader.handle(loc->getUploadDir(), "uploaded_file", router.getRequest().getBody(), response);
+    
+    String filename;
+    String fileContent;
+    
+    // Check if this is a multipart/form-data upload
+    String contentType = router.getRequest().getContentType();
+    if (contentType.find("multipart/form-data") != String::npos) {
+        // Extract boundary from Content-Type
+        String boundary = extractBoundaryFromContentType(contentType);
+        
+        // Parse multipart body to extract filename and content
+        if (boundary.empty() || !parseMultipartFormData(router.getRequest().getBody(), boundary, filename, fileContent)) {
+            std::cout << "Failed to parse multipart form data" << std::endl;
+            // Fallback to timestamp-based filename
+            filename = "upload_" + typeToString<time_t>(getCurrentTime()) + ".dat";
+            fileContent = router.getRequest().getBody();
+        } else {
+            std::cout << "Extracted filename: " << filename << std::endl;
+        }
+    } else {
+        // Not multipart, try to extract from Content-Disposition header or generate default
+        filename = extractFilenameFromHeader(router.getRequest().getHeader(HEADER_CONTENT_DISPOSITION));
+        if (filename.empty()) {
+            // Generate timestamp-based filename
+            filename = "upload_" + typeToString<time_t>(getCurrentTime()) + ".dat";
+        }
+        fileContent = router.getRequest().getBody();
+    }
+    
+    return uploader.handle(loc->getUploadDir(), filename, fileContent, response);
 }
 
 void ResponseBuilder::handleError(HttpResponse& response, const Router& router) {

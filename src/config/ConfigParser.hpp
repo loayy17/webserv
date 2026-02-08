@@ -15,35 +15,33 @@ class ConfigParser {
     ConfigParser();
     ConfigParser(const ConfigParser& other);
     ConfigParser& operator=(const ConfigParser& other);
-    ConfigParser(const std::string& f);
+    ConfigParser(const String& f);
     ~ConfigParser();
 
     bool               parse();
-    std::string        getHttpClientMaxBody() const;
+    String             getHttpClientMaxBody() const;
     VectorServerConfig getServers() const;
 
    private:
-    enum Scope { NONE, HTTP, SERVER, LOCATION };
-
-    std::string               file;
+    String                    file;
     std::vector<ServerConfig> servers;
-    Scope                     scope;
+    ScopeConfig               scope;
     size_t                    curr_index;
-    std::string               httpClientMaxBody;
+    String                    httpClientMaxBody;
     VectorString              lines;
     ServerDirectiveMap        serverDirectives;
     LocationDirectiveMap      locationDirectives;
 
-    bool getNextLine(std::string& out);
+    bool getNextLine(String& out);
 
     ServerDirectiveMap   getServerDirectives();
     LocationDirectiveMap getLocationDirectives();
 
     bool parseHttp();
     bool parseServer();
-    bool parseLocation(ServerConfig& srv, const std::string& header);
-    bool parseServerDirective(const std::string& l, ServerConfig& srv);
-    bool parseLocationDirective(const std::string& l, LocationConfig& loc);
+    bool parseLocation(ServerConfig& srv, const String& header);
+    bool parseServerDirective(const String& l, ServerConfig& srv);
+    bool parseLocationDirective(const String& l, LocationConfig& loc);
     bool validate();
 };
 

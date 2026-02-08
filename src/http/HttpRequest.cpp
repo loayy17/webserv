@@ -66,43 +66,53 @@ HttpRequest::~HttpRequest() {
     cookies.clear();
 }
 
-bool HttpRequest::parse(const std::string& raw) {
+bool HttpRequest::parse(const String& raw) {
     errorCode        = 0;
     size_t headerEnd = raw.find("\r\n\r\n");
-    if (headerEnd == std::string::npos) {
+    if (headerEnd == String::npos) {
         errorCode = HTTP_BAD_REQUEST;
+        std::cout << "header not end" << std::endl;
         return false;
     }
-    std::string headerSection = raw.substr(0, headerEnd);
-    std::string bodySection   = raw.substr(headerEnd + 4); // +4 to skip \r\n\r\n
+    String headerSection = raw.substr(0, headerEnd);
+    String bodySection   = raw.substr(headerEnd + 4); // +4 to skip \r\n\r\n
     if (!parseHeaders(headerSection)) {
         if (errorCode == 0)
             errorCode = HTTP_BAD_REQUEST;
+        std::cout << "parseHeaders" << std::endl;
         return Logger::error("Failed to parse headers");
     }
     if (!parseBody(bodySection)) {
         if (errorCode == 0)
             errorCode = HTTP_BAD_REQUEST;
+        std::cout << "parseBody" << std::endl;
+
         return Logger::error("Failed to parse body");
     }
     return true;
 }
-bool HttpRequest::parseHeaders(const std::string& headerSection) {
+bool HttpRequest::parseHeaders(const String& headerSection) {
     size_t lineEnd = headerSection.find("\r\n");
-    if (lineEnd == std::string::npos && (errorCode = HTTP_BAD_REQUEST))
+    if (lineEnd == String::npos && (errorCode = HTTP_BAD_REQUEST)) {
+        std::cout << "line end not found" << std::endl;
         return Logger::error("Failed to find end of request line");
+    }
 
-    std::string  requestLine = headerSection.substr(0, lineEnd);
+    String       requestLine = headerSection.substr(0, lineEnd);
     VectorString values;
     if (!parseKeyValue(requestLine, method, values) && (errorCode = HTTP_BAD_REQUEST)) {
+        std::cout << "parseKeyValue failed" << std::endl;
         return Logger::error("Failed to parse request line");
     }
-    if (values.size() != 2 && (errorCode = HTTP_BAD_REQUEST))
+    if (values.size() != 2 && (errorCode = HTTP_BAD_REQUEST)) {
+        std::cout << "invalid request line format" << std::endl;
         return Logger::error("Invalid request line format");
+    }
 
     uri         = values[0];
     httpVersion = values[1];
     if (method.empty() || uri.empty() || httpVersion.empty()) {
+        std::cout << "method, uri, or http version is empty" << std::endl;
         errorCode = HTTP_BAD_REQUEST;
         return Logger::error("Empty method, URI, or HTTP version");
     }
@@ -132,19 +142,19 @@ bool HttpRequest::parseHeaders(const std::string& headerSection) {
         lineEnd = headerSection.find("\r\n", pos);
 
         // If no more \r\n found, process remaining content as last header
-        if (lineEnd == std::string::npos)
+        if (lineEnd == String::npos)
             lineEnd = headerSection.size();
 
-        std::string line = headerSection.substr(pos, lineEnd - pos);
+        String line = headerSection.substr(pos, lineEnd - pos);
         if (line.empty())
             break;
 
-        std::string key, value;
+        String key, value;
         if (!splitByChar(line, key, value, ':') && (errorCode = HTTP_BAD_REQUEST))
             return Logger::error("Failed to parse header line");
 
-        std::string headerKey = toLowerWords(trimSpaces(key));
-        std::string headerVal = trimSpaces(value);
+        String headerKey = toLowerWords(trimSpaces(key));
+        String headerVal = trimSpaces(value);
 
         // ! RFC 7230: Multiple headers with same name should append with comma
         if (!hasNonEmptyValue(headers, headerKey))
@@ -161,12 +171,12 @@ bool HttpRequest::parseHeaders(const std::string& headerSection) {
     }
 
     // ! Parse cookies if present
-    std::string cookieHeader = getValue(headers, std::string("cookie"), std::string());
+    String cookieHeader = getValue(headers, String("cookie"), String());
     if (!cookieHeader.empty())
         parseCookies(cookieHeader);
 
     // ! Extract Content-Type
-    std::string ct = getValue(headers, std::string("content-type"), std::string());
+    String ct = getValue(headers, String("content-type"), String());
     if (!ct.empty())
         contentType = ct;
 
@@ -176,8 +186,8 @@ bool HttpRequest::parseHeaders(const std::string& headerSection) {
     }
 
     // ! Extract host and port
-    std::string portStr;
-    std::string hostHeader = getValue(headers, std::string("host"), std::string());
+    String portStr;
+    String hostHeader = getValue(headers, String("host"), String());
     if (!hostHeader.empty()) {
         if (!splitByChar(hostHeader, host, portStr, ':')) {
             host = hostHeader;
@@ -189,13 +199,16 @@ bool HttpRequest::parseHeaders(const std::string& headerSection) {
     return true;
 }
 
-bool HttpRequest::parseBody(const std::string& bodySection) {
+bool HttpRequest::parseBody(const String& bodySection) {
     body = bodySection;
     // ! If method typically has a body (POST, PUT, PATCH)
     bool methodExpectsBody = (method == "POST" || method == "PUT" || method == "PATCH");
 
-    if (hasNonEmptyValue(headers, std::string("content-length"))) {
+    if (hasNonEmptyValue(headers, String("content-length"))) {
         // ! Content-Length is present, validate body size matches
+        std::cout << "content length " << contentLength << std::endl;
+        std::cout << "body size " << body.size() << std::endl;
+        std::cout << "body " << body << std::endl;
         if (body.size() != contentLength) {
             errorCode = HTTP_BAD_REQUEST;
             return Logger::error("Body length does not match Content-Length");
@@ -235,7 +248,7 @@ bool HttpRequest::validateContentLength() {
         contentLength = 0;
         return true;
     }
-    const std::string& clValue = it->second;
+    const String& clValue = it->second;
     for (size_t i = 0; i < clValue.length(); ++i) {
         if (!std::isdigit(clValue[i])) {
             errorCode = HTTP_BAD_REQUEST;
@@ -251,28 +264,28 @@ bool HttpRequest::validateContentLength() {
     return true;
 }
 // ? example Cookie: "key1=value1; key2=value2; key3=value3" & "session=42; theme=dark; lang=en"
-void HttpRequest::parseCookies(const std::string& cookieHeader) {
+void HttpRequest::parseCookies(const String& cookieHeader) {
     VectorString cookiePairs;
     splitByString(cookieHeader, cookiePairs, ";");
     for (size_t i = 0; i < cookiePairs.size(); ++i) {
-        std::string key, value;
+        String key, value;
         if (splitByChar(trimSpacesComments(cookiePairs[i]), key, value, '=')) {
             cookies[toLowerWords(trimSpacesComments(key))] = trimSpacesComments(value);
         }
     }
 }
 // Getters
-std::string HttpRequest::getMethod() const {
+String HttpRequest::getMethod() const {
     return method;
 }
-std::string HttpRequest::getUri() const {
+String HttpRequest::getUri() const {
     return uri;
 }
-std::string HttpRequest::getHttpVersion() const {
+String HttpRequest::getHttpVersion() const {
     return httpVersion;
 }
-std::string HttpRequest::getHeader(const std::string& key) const {
-    std::string               lowerKey = toLowerWords(key);
+String HttpRequest::getHeader(const String& key) const {
+    String                    lowerKey = toLowerWords(key);
     MapString::const_iterator it       = headers.find(lowerKey);
     if (it != headers.end()) {
         return it->second;
@@ -282,17 +295,17 @@ std::string HttpRequest::getHeader(const std::string& key) const {
 const MapString& HttpRequest::getHeaders() const {
     return headers;
 }
-std::string HttpRequest::getBody() const {
+String HttpRequest::getBody() const {
     return body;
 }
 size_t HttpRequest::getContentLength() const {
     return contentLength;
 }
-std::string HttpRequest::getContentType() const {
+String HttpRequest::getContentType() const {
     return contentType;
 }
 
-std::string HttpRequest::getHost() const {
+String HttpRequest::getHost() const {
     return host;
 }
 int HttpRequest::getPort() const {
@@ -310,8 +323,8 @@ bool HttpRequest::isComplete() const {
 bool HttpRequest::hasBody() const {
     return !body.empty();
 }
-std::string HttpRequest::getCookie(const std::string& key) const {
-    std::string                     lowerKey = toLowerWords(key);
+String HttpRequest::getCookie(const String& key) const {
+    String                          lowerKey = toLowerWords(key);
     const MapString::const_iterator it       = cookies.find(lowerKey);
     if (it == cookies.end()) {
         return "";
@@ -323,4 +336,8 @@ const MapString& HttpRequest::getCookies() const {
 }
 int HttpRequest::getErrorCode() const {
     return errorCode;
+}
+
+String HttpRequest::getQueryString() const {
+    return queryString;
 }

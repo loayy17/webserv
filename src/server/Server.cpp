@@ -41,7 +41,7 @@ bool Server::bindSocket() {
     hints.ai_family       = AF_INET;
     hints.ai_socktype     = SOCK_STREAM;
     hints.ai_flags        = AI_PASSIVE;
-    std::string iface     = config.getInterface(listenIndex);
+    String      iface     = config.getInterface(listenIndex);
     int         portNum   = config.getPort(listenIndex);
     const char* interface = iface.c_str();
     const char* portStr   = typeToString<int>(portNum).c_str();

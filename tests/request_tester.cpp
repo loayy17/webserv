@@ -4,7 +4,7 @@
 #include "../src/http/HttpRequest.hpp"
 
 // Read entire file into a string
-std::string readFile(const std::string& filename) {
+String readFile(const String& filename) {
     std::ifstream file(filename.c_str(), std::ios::binary); // binary mode to preserve \r\n
     if (!file.is_open()) {
         std::cerr << "ERROR|Cannot open file: " << filename << std::endl;
@@ -21,8 +21,8 @@ int main(int argc, char* argv[]) {
         std::cerr << "Usage: " << argv[0] << " <request_file.http>" << std::endl;
         return 1;
     }
-    std::string requestFile = argv[1];
-    std::string rawRequest  = readFile(requestFile);
+    String requestFile = argv[1];
+    String rawRequest  = readFile(requestFile);
     // Parse request
     HttpRequest request;
     bool        parseResult = request.parse(rawRequest);

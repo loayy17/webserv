@@ -1,11 +1,13 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
+#include <sys/stat.h>
 #include <ctime>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <vector>
 #include "Constants.hpp"
+#include "Enums.hpp"
 #include "Logger.hpp"
 #include "Types.hpp"
 
@@ -13,25 +15,37 @@
 time_t getCurrentTime();
 void   updateTime(time_t& t);
 time_t getDifferentTime(const time_t& start, const time_t& end);
+String formatTime(time_t t);
 // String methods
-std::string toUpperWords(const std::string& str);
-std::string toLowerWords(const std::string& str);
-std::string trimSpaces(const std::string& s);
-std::string trimSpacesComments(const std::string& s);
-std::string cleanCharEnd(const std::string& v, char c);
-bool        splitByChar(const std::string& line, std::string& key, std::string& value, char endChar);
-bool        splitByString(const std::string& line, VectorString& values, const std::string& delimiter);
-// vector methods
-bool convertFileToLines(std::string file, VectorString& lines);
-bool checkAllowedMethods(const std::string& m);
-bool isStringInVector(const std::string& toFind, const VectorString& fromFind);
-bool parseKeyValue(const std::string& line, std::string& key, VectorString& values);
+String toUpperWords(const String& str);
+String toLowerWords(const String& str);
+String trimSpaces(const String& s);
+String trimSpacesComments(const String& s);
+String cleanCharEnd(const String& v, char c);
+bool   splitByChar(const String& line, String& key, String& value, char endChar, bool reverse = false);
+bool   splitByString(const String& line, VectorString& values, const String& delimiter);
 
-std::string findValueInVector(const VectorString& map, const std::string& key);
+// File methods
+bool        convertFileToLines(String file, VectorString& lines);
+bool        readFileContent(const String& filePath, String& content);
+struct stat getFileStat(const String& path);
+FileType    getFileType(const struct stat& st);
+FileType    getFileType(const String& path);
+String      sanitizeFilename(const String& filename);
+String      htmlEntities(const String& str);
+// vector methods
+bool checkAllowedMethods(const String& m);
+bool parseKeyValue(const String& line, String& key, VectorString& values);
+
+String findValueInVector(const VectorString& map, const String& key);
+String findValueStrInMap(const MapString& map, const String& key);
+String findValueIntInMap(const MapIntString& map, int key);
 // Path methods
-size_t      convertMaxBodySize(const std::string& maxBody);
-std::string normalizePath(const std::string& path);
-bool        pathStartsWith(const std::string& path, const std::string& prefix);
+size_t convertMaxBodySize(const String& maxBody);
+String formatSize(double size);
+String normalizePath(const String& path);
+String joinPaths(const String& firstPath, const String& secondPath);
+bool   pathStartsWith(const String& path, const String& prefix);
 
 // Map methods
 template <typename MapType, typename KeyType>
@@ -55,17 +69,29 @@ bool hasNonEmptyValue(const MapType& m, const KeyType& key) {
 }
 // Type conversion methods
 template <typename type>
-std::string typeToString(type _value) {
+String typeToString(type _value) {
     std::stringstream ss;
     ss << _value;
     return ss.str();
 }
 template <typename type>
-type stringToType(const std::string& str) {
+type stringToType(const String& str) {
     std::stringstream ss(str);
     type              value;
     ss >> value;
     return value;
+}
+
+template <typename K, typename V>
+bool isKeyInMap(const K& key, const std::map<K, V>& m) {
+    return m.find(key) != m.end();
+}
+template <typename K, typename V>
+bool isKeyInVector(const K& key, const std::vector<K, V>& vector) {
+    for (size_t i = 0; i < vector.size(); ++i)
+        if (vector[i] == key)
+            return true;
+    return false;
 }
 
 #endif

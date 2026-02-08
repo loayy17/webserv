@@ -4,13 +4,13 @@
 #include <unistd.h>
 #include <ctime>
 #include <iostream>
-
+#include "../utils/Types.hpp"
 class Client {
    private:
-    int         client_fd;
-    std::string storeReceiveData;
-    std::string storeSendData;
-    time_t      lastActivity;
+    int    client_fd;
+    String storeReceiveData;
+    String storeSendData;
+    time_t lastActivity;
 
    public:
     Client(const Client&);
@@ -19,15 +19,15 @@ class Client {
     Client();
     ~Client();
 
-    ssize_t     receiveData();
-    ssize_t     sendData();
-    void        queueResponse(const std::string& data);
-    void        clearStoreReceiveData();
-    bool        isTimedOut(int timeout) const;
-    void        closeConnection();
-    std::string getStoreReceiveData() const;
-    std::string getStoreSendData() const;
-    int         getFd() const;
+    ssize_t receiveData();
+    ssize_t sendData();
+    void    setSendData(const String& data);
+    void    clearStoreReceiveData();
+    bool    isTimedOut(int timeout) const;
+    void    closeConnection();
+    String  getStoreReceiveData() const;
+    String  getStoreSendData() const;
+    int     getFd() const;
 };
 
 #endif

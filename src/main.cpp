@@ -22,7 +22,7 @@ void setupSignals() {
 }
 
 int main(int ac, char** av) {
-    std::string configFile = (ac > 1) ? av[1] : "webserv.conf";
+    String configFile = (ac > 1) ? av[1] : "webserv.conf";
 
     std::cout << "========================================" << std::endl;
     std::cout << "       Webserv HTTP Server v1.0        " << std::endl;

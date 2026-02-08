@@ -8,17 +8,26 @@ void updateTime(time_t& t) {
 time_t getDifferentTime(const time_t& start, const time_t& end) {
     return end - start;
 }
+String formatTime(time_t t) {
+    char* raw = ctime(&t);
+    if (!raw)
+        return "-";
+    String result(raw);
+    if (!result.empty() && result[result.size() - 1] == '\n')
+        result.erase(result.size() - 1);
+    return result;
+}
 
-std::string toUpperWords(const std::string& str) {
-    std::string result = str;
+String toUpperWords(const String& str) {
+    String result = str;
     for (size_t i = 0; i < result.size(); ++i) {
         if (result[i] >= 'a' && result[i] <= 'z')
             result[i] = std::toupper(result[i]);
     }
     return result;
 }
-std::string toLowerWords(const std::string& str) {
-    std::string result = str;
+String toLowerWords(const String& str) {
+    String result = str;
     for (size_t i = 0; i < result.size(); ++i) {
         if (result[i] >= 'A' && result[i] <= 'Z')
             result[i] = std::tolower(result[i]);
@@ -26,28 +35,35 @@ std::string toLowerWords(const std::string& str) {
     return result;
 }
 
-std::string cleanCharEnd(const std::string& v, char c) {
+String cleanCharEnd(const String& v, char c) {
     if (!v.empty() && v[v.size() - 1] == c)
         return v.substr(0, v.size() - 1);
     return v;
 }
 
-std::string trimSpaces(const std::string& s) {
+String trimSpaces(const String& s) {
     size_t start = s.find_first_not_of(" \t\r\n");
-    if (start == std::string::npos)
+    if (start == String::npos)
         return "";
     size_t end = s.find_last_not_of(" \t\r\n");
     return s.substr(start, end - start + 1);
 }
 
-std::string findValueInMap(const MapString& map, const std::string& key) {
+String findValueStrInMap(const MapString& map, const String& key) {
     MapString::const_iterator it = map.find(key);
     if (it != map.end()) {
         return it->second;
     }
     return "";
 }
-std::string findValueInVector(const VectorString& map, const std::string& key) {
+String findValueIntInMap(const MapIntString& map, int key) {
+    MapIntString::const_iterator it = map.find(key);
+    if (it != map.end()) {
+        return it->second;
+    }
+    return "";
+}
+String findValueInVector(const VectorString& map, const String& key) {
     for (size_t i = 0; i < map.size(); i++) {
         if (map[i] == key) {
             return map[i];
@@ -56,32 +72,33 @@ std::string findValueInVector(const VectorString& map, const std::string& key) {
     return "";
 }
 
-std::string trimSpacesComments(const std::string& s) {
+String trimSpacesComments(const String& s) {
     size_t start = s.find_first_not_of(" \t\r\n");
-    if (start == std::string::npos || s[start] == '#')
+    if (start == String::npos || s[start] == '#')
         return "";
     size_t end = s.find('#', start);
-    if (end != std::string::npos)
+    if (end != String::npos)
         end--;
     else
         end = s.find_last_not_of(" \t\r\n");
     return s.substr(start, end - start + 1);
 }
 
-bool convertFileToLines(std::string file, VectorString& lines) {
+bool convertFileToLines(String file, VectorString& lines) {
     std::ifstream ff(file.c_str());
     if (!ff.is_open()) {
+        std::cerr << "Error: Could not open file " << file << std::endl;
         return false;
     }
 
-    std::string line;
-    std::string current;
+    String line;
+    String current;
 
     while (std::getline(ff, line)) {
         for (size_t i = 0; i < line.size(); ++i) {
             char c = line[i];
             if (c == '{' || c == ';' || c == '}') {
-                std::string t = trimSpacesComments(current);
+                String t = trimSpacesComments(current);
                 if (!t.empty())
                     lines.push_back(t + ((c == '{') ? " {" : (c == ';') ? ";" : ""));
                 else if (c == '{')
@@ -93,7 +110,7 @@ bool convertFileToLines(std::string file, VectorString& lines) {
                 current += c;
             }
         }
-        std::string t = trimSpacesComments(current);
+        String t = trimSpacesComments(current);
 
         if (!t.empty())
             lines.push_back(t);
@@ -102,8 +119,96 @@ bool convertFileToLines(std::string file, VectorString& lines) {
     ff.close();
     return true;
 }
+struct stat getFileStat(const String& path) {
+    struct stat st;
+    String      actualPath = path;
 
-bool checkAllowedMethods(const std::string& m) {
+    if (stat(actualPath.c_str(), &st) == 0)
+        return st;
+
+    if (actualPath.size() > 2 && actualPath[0] == '.' && actualPath[1] == '/') {
+        actualPath = actualPath.substr(2);
+        if (stat(actualPath.c_str(), &st) == 0)
+            return st;
+    }
+
+    if (!actualPath.empty() && actualPath[0] == '/') {
+        actualPath = "." + actualPath;
+        if (stat(actualPath.c_str(), &st) == 0)
+            return st;
+
+        actualPath = actualPath.substr(1);
+        if (stat(actualPath.c_str(), &st) == 0)
+            return st;
+    }
+
+    // mark invalid
+    st.st_mode = 0;
+    return st;
+}
+
+FileType getFileType(const struct stat& st) {
+    if (st.st_mode == 0)
+        return UNKNOWN;
+
+    if (S_ISDIR(st.st_mode))
+        return DIRECTORY;
+
+    if (S_ISREG(st.st_mode))
+        return SINGLEFILE;
+
+    return UNKNOWN;
+}
+FileType getFileType(const String& path) {
+    struct stat st = getFileStat(path);
+    return getFileType(st);
+}
+
+String sanitizeFilename(const String& filename) {
+    String safe;
+    for (size_t i = 0; i < filename.size(); ++i) {
+        char c = filename[i];
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_')
+            safe += c;
+        else
+            safe += '_';
+    }
+    return safe;
+}
+
+String htmlEntities(const String& str) {
+    String result;
+    for (size_t i = 0; i < str.size(); ++i) {
+        char c = str[i];
+        if (c == '&')
+            result += "&amp;";
+        else if (c == '<')
+            result += "&lt;";
+        else if (c == '>')
+            result += "&gt;";
+        else if (c == '"')
+            result += "&quot;";
+        else if (c == '\'')
+            result += "&#39;";
+        else
+            result += c;
+    }
+    return result;
+}
+
+bool readFileContent(const String& filePath, String& content) {
+    content.clear();
+    std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
+    if (!file.is_open())
+        return false;
+
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    content = ss.str();
+    return true;
+}
+
+bool checkAllowedMethods(const String& m) {
     VectorString methods;
     methods.push_back("GET");
     methods.push_back("POST");
@@ -112,23 +217,23 @@ bool checkAllowedMethods(const std::string& m) {
     methods.push_back("PATCH");
     methods.push_back("HEAD");
     methods.push_back("OPTIONS");
-    return isStringInVector(m, methods);
+    return isKeyInVector(m, methods);
 }
-
-bool splitByChar(const std::string& line, std::string& key, std::string& value, char endChar) {
-    std::string s   = line;
-    size_t      pos = s.find(endChar);
-    if (pos == std::string::npos)
+// ./www/html/index.html
+bool splitByChar(const String& line, String& key, String& value, char endChar, bool reverse) {
+    String s   = line;
+    size_t pos = reverse ? s.rfind(endChar) : s.find(endChar);
+    if (pos == String::npos)
         return false;
     key   = s.substr(0, pos);
     value = s.substr(pos + 1);
     return true;
 }
 
-bool splitByString(const std::string& line, VectorString& values, const std::string& delimiter) {
+bool splitByString(const String& line, VectorString& values, const String& delimiter) {
     size_t start = 0;
     size_t end   = line.find(delimiter);
-    while (end != std::string::npos) {
+    while (end != String::npos) {
         values.push_back(line.substr(start, end - start));
         start = end + delimiter.length();
         end   = line.find(delimiter, start);
@@ -137,20 +242,20 @@ bool splitByString(const std::string& line, VectorString& values, const std::str
     return !values.empty();
 }
 
-bool parseKeyValue(const std::string& line, std::string& key, VectorString& values) {
+bool parseKeyValue(const String& line, String& key, VectorString& values) {
     std::stringstream ss(line);
     ss >> key;
     if (key.empty())
         return false;
 
-    std::string v;
+    String v;
     while (ss >> v) {
         values.push_back(cleanCharEnd(v, ';'));
     }
     return !values.empty();
 }
 
-size_t convertMaxBodySize(const std::string& maxBody) {
+size_t convertMaxBodySize(const String& maxBody) {
     if (maxBody.empty())
         return 0;
 
@@ -166,22 +271,33 @@ size_t convertMaxBodySize(const std::string& maxBody) {
         return size * 1024 * 1024 * 1024;
     return size;
 }
+String formatSize(double size) {
+    String units[] = {"B", "KB", "MB", "GB", "TB"};
+    int    unit    = 0;
 
-bool isStringInVector(const std::string& toFind, const VectorString& fromFind) {
-    for (size_t i = 0; i < fromFind.size(); i++) {
-        if (fromFind[i] == toFind) {
-            return true;
+    while (size >= 1024.0 && unit < 4) {
+        size /= 1024.0;
+        unit++;
+    }
+    size_t num    = static_cast<size_t>(size);
+    String result = typeToString<size_t>(num);
+    if (unit) {
+        size_t dicemal = static_cast<size_t>(size - num) * 100;
+        if (dicemal > 0) {
+            result += "'";
+            result += typeToString<size_t>(dicemal);
         }
     }
-    return false;
+    result += units[unit];
+    return result;
 }
 
-std::string normalizePath(const std::string& path) {
-    std::string normalized = path;
+String normalizePath(const String& path) {
+    String normalized = path;
 
     if (normalized.empty())
         return "/";
-    std::string result;
+    String result;
     if (normalized[0] != '/')
         result += '/';
     for (size_t i = 0; i < normalized.length(); i++) {
@@ -192,7 +308,23 @@ std::string normalizePath(const std::string& path) {
     return result;
 }
 
-bool pathStartsWith(const std::string& path, const std::string& prefix) {
+String joinPaths(const String& firstPath, const String& secondPath) {
+    if (firstPath.empty())
+        return secondPath.empty() ? "/" : secondPath;
+    if (secondPath.empty())
+        return firstPath;
+    String result = firstPath;
+    if (result[result.size() - 1] == '/' && secondPath[0] == '/')
+        result += secondPath.substr(1);
+    else if (result[result.size() - 1] != '/' && secondPath[0] != '/')
+        result += "/" + secondPath;
+    else
+        result += secondPath;
+
+    return result;
+}
+
+bool pathStartsWith(const String& path, const String& prefix) {
     if (prefix.length() > path.length())
         return false;
     return path.compare(0, prefix.length(), prefix) == 0;

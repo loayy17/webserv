@@ -45,7 +45,7 @@ bool ServerConfig::setClientMaxBody(const VectorString& c) {
     clientMaxBodySize = c[0];
     return true;
 }
-void ServerConfig::setClientMaxBody(const std::string& c) {
+void ServerConfig::setClientMaxBody(const String& c) {
     clientMaxBodySize = c;
 }
 bool ServerConfig::setServerName(const VectorString& names) {
@@ -66,13 +66,13 @@ bool ServerConfig::setRoot(const VectorString& r) {
         root.erase(root.length() - 1);
     return true;
 }
-void ServerConfig::setRoot(const std::string& r) {
+void ServerConfig::setRoot(const String& r) {
     root = r;
 }
 bool ServerConfig::setListen(const VectorString& l) {
     if (l.size() != 1)
         return Logger::error("listen takes exactly one value");
-    std::string interface, portStr;
+    String interface, portStr;
     if (!splitByChar(l[0], interface, portStr, ':'))
         return Logger::error("invalid listen format");
     if (portStr.empty() || interface.empty())
@@ -94,7 +94,7 @@ bool ServerConfig::setListen(const VectorString& l) {
 bool ServerConfig::setErrorPage(const VectorString& values) {
     if (values.size() < 2)
         return Logger::error("error_page requires at least error code and page path");
-    std::string pagePath = values.back();
+    String pagePath = values.back();
     for (size_t i = 0; i < values.size() - 1; i++) {
         char* endptr = NULL;
         long  code   = std::strtol(values[i].c_str(), &endptr, 10);
@@ -119,7 +119,7 @@ void ServerConfig::addLocation(const LocationConfig& loc) {
 int ServerConfig::getPort(size_t index) const {
     return (index < listenAddresses.size()) ? listenAddresses[index].getPort() : -1;
 }
-std::string ServerConfig::getInterface(size_t index) const {
+String ServerConfig::getInterface(size_t index) const {
     return (index < listenAddresses.size()) ? listenAddresses[index].getInterface() : "";
 }
 const VectorListenAddress& ServerConfig::getListenAddresses() const {
@@ -142,24 +142,24 @@ const VectorLocationConfig& ServerConfig::getLocations() const {
 VectorString ServerConfig::getIndexes() const {
     return indexes;
 }
-std::string ServerConfig::getServerName(size_t index) const {
+String ServerConfig::getServerName(size_t index) const {
     return (index < serverNames.size()) ? serverNames[index] : "";
 }
 const VectorString& ServerConfig::getServerNames() const {
     return serverNames;
 }
-bool ServerConfig::hasServerName(const std::string& name) const {
+bool ServerConfig::hasServerName(const String& name) const {
     for (size_t i = 0; i < serverNames.size(); i++) {
         if (serverNames[i] == name)
             return true;
     }
     return false;
 }
-std::string ServerConfig::getRoot() const {
+String ServerConfig::getRoot() const {
     return root;
 }
 
-std::string ServerConfig::getClientMaxBody() const {
+String ServerConfig::getClientMaxBody() const {
     return clientMaxBodySize;
 }
 
@@ -167,7 +167,7 @@ const MapIntString& ServerConfig::getErrorPages() const {
     return errorPages;
 }
 
-std::string ServerConfig::getErrorPage(int code) const {
+String ServerConfig::getErrorPage(int code) const {
     MapIntString::const_iterator it = errorPages.find(code);
     return (it != errorPages.end()) ? it->second : "";
 }

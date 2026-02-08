@@ -1,0 +1,6 @@
+#ifndef ENUM_HPP
+#define ENUM_HPP
+enum FileType { SINGLEFILE, DIRECTORY, UNKNOWN };
+enum ScopeConfig { NONE, HTTP, SERVER, LOCATION };
+enum HandlerType { STATIC, DIRECTORY_LISTING, CGI, UPLOAD, ERROR_PAGE, NOT_FOUND };
+#endif

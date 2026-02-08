@@ -1,6 +1,7 @@
 #include "ServerManager.hpp"
 
-ServerManager::ServerManager() : running(false), pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs() {}
+ServerManager::ServerManager()
+    : running(false), pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes() {}
 
 ServerManager::ServerManager(const ServerManager& other)
     : running(other.running),
@@ -9,7 +10,8 @@ ServerManager::ServerManager(const ServerManager& other)
       serverConfigs(other.serverConfigs),
       clients(other.clients),
       clientToServer(other.clientToServer),
-      serverToConfigs(other.serverToConfigs) {}
+      serverToConfigs(other.serverToConfigs),
+      mimeTypes(other.mimeTypes) {}
 
 ServerManager& ServerManager::operator=(const ServerManager& other) {
     if (this != &other) {
@@ -19,12 +21,13 @@ ServerManager& ServerManager::operator=(const ServerManager& other) {
         clients         = other.clients;
         clientToServer  = other.clientToServer;
         serverToConfigs = other.serverToConfigs;
+        mimeTypes       = other.mimeTypes;
     }
     return *this;
 }
 
 ServerManager::ServerManager(const VectorServerConfig& _configs)
-    : running(false), pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs() {}
+    : running(false), pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes() {}
 
 ServerManager::~ServerManager() {
     shutdown();
@@ -40,31 +43,19 @@ bool ServerManager::initialize() {
     return Logger::info("[INFO]: ServerManager initialized");
 }
 
-ListenerToConfigsMap ServerManager::getListerToConfigs() {
-    ListenerToConfigsMap listenerToConfigs;
-    for (size_t i = 0; i < serverConfigs.size(); i++) {
-        const VectorListenAddress& addresses = serverConfigs[i].getListenAddresses();
-        for (size_t j = 0; j < addresses.size(); j++) {
-            std::string key = addresses[j].getInterface() + ":" + typeToString<int>(addresses[j].getPort());
-            listenerToConfigs[key].push_back(serverConfigs[i]);
-        }
-    }
-    return listenerToConfigs;
-}
 ListenerToConfigsMap ServerManager::mapListenersToConfigs(const VectorServerConfig& configs) {
     ListenerToConfigsMap result;
     for (size_t i = 0; i < configs.size(); i++) {
         const VectorListenAddress& addresses = configs[i].getListenAddresses();
         for (size_t j = 0; j < addresses.size(); j++) {
-            std::string key = addresses[j].getInterface() + ":" + typeToString<int>(addresses[j].getPort());
+            String key = addresses[j].getInterface() + ":" + typeToString<int>(addresses[j].getPort());
             result[key].push_back(configs[i]);
         }
     }
     return result;
 }
 
-Server* ServerManager::createServerForListener(const std::string& listenerKey, const VectorServerConfig& configsForListener,
-                                               PollManager& pollManager) {
+Server* ServerManager::createServerForListener(const String& listenerKey, const VectorServerConfig& configsForListener, PollManager& pollManager) {
     if (configsForListener.empty())
         return NULL;
 
@@ -73,7 +64,7 @@ Server* ServerManager::createServerForListener(const std::string& listenerKey, c
     const VectorListenAddress& addresses   = firstConfig.getListenAddresses();
     size_t                     listenIndex = 0;
     for (size_t i = 0; i < addresses.size(); i++) {
-        std::string key = addresses[i].getInterface() + ":" + typeToString<int>(addresses[i].getPort());
+        String key = addresses[i].getInterface() + ":" + typeToString<int>(addresses[i].getPort());
         if (key == listenerKey) {
             listenIndex = i;
             break;
@@ -98,11 +89,11 @@ Server* ServerManager::createServerForListener(const std::string& listenerKey, c
 bool ServerManager::initializeServers(const VectorServerConfig& configs) {
     ListenerToConfigsMap listenerToConfigs = mapListenersToConfigs(configs);
 
-    std::map<std::string, Server*> listenerToServerMap;
+    std::map<String, Server*> listenerToServerMap;
 
     ListenerToConfigsMap::iterator it;
     for (it = listenerToConfigs.begin(); it != listenerToConfigs.end(); ++it) {
-        const std::string&        listenerKey        = it->first;
+        const String&             listenerKey        = it->first;
         const VectorServerConfig& configsForListener = it->second;
 
         Server* server = createServerForListener(listenerKey, configsForListener, pollManager);
@@ -224,36 +215,28 @@ void ServerManager::checkTimeouts(int timeout) {
     }
 }
 
-void ServerManager::processRequest(Client* client, Server* server) {
-    std::string buffer = client->getStoreReceiveData();
-    Logger::info("[INFO]: Processing request for client fd " + typeToString(client->getFd()));
-    if (buffer.find("\r\n\r\n") == std::string::npos) {
+void ServerManager::processRequest(Client* client, Server* /*server*/) {
+    String buffer = client->getStoreReceiveData();
+    if (buffer.find("\r\n\r\n") == String::npos) {
         Logger::info("[INFO]: Incomplete HTTP request, waiting for more data");
         return;
     }
-    Logger::info("[INFO]: Processing HTTP request");
-    Logger::info("[DEBUG]: Request Data:\n" + buffer);
+    std::cout << "BUFFER" << buffer << std::endl;
     HttpRequest request;
     if (!request.parse(buffer)) {
         Logger::error("[ERROR]: Failed to parse HTTP request");
-        HttpResponse bad;
-        bad.setStatus(400, "Bad Request");
-        bad.addHeader("Content-Type", "text/plain");
-        bad.addHeader("Connection", "close");
-        std::string body = "Bad Request";
-        bad.addHeader("Content-Length", typeToString(body.size()));
-        bad.setBody(body);
-        client->queueResponse(bad.httpToString());
+        ResponseBuilder builder;
+        HttpResponse    response = builder.buildError(400, "Bad Request");
+        client->setSendData(response.toString());
         client->clearStoreReceiveData();
         return;
     }
-    Logger::info("[INFO]: Request: " + request.getUri() + " on port " + typeToString(server->getPort()));
-
-    HttpResponse response;
-    ServerConfig config = server->getConfig();
-    Router       router(serverConfigs, request);
+    
+    Router router(serverConfigs, request);
     router.processRequest();
-    client->queueResponse(response.httpToString());
+    ResponseBuilder builder(mimeTypes);
+    HttpResponse    response = builder.build(router);
+    client->setSendData(response.toString());
     client->clearStoreReceiveData();
 }
 

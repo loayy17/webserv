@@ -11,8 +11,8 @@ ListenAddress& ListenAddress::operator=(const ListenAddress& other) {
     return *this;
 }
 ListenAddress::~ListenAddress() {}
-ListenAddress::ListenAddress(const std::string& iface, int p) : _interface(iface), _port(p), _serverFd(-1) {}
-const std::string& ListenAddress::getInterface() const {
+ListenAddress::ListenAddress(const String& iface, int p) : _interface(iface), _port(p), _serverFd(-1) {}
+const String& ListenAddress::getInterface() const {
     return _interface;
 }
 int ListenAddress::getPort() const {

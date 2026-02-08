@@ -12,6 +12,19 @@ Router::Router()
       isRedirect(false),
       statusCode(0),
       errorMessage("") {}
+Router::Router(int _statusCode, String errorMessage)
+    : _servers(),
+      _request(),
+      isPathFound(false),
+      pathRootUri(""),
+      matchedPath(""),
+      remainingPath(""),
+      matchLocation(NULL),
+      matchServer(NULL),
+      redirectUrl(""),
+      isRedirect(false),
+      statusCode(_statusCode),
+      errorMessage(errorMessage) {}
 
 Router::Router(const Router& other)
     : _servers(other._servers),
@@ -96,7 +109,7 @@ void Router::processRequest() {
     }
 
     // 4. check if method allowed in location
-    if (!isStringInVector(_request.getMethod(), matchLocation->getAllowedMethods())) {
+    if (!isKeyInVector(_request.getMethod(), matchLocation->getAllowedMethods())) {
         statusCode   = 405;
         errorMessage = "Method Not Allowed";
         return;
@@ -110,18 +123,21 @@ void Router::processRequest() {
             return;
         }
     }
-    pathRootUri = resolveFilesystemPath();
 
+    // 6. resolve filesystem path
+    pathRootUri = resolveFilesystemPath();
     if (_request.getUri().length() > matchLocation->getPath().length()) {
         remainingPath = _request.getUri().substr(matchLocation->getPath().length());
     }
+
+    std::cout << "Resolved path: " << pathRootUri << std::endl;
     statusCode = 200;
     return;
 }
 
 const ServerConfig* Router::findServer() const {
-    int requestPort = _request.getPort();
-    std::string requestHost = _request.getHost();
+    int    requestPort = _request.getPort();
+    String requestHost = _request.getHost();
 
     for (size_t i = 0; i < _servers.size(); i++) {
         if (_servers[i].hasPort(requestPort)) {
@@ -143,13 +159,14 @@ const ServerConfig* Router::getDefaultServer(int port) const {
 }
 
 const LocationConfig* Router::bestMatchLocation(const VectorLocationConfig& locationsMatchServer) const {
-    std::string           normalizedUri = normalizePath(_request.getUri());
+    String                normalizedUri = normalizePath(_request.getUri());
     const LocationConfig* bestMatch     = NULL;
 
     size_t bestMatchLength = 0;
     for (size_t i = 0; i < locationsMatchServer.size(); i++) {
         size_t locPathLength = locationsMatchServer[i].getPath().length();
-        if (pathStartsWith(normalizedUri, locationsMatchServer[i].getPath())) {
+        String locPath       = normalizePath(locationsMatchServer[i].getPath());
+        if (pathStartsWith(normalizedUri, locPath)) {
             if (locPathLength > bestMatchLength) {
                 bestMatchLength = locPathLength;
                 bestMatch       = &locationsMatchServer[i];
@@ -160,42 +177,62 @@ const LocationConfig* Router::bestMatchLocation(const VectorLocationConfig& loca
     return bestMatch;
 }
 
-std::string Router::resolveFilesystemPath() const {
-    std::string root    = matchLocation->getRoot();
-    std::string locPath = matchLocation->getPath();
-    std::string uri     = normalizePath(_request.getUri());
+String Router::resolveFilesystemPath() const {
+    if (!matchLocation)
+        return "";
+
+    String root    = matchLocation->getRoot();
+    String locPath = normalizePath(matchLocation->getPath());
+    String uri     = normalizePath(_request.getUri());
+
+    if (!root.empty() && root[0] == '/')
+        root = "." + root;
+
+    String rest;
     if (locPath == "/")
-        return root + uri;
+        rest = uri;
+    else if (pathStartsWith(uri, locPath))
+        rest = uri.substr(locPath.length());
+    else
+        rest = uri;
 
-    std::string rest = uri.substr(locPath.length());
-    if (!rest.empty() && rest[0] != '/')
-        rest = "/" + rest;
+    if (rest.empty())
+        rest = "/";
 
-    return root + rest;
+    return joinPaths(root, rest);
 }
 
 bool Router::checkBodySize(const LocationConfig& location) const {
-    std::string maxBodyStr = location.getClientMaxBody();
+    String maxBodyStr = location.getClientMaxBody();
     if (maxBodyStr.empty())
         return true;
     size_t maxBody = convertMaxBodySize(maxBodyStr);
     return _request.getContentLength() <= maxBody;
 }
 
-bool Router::isCgiRequest(const std::string& path, const LocationConfig& location) const {
+bool Router::isCgiRequest(const String& path, const LocationConfig& location) const {
+    MapString cgiPass = location.getCgiPass();
+    for (MapString::const_iterator it = cgiPass.begin(); it != cgiPass.end(); ++it) {
+        std::cout << "CGI Pass: " << it->first << " => " << it->second << std::endl;
+    }
+    std::cout << "Checking if cgipass map is empty: " << location.getCgiPass().empty() << std::endl;
     if (!location.hasCgi())
         return false;
-
-    // Find the file extension in the path
+    std::cout << "Checking CGI for path: " << path << std::endl;
     size_t dotPos = path.rfind('.');
-    if (dotPos == std::string::npos)
+    std::cout << "Dot position: " << dotPos << std::endl;
+    if (dotPos == String::npos)
         return false;
 
-    std::string extension = path.substr(dotPos);
+    String extension = path.substr(dotPos);
+    std::cout << "Extension: " << extension << std::endl;
+    std::cout << "Has CGI for extension: " << location.hasCgi() << std::endl;
+    std::cout << "CGI Interpreter: " << location.getCgiInterpreter(extension) << std::endl;
+
     return !location.getCgiInterpreter(extension).empty();
 }
 
-bool Router::isUploadRequest(const std::string& method, const LocationConfig& location) const {
+bool Router::isUploadRequest(const String& method, const LocationConfig& location) const {
     return !location.getUploadDir().empty() && method == "POST";
 }
 
@@ -216,18 +253,22 @@ const LocationConfig* Router::getLocation() const {
 const ServerConfig* Router::getServer() const {
     return matchServer;
 }
-const std::string& Router::getPathRootUri() const {
+const String& Router::getPathRootUri() const {
     return pathRootUri;
 }
-const std::string& Router::getMatchedPath() const {
+const String& Router::getMatchedPath() const {
     return matchedPath;
 }
-const std::string& Router::getRemainingPath() const {
+const String& Router::getRemainingPath() const {
     return remainingPath;
 }
-const std::string& Router::getRedirectUrl() const {
+const String& Router::getRedirectUrl() const {
     return redirectUrl;
 }
-const std::string& Router::getErrorMessage() const {
+const String& Router::getErrorMessage() const {
     return errorMessage;
+}
+
+const HttpRequest& Router::getRequest() const {
+    return _request;
 }

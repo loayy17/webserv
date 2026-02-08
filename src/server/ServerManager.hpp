@@ -9,6 +9,7 @@
 #include "../config/ServerConfig.hpp"
 #include "../http/HttpRequest.hpp"
 #include "../http/HttpResponse.hpp"
+#include "../http/ResponseBuilder.hpp"
 #include "../http/Router.hpp"
 #include "../utils/Logger.hpp"
 #include "../utils/Utils.hpp"
@@ -38,6 +39,7 @@ class ServerManager {
     MapIntClientPtr          clients;
     MapIntServerPtr          clientToServer;
     MapIntVectorServerConfig serverToConfigs;
+    MimeTypes                mimeTypes;
     // Internal helpers
     bool    initializeServers(const VectorServerConfig& serversConfigs);
     bool    acceptNewConnection(Server* server);
@@ -49,7 +51,7 @@ class ServerManager {
     bool    isServerSocket(int fd) const;
     void    processRequest(Client* client, Server* server);
 
-    Server*              createServerForListener(const std::string& listenerKey, const VectorServerConfig& configs, PollManager& pollMgr);
+    Server*              createServerForListener(const String& listenerKey, const VectorServerConfig& configs, PollManager& pollMgr);
     ListenerToConfigsMap getListerToConfigs();
     ListenerToConfigsMap mapListenersToConfigs(const VectorServerConfig& configs);
 };

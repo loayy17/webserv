@@ -48,7 +48,7 @@ ssize_t Client::sendData() {
     return sent;
 }
 
-void Client::queueResponse(const std::string& data) {
+void Client::setSendData(const String& data) {
     storeSendData = data;
 }
 
@@ -67,11 +67,11 @@ void Client::closeConnection() {
     }
 }
 
-std::string Client::getStoreReceiveData() const {
+String Client::getStoreReceiveData() const {
     return storeReceiveData;
 }
 
-std::string Client::getStoreSendData() const {
+String Client::getStoreSendData() const {
     return storeSendData;
 }
 

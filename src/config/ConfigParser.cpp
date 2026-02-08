@@ -27,7 +27,7 @@ ConfigParser& ConfigParser::operator=(const ConfigParser& other) {
     return *this;
 }
 
-ConfigParser::ConfigParser(const std::string& f) : file(f), scope(NONE), curr_index(0) {
+ConfigParser::ConfigParser(const String& f) : file(f), scope(NONE), curr_index(0) {
     if (!convertFileToLines(file, lines))
         Logger::error("Failed to read configuration file: " + file);
 }
@@ -37,7 +37,7 @@ ConfigParser::~ConfigParser() {
     lines.clear();
 }
 
-bool ConfigParser::getNextLine(std::string& out) {
+bool ConfigParser::getNextLine(String& out) {
     if (curr_index >= lines.size())
         return false;
     out = lines[curr_index++];
@@ -45,8 +45,8 @@ bool ConfigParser::getNextLine(std::string& out) {
 }
 
 bool ConfigParser::parse() {
-    std::string line;
-    bool        is_http_defined = false;
+    String line;
+    bool   is_http_defined = false;
     while (getNextLine(line)) {
         if (line == "http {") {
             if (is_http_defined)
@@ -72,9 +72,9 @@ bool ConfigParser::parse() {
 }
 
 bool ConfigParser::parseHttp() {
-    std::string line;
+    String line;
     while (getNextLine(line)) {
-        std::string t = trimSpacesComments(line);
+        String t = trimSpacesComments(line);
         if (t.empty())
             continue;
         if (t == "}") {
@@ -86,7 +86,7 @@ bool ConfigParser::parseHttp() {
                 return false;
             continue;
         }
-        std::string  key;
+        String       key;
         VectorString values;
         if (!parseKeyValue(t, key, values))
             return Logger::error("invalid http directive: " + t);
@@ -123,11 +123,11 @@ bool ConfigParser::parseServer() {
     ServerConfig srv;
     scope = SERVER;
 
-    std::string l;
+    String l;
     serverDirectives = getServerDirectives();
 
     while (getNextLine(l)) {
-        std::string t = trimSpacesComments(l);
+        String t = trimSpacesComments(l);
         if (t.empty())
             continue;
         if (t == "}") {
@@ -154,8 +154,8 @@ bool ConfigParser::parseServer() {
     return true;
 }
 
-bool ConfigParser::parseServerDirective(const std::string& l, ServerConfig& srv) {
-    std::string  key;
+bool ConfigParser::parseServerDirective(const String& l, ServerConfig& srv) {
+    String       key;
     VectorString values;
     if (!parseKeyValue(l, key, values))
         return Logger::error("invalid server directive: " + l);
@@ -165,8 +165,8 @@ bool ConfigParser::parseServerDirective(const std::string& l, ServerConfig& srv)
     return (srv.*(it->second))(values);
 }
 
-bool ConfigParser::parseLocation(ServerConfig& srv, const std::string& header) {
-    std::string  loc;
+bool ConfigParser::parseLocation(ServerConfig& srv, const String& header) {
+    String       loc;
     VectorString values;
     locationDirectives = getLocationDirectives();
     if (!parseKeyValue(header, loc, values))
@@ -183,7 +183,7 @@ bool ConfigParser::parseLocation(ServerConfig& srv, const std::string& header) {
     LocationConfig locCfg(values[0]);
     scope = LOCATION;
 
-    std::string line;
+    String line;
     while (getNextLine(line)) {
         if (line == "}") {
             scope = SERVER;
@@ -208,12 +208,13 @@ LocationDirectiveMap ConfigParser::getLocationDirectives() {
     m["return"]               = &LocationConfig::setRedirect;
     m["cgi_pass"]             = &LocationConfig::setCgiPass;
     m["upload_dir"]           = &LocationConfig::setUploadDir;
+    m["error_page"]           = &LocationConfig::setErrorPage;
 
     return m;
 }
 
-bool ConfigParser::parseLocationDirective(const std::string& l, LocationConfig& loc) {
-    std::string  key;
+bool ConfigParser::parseLocationDirective(const String& l, LocationConfig& loc) {
+    String       key;
     VectorString values;
     if (!parseKeyValue(l, key, values))
         return Logger::error("invalid location directive: " + l);
@@ -262,6 +263,6 @@ VectorServerConfig ConfigParser::getServers() const {
     return servers;
 }
 
-std::string ConfigParser::getHttpClientMaxBody() const {
+String ConfigParser::getHttpClientMaxBody() const {
     return httpClientMaxBody;
 }

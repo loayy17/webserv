@@ -16,6 +16,11 @@
                 <h1>Your Name</h1>
                 <p class="lead">Brief tagline about you — e.g., "Full-stack developer, designer, and lifelong learner."
                     Location • Open to work</p>
+                <!-- Upload File use html and uploader class -->
+                <form class="uploader" action="/upload" method="post" enctype="multipart/form-data">
+                    <input type="file" name="file" id="fileInput">
+                    <button type="submit">Upload File</button>
+                </form>
             </div>
         </header>
 

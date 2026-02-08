@@ -19,29 +19,29 @@ class ServerConfig {
     // setters
     bool setIndexes(const VectorString& i);
     bool setClientMaxBody(const VectorString& c);
-    void setClientMaxBody(const std::string& c);
+    void setClientMaxBody(const String& c);
     bool setServerName(const VectorString& name);
     bool setRoot(const VectorString& root);
-    void setRoot(const std::string& root);
+    void setRoot(const String& root);
     bool setListen(const VectorString& l);
     bool setErrorPage(const VectorString& values);
     void addLocation(const LocationConfig& loc);
 
     // getters
     int                         getPort(size_t index = 0) const;
-    std::string                 getInterface(size_t index = 0) const;
+    String                      getInterface(size_t index = 0) const;
     const VectorListenAddress&  getListenAddresses() const;
     bool                        hasPort(int port) const;
     VectorLocationConfig&       getLocations(); // to set parameter in locations from server
     const VectorLocationConfig& getLocations() const;
-    std::string                 getServerName(size_t index = 0) const;
+    String                      getServerName(size_t index = 0) const;
     const VectorString&         getServerNames() const;
-    bool                        hasServerName(const std::string& name) const;
-    std::string                 getRoot() const;
+    bool                        hasServerName(const String& name) const;
+    String                      getRoot() const;
     VectorString                getIndexes() const;
-    std::string                 getClientMaxBody() const;
+    String                      getClientMaxBody() const;
     const MapIntString&         getErrorPages() const;
-    std::string                 getErrorPage(int code) const;
+    String                      getErrorPage(int code) const;
     bool                        hasErrorPage(int code) const;
 
    private:
@@ -51,9 +51,9 @@ class ServerConfig {
 
     // optional server parameters
     VectorString serverNames;       // default: empty, can have multiple names
-    std::string  root;              // default: use for location if not set(be required)
+    String       root;              // default: use for location if not set(be required)
     VectorString indexes;           // default: "index.html"
-    std::string  clientMaxBodySize; // default: "1M" or inherited from http config
+    String       clientMaxBodySize; // default: "1M" or inherited from http config
     MapIntString errorPages;        // maps error code to page path
 };
 #endif

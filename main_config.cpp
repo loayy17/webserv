@@ -14,7 +14,7 @@ void printLine() {
 /* ----------------------------------------------------
  * Print location
  * ---------------------------------------------------- */
-void printLocation(const LocationConfig& loc, const std::string& resolvedBody) {
+void printLocation(const LocationConfig& loc, const String& resolvedBody) {
     std::cout << "  Location: " << loc.getPath() << "\n";
     std::cout << "    root       : " << loc.getRoot() << "\n";
     std::cout << "    autoindex  : " << (loc.getAutoIndex() ? "on" : "off") << "\n";
@@ -45,7 +45,7 @@ void printServer(const ServerConfig& srv, const ConfigParser& http) {
     const std::vector<LocationConfig>& locs = srv.getLocations();
 
     for (size_t i = 0; i < locs.size(); i++) {
-        std::string resolved = http.getHttpClientMaxBody();
+        String resolved = http.getHttpClientMaxBody();
 
         if (srv.getClientMaxBody().empty() == false)
             resolved = srv.getClientMaxBody();

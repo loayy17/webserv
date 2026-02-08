@@ -40,7 +40,7 @@ LocationConfig& LocationConfig::operator=(const LocationConfig& other) {
     return *this;
 }
 
-LocationConfig::LocationConfig(const std::string& p)
+LocationConfig::LocationConfig(const String& p)
     : path(p),
       root(""),
       autoIndex(false),
@@ -69,7 +69,7 @@ bool LocationConfig::setRoot(const VectorString& r) {
     return true;
 }
 
-void LocationConfig::setRoot(const std::string& r) {
+void LocationConfig::setRoot(const String& r) {
     root = r;
 }
 
@@ -96,7 +96,7 @@ bool LocationConfig::setIndexes(const VectorString& i) {
     indexes = i;
     return true;
 }
-void LocationConfig::setUploadDir(const std::string& p) {
+void LocationConfig::setUploadDir(const String& p) {
     uploadDir = p;
 }
 
@@ -112,30 +112,26 @@ bool LocationConfig::setUploadDir(const VectorString& p) {
 }
 
 bool LocationConfig::setCgiPass(const VectorString& c) {
-    if (c.size() != 1)
-        return Logger::error("cgi_pass takes exactly one value");
+    if (c.size() != 2)
+        return Logger::error("cgi_pass requires extension and interpreter");
 
-    const std::string& value    = c[0];
-    size_t             colonPos = value.find(':');
-    if (colonPos == std::string::npos)
-        return Logger::error("cgi_pass format must be .extension:/path/to/interpreter");
-
-    std::string extension   = value.substr(0, colonPos);
-    std::string interpreter = value.substr(colonPos + 1);
+    String extension   = trimSpaces(c[0]);
+    String interpreter = trimSpaces(c[1]);
 
     if (extension.empty() || extension[0] != '.')
         return Logger::error("cgi_pass extension must start with '.'");
+
     if (interpreter.empty() || interpreter[0] != '/')
         return Logger::error("cgi_pass interpreter must be an absolute path");
 
-    if (cgiPass.find(extension) != cgiPass.end())
+    if (findValueStrInMap(cgiPass, extension) != "")
         return Logger::error("duplicate cgi_pass for extension: " + extension);
 
     cgiPass[extension] = interpreter;
     return true;
 }
 
-void LocationConfig::setRedirect(const std::string& r) {
+void LocationConfig::setRedirect(const String& r) {
     redirect = r;
 }
 
@@ -158,11 +154,11 @@ bool LocationConfig::setClientMaxBody(const VectorString& c) {
     clientMaxBody = c[0];
     return true;
 }
-void LocationConfig::setClientMaxBody(const std::string& c) {
+void LocationConfig::setClientMaxBody(const String& c) {
     clientMaxBody = c;
 }
 
-void LocationConfig::addAllowedMethod(const std::string& m) {
+void LocationConfig::addAllowedMethod(const String& m) {
     allowedMethods.push_back(m);
 }
 bool LocationConfig::setAllowedMethods(const VectorString& v) {
@@ -171,7 +167,7 @@ bool LocationConfig::setAllowedMethods(const VectorString& v) {
     if (v.empty())
         return Logger::error("methods requires at least one value");
     for (size_t i = 0; i < v.size(); i++) {
-        std::string m = toUpperWords(v[i]);
+        String m = toUpperWords(v[i]);
         if (!checkAllowedMethods(m))
             return Logger::error("invalid method: " + m);
         for (size_t j = 0; j < allowedMethods.size(); j++) {
@@ -182,39 +178,60 @@ bool LocationConfig::setAllowedMethods(const VectorString& v) {
     }
     return true;
 }
+bool LocationConfig::setErrorPage(const VectorString& values) {
+    if (values.size() < 2)
+        return Logger::error("error_page requires at least an error code and a page path");
+    const String& pagePath = values.back();
+
+    for (size_t i = 0; i < values.size() - 1; ++i) {
+        const String& codeStr = values[i];
+        int           code    = stringToType<int>(codeStr);
+        if (codeStr != typeToString(code)) {
+            return Logger::error("Invalid error code: " + codeStr);
+        }
+        if (code < 100 || code > 599) {
+            return Logger::error("Error code must be between 100 and 599: " + codeStr);
+        }
+        errorPage[code] = pagePath;
+    }
+
+    return true;
+}
 
 // getters
-std::string LocationConfig::getPath() const {
+String LocationConfig::getPath() const {
     return path;
 }
-std::string LocationConfig::getRoot() const {
+String LocationConfig::getRoot() const {
     return root;
 }
 bool LocationConfig::getAutoIndex() const {
     return autoIndex;
 }
-std::string LocationConfig::getUploadDir() const {
+String LocationConfig::getUploadDir() const {
     return uploadDir;
 }
-const std::map<std::string, std::string>& LocationConfig::getCgiPass() const {
+const std::map<String, String>& LocationConfig::getCgiPass() const {
     return cgiPass;
 }
-std::string LocationConfig::getCgiInterpreter(const std::string& extension) const {
-    std::map<std::string, std::string>::const_iterator it = cgiPass.find(extension);
-    return (it != cgiPass.end()) ? it->second : "";
+String LocationConfig::getCgiInterpreter(const String& extension) const {
+    return findValueStrInMap(cgiPass, extension);
 }
 bool LocationConfig::hasCgi() const {
     return !cgiPass.empty();
 }
-std::string LocationConfig::getRedirect() const {
+String LocationConfig::getRedirect() const {
     return redirect;
 }
 VectorString LocationConfig::getAllowedMethods() const {
     return allowedMethods;
 }
-std::string LocationConfig::getClientMaxBody() const {
+String LocationConfig::getClientMaxBody() const {
     return clientMaxBody;
 }
 VectorString LocationConfig::getIndexes() const {
     return indexes;
+}
+String LocationConfig::getErrorPage(int code) const {
+    return findValueIntInMap(errorPage, code);
 }

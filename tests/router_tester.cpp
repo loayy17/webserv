@@ -6,7 +6,7 @@
 #include "../src/http/Router.hpp"
 
 // Read file content into string
-std::string readFile(const std::string& filename) {
+String readFile(const String& filename) {
     std::ifstream file(filename.c_str());
     if (!file.is_open()) {
         std::cerr << "ERROR|Cannot open file: " << filename << std::endl;
@@ -24,8 +24,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::string configFile  = argv[1];
-    std::string requestFile = argv[2];
+    String configFile  = argv[1];
+    String requestFile = argv[2];
 
     // 1. Parse config
     ConfigParser parser(configFile);
@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
     }
 
     // 2. Parse request
-    std::string rawRequest = readFile(requestFile);
+    String rawRequest = readFile(requestFile);
     if (rawRequest.empty()) {
         return 1;
     }

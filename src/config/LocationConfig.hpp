@@ -10,52 +10,55 @@ class LocationConfig {
     LocationConfig();
     LocationConfig(const LocationConfig& other);
     LocationConfig& operator=(const LocationConfig& other);
-    LocationConfig(const std::string& p);
+    LocationConfig(const String& p);
     ~LocationConfig();
 
     bool setRoot(const VectorString& r);
-    void setRoot(const std::string& r);
+    void setRoot(const String& r);
 
     void setAutoIndex(bool v);
     bool setAutoIndex(const VectorString& v);
 
     bool setIndexes(const VectorString& i);
-    void setUploadDir(const std::string& p);
+    void setUploadDir(const String& p);
     bool setUploadDir(const VectorString& p);
     bool setCgiPass(const VectorString& c);
-    void setRedirect(const std::string& r);
+    void setRedirect(const String& r);
     bool setRedirect(const VectorString& r);
+    bool setErrorPage(const VectorString& values);
 
-    void setClientMaxBody(const std::string& c);
+    void setClientMaxBody(const String& c);
     bool setClientMaxBody(const VectorString& c);
 
-    void             addAllowedMethod(const std::string& m);
+    void             addAllowedMethod(const String& m);
     bool             setAllowedMethods(const VectorString& m);
-    std::string      getPath() const;
-    std::string      getRoot() const;
+    String           getPath() const;
+    String           getRoot() const;
     bool             getAutoIndex() const;
     VectorString     getIndexes() const;
-    std::string      getUploadDir() const;
+    String           getUploadDir() const;
     const MapString& getCgiPass() const;
-    std::string      getCgiInterpreter(const std::string& extension) const;
+    String           getCgiInterpreter(const String& extension) const;
     bool             hasCgi() const;
-    std::string      getRedirect() const;
-    std::string      getClientMaxBody() const;
+    String           getRedirect() const;
+    String           getClientMaxBody() const;
     VectorString     getAllowedMethods() const;
+    String           getErrorPage(int code) const;
 
    private:
     // required location parameters
-    std::string path;
+    String path;
     // optional location parameters
-    std::string  root;           // default root of server if not set (be required)
+    String       root;           // default root of server if not set (be required)
     bool         autoIndex;      // default: false
     bool         autoIndexSet;   // tracks if autoindex directive was used
     VectorString indexes;        // default: root if not set be default "index.html"
-    std::string  uploadDir;      // upload directory path
+    String       uploadDir;      // upload directory path
     MapString    cgiPass;        // maps extension to interpreter path
-    std::string  redirect;       // default: ""
-    std::string  clientMaxBody;  // default: ""
+    String       redirect;       // default: ""
+    String       clientMaxBody;  // default: ""
     VectorString allowedMethods; // default: GET
+    MapIntString errorPage;      // maps error code to error page path
 };
 
 #endif

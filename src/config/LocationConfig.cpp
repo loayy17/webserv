@@ -92,7 +92,7 @@ bool LocationConfig::setIndexes(const VectorString& i) {
     if (!indexes.empty())
         return Logger::error("duplicate index");
     if (i.empty())
-        return Logger::error("index takes at least one value");
+        return true;
     indexes = i;
     return true;
 }
@@ -105,8 +105,6 @@ bool LocationConfig::setUploadDir(const VectorString& p) {
         return Logger::error("duplicate upload_dir directive");
     if (p.size() != 1)
         return Logger::error("upload_dir takes exactly one value");
-    if (p[0].empty() || p[0][0] != '/')
-        return Logger::error("upload_dir must be an absolute path");
     uploadDir = p[0];
     return true;
 }

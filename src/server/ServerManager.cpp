@@ -247,14 +247,32 @@ String checkMethod(std::string& buffer) {
 
 void ServerManager::processRequest(Client* client, Server*) {
     String buffer = client->getStoreReceiveData();
-
+    if(buffer.size() > MAX_HEADER_SIZE) {
+        ResponseBuilder builder;
+        HttpResponse    response = builder.buildError(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, "Request Header Fields Too Large");
+        client->setSendData(response.toString());
+        client->clearStoreReceiveData();
+        return;
+    }
     size_t headerEnd = buffer.find("\r\n\r\n");
+    size_t headerEndLen = 4;
+    if (headerEnd == String::npos) {
+        headerEnd = buffer.find("\n\n");
+        headerEndLen = 2;
+    }
     if (headerEnd == String::npos)
         return;
 
     size_t contentLength = extractContentLength(buffer);
-    size_t fullSize      = headerEnd + 4 + contentLength;
-
+    size_t fullSize      = headerEnd + headerEndLen + contentLength;
+    size_t maxBodySize   = convertMaxBodySize(clientToServer[client->getFd()]->getConfig().getClientMaxBody());
+    if (buffer.size() > maxBodySize || contentLength > maxBodySize) {
+        ResponseBuilder builder;
+        HttpResponse    response = builder.buildError(HTTP_PAYLOAD_TOO_LARGE, "Payload Too Large");
+        client->setSendData(response.toString());
+        client->clearStoreReceiveData();
+        return;
+    }
     if (buffer.size() < fullSize)
         return;
 
@@ -270,11 +288,11 @@ void ServerManager::processRequest(Client* client, Server*) {
     }
 
     Router router(serverConfigs, request);
-    router.processRequest();
+    RouteResult result = router.processRequest();
     ResponseBuilder builder(mimeTypes);
-    HttpResponse    response = builder.build(router);
+    HttpResponse    response = builder.build(result);
     client->setSendData(response.toString());
-    buffer.erase(0, fullSize);
+    client->clearStoreReceiveData();
 }
 
 void ServerManager::closeClientConnection(int clientFd) {

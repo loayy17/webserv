@@ -16,11 +16,11 @@ CgiHandler& CgiHandler::operator=(const CgiHandler& other) {
 CgiHandler::~CgiHandler() {}
 
 // Build environment variables from Router and HttpRequest
-VectorString CgiHandler::buildEnv(const Router& router) const {
+VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     std::vector<String> env;
 
-    const HttpRequest&    req = router.getRequest();
-    const LocationConfig* loc = router.getLocation();
+    const HttpRequest&    req = resultRouter.getRequest();
+    const LocationConfig* loc = resultRouter.getLocation();
     if (!loc)
         return env;
 
@@ -33,8 +33,8 @@ VectorString CgiHandler::buildEnv(const Router& router) const {
     if (!req.getContentType().empty())
         env.push_back("CONTENT_TYPE=" + req.getContentType());
     env.push_back("SCRIPT_NAME=" + loc->getPath());
-    env.push_back("SCRIPT_FILENAME=" + router.getPathRootUri());
-    env.push_back("PATH_INFO=" + router.getRemainingPath());
+    env.push_back("SCRIPT_FILENAME=" + resultRouter.getPathRootUri());
+    env.push_back("PATH_INFO=" + resultRouter.getRemainingPath());
     env.push_back("SERVER_NAME=" + req.getHost());
     env.push_back("SERVER_PORT=" + typeToString<int>(req.getPort()));
     env.push_back("GATEWAY_INTERFACE=" + String(CGI_INTERFACE));
@@ -66,17 +66,22 @@ std::vector<char*> CgiHandler::convertEnv(const std::vector<String>& env) const 
 
 bool parseCgiOutput(const std::string& raw, HttpResponse& response) {
     size_t headerEnd = raw.find("\r\n\r\n");
-    if (headerEnd == std::string::npos)
+    size_t headerEndLength = 4;
+    
+    if (headerEnd == std::string::npos) {
         headerEnd = raw.find("\n\n");
+        headerEndLength = 2;
+    }
 
     if (headerEnd == std::string::npos)
         return false;
 
     std::string headerPart = raw.substr(0, headerEnd);
-    std::string bodyPart   = raw.substr(headerEnd + 4);
+    std::string bodyPart   = raw.substr(headerEnd + headerEndLength);
 
     std::stringstream ss(headerPart);
     std::string       line;
+    bool statusSet = false;
 
     while (std::getline(ss, line)) {
         if (!line.empty() && line[line.size() - 1] == '\r')
@@ -95,23 +100,29 @@ bool parseCgiOutput(const std::string& raw, HttpResponse& response) {
         if (toLowerWords(key) == "status") {
             int code = atoi(val.c_str());
             response.setStatus(code, "OK");
+            statusSet = true;
         } else {
             response.addHeader(key, val);
         }
+    }
+    
+    // If no Status header was provided, default to 200 OK
+    if (!statusSet) {
+        response.setStatus(HTTP_OK, "OK");
     }
 
     response.setBody(bodyPart);
     return true;
 }
 
-bool CgiHandler::handle(const Router& router, HttpResponse& response) const {
-    const LocationConfig* loc     = router.getLocation();
-    const HttpRequest     request = router.getRequest();
+bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response) const {
+    const LocationConfig* loc     = resultRouter.getLocation();
+    const HttpRequest     request = resultRouter.getRequest();
     if (!loc || !loc->hasCgi())
         return false;
 
     String scriptName, extension;
-    extension = extractFileExtension(router.getPathRootUri());
+    extension = extractFileExtension(resultRouter.getPathRootUri());
     if (extension.empty())
         return Logger::error("Failed to parse CGI extension");
         
@@ -149,12 +160,12 @@ bool CgiHandler::handle(const Router& router, HttpResponse& response) const {
         close(childToParent[1]);
 
         // convert all requierd data
-        VectorString       envStrings = buildEnv(router);
+        VectorString       envStrings = buildEnv(resultRouter);
         std::vector<char*> env        = convertEnv(envStrings);
 
         char* argv[3];
         argv[0] = const_cast<char*>(interpreter.c_str());
-        argv[1] = const_cast<char*>(router.getPathRootUri().c_str());
+        argv[1] = const_cast<char*>(resultRouter.getPathRootUri().c_str());
         argv[2] = NULL;
 
         execve(argv[0], argv, &env[0]);

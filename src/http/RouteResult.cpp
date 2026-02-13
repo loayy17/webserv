@@ -1,0 +1,152 @@
+#include "RouteResult.hpp"
+
+RouteResult::RouteResult()
+    : statusCode(0),
+      isRedirect(false),
+      redirectUrl(""),
+      pathRootUri(""),
+      matchedPath(""),
+      remainingPath(""),
+      errorMessage(""),
+      server(NULL),
+      location(NULL),
+      isCgiRequest(false),
+      isUploadRequest(false),
+      request() {}
+
+RouteResult::RouteResult(const RouteResult& other)
+    : statusCode(other.statusCode),
+      isRedirect(other.isRedirect),
+      redirectUrl(other.redirectUrl),
+      pathRootUri(other.pathRootUri),
+      matchedPath(other.matchedPath),
+      remainingPath(other.remainingPath),
+      errorMessage(other.errorMessage),
+      server(other.server),
+      location(other.location),
+      isCgiRequest(other.isCgiRequest),
+      isUploadRequest(other.isUploadRequest),
+      request(other.request) {}
+
+RouteResult& RouteResult::operator=(const RouteResult& other) {
+    if (this != &other) {
+        statusCode      = other.statusCode;
+        isRedirect      = other.isRedirect;
+        redirectUrl     = other.redirectUrl;
+        pathRootUri     = other.pathRootUri;
+        matchedPath     = other.matchedPath;
+        remainingPath   = other.remainingPath;
+        errorMessage    = other.errorMessage;
+        server          = other.server;
+        location        = other.location;
+        isCgiRequest    = other.isCgiRequest;
+        isUploadRequest = other.isUploadRequest;
+        request         = other.request;
+    }
+    return *this;
+}
+
+RouteResult::~RouteResult() {}
+
+// Setters
+void RouteResult::setStatusCode(int code) {
+    statusCode = code;
+}
+
+RouteResult& RouteResult::setRedirect(const String& url) {
+    isRedirect  = true;
+    redirectUrl = url;
+    statusCode  = HTTP_MOVED_PERMANENTLY;
+    return *this;
+}
+
+void RouteResult::setPathRootUri(const String& uri) {
+    pathRootUri = uri;
+}
+
+void RouteResult::setMatchedPath(const String& path) {
+    matchedPath = path;
+}
+
+void RouteResult::setRemainingPath(const String& path) {
+    remainingPath = path;
+}
+
+void RouteResult::setErrorMessage(const String& message) {
+    errorMessage = message;
+}
+
+void RouteResult::setServer(const ServerConfig* _server) {
+    server = _server;
+}
+
+void RouteResult::setLocation(const LocationConfig* _location) {
+    location = _location;
+}
+
+void RouteResult::setCgiRequest(bool isCgi) {
+    isCgiRequest = isCgi;
+}
+
+void RouteResult::setUploadRequest(bool isUpload) {
+    isUploadRequest = isUpload;
+}
+
+void RouteResult::setRequest(const HttpRequest& req) {
+    request = req;
+}
+
+RouteResult& RouteResult::setCodeAndMessage(int code, const String& message) {
+    statusCode   = code;
+    errorMessage = message;
+    return *this;
+}
+
+// Getters
+int RouteResult::getStatusCode() const {
+    return statusCode;
+}
+
+bool RouteResult::getIsRedirect() const {
+    return isRedirect;
+}
+
+String RouteResult::getRedirectUrl() const {
+    return redirectUrl;
+}
+
+String RouteResult::getPathRootUri() const {
+    return pathRootUri;
+}
+
+String RouteResult::getMatchedPath() const {
+    return matchedPath;
+}
+
+String RouteResult::getRemainingPath() const {
+    return remainingPath;
+}
+
+String RouteResult::getErrorMessage() const {
+    return errorMessage;
+}
+
+const ServerConfig* RouteResult::getServer() const {
+    return server;
+}
+
+const LocationConfig* RouteResult::getLocation() const {
+    return location;
+}
+
+bool RouteResult::getIsCgiRequest() const {
+    return isCgiRequest;
+}
+
+bool RouteResult::getIsUploadRequest() const {
+    return isUploadRequest;
+}
+
+const HttpRequest& RouteResult::getRequest() const {
+    return request;
+}

@@ -22,16 +22,14 @@ Server::~Server() {
 bool Server::createSocket() {
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
-        std::cout << "[ERROR]: Failed to create socket" << std::endl;
-        return false;
+        return Logger::error("Failed to create socket");
     }
     return true;
 }
 bool Server::configureSocket() {
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        std::cout << "[ERROR]: Failed to set SO_REUSEADDR" << std::endl;
-        return false;
+        return Logger::error("Failed to set SO_REUSEADDR");
     }
     return true;
 }
@@ -46,12 +44,12 @@ bool Server::bindSocket() {
     const char* interface = iface.c_str();
     const char* portStr   = typeToString<int>(portNum).c_str();
     if (getaddrinfo(interface, portStr, &hints, &res) != 0)
-        return Logger::error("[ERROR]: getaddrinfo failed");
+        return Logger::error("getaddrinfo failed");
     int bindResult = bind(server_fd, res->ai_addr, res->ai_addrlen);
     freeaddrinfo(res);
     if (bindResult < 0)
-        return Logger::error("[ERROR]: Failed to bind socket to " + iface + ":" + typeToString<int>(portNum));
-    return Logger::info("[INFO]: Socket bound to " + iface + ":" + typeToString<int>(portNum));
+        return Logger::error("Failed to bind socket to " + iface + ":" + typeToString<int>(portNum));
+    return Logger::info("Socket bound to http://" + iface + ":" + typeToString<int>(portNum));
 }
 bool Server::startListening() {
     if (listen(server_fd, 10) < 0) {

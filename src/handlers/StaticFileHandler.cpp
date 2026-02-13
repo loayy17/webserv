@@ -15,8 +15,8 @@ StaticFileHandler& StaticFileHandler::operator=(const StaticFileHandler& other) 
 
 StaticFileHandler::~StaticFileHandler() {}
 
-bool StaticFileHandler::handle(const Router& router, HttpResponse& response) const {
-    String path = router.getPathRootUri();
+bool StaticFileHandler::handle(const RouteResult& resultRouter, HttpResponse& response) const {
+    String path = resultRouter.getPathRootUri();
     String content;
     if (!readFileContent(path, content))
         return false;

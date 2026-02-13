@@ -20,8 +20,7 @@ void HttpResponse::setStatus(int code, const String& msg) {
     statusCode    = code;
     statusMessage = msg;
 }
-void HttpResponse::addHeader(const String&, const String&) {
-    String key, value;
+void HttpResponse::addHeader(const String& key, const String& value) {
     String valueFind = getValue(headers, key, String());
     headers[key]     = valueFind.empty() ? value : valueFind + ", " + value;
 }

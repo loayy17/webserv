@@ -196,7 +196,12 @@ bool readFileContent(const String& filePath, String& content) {
     std::ostringstream ss;
     ss << file.rdbuf();
     content = ss.str();
+    file.close();
     return true;
+}
+bool fileExists(const String& path) {
+    struct stat st;
+    return stat(path.c_str(), &st) == 0;
 }
 
 bool checkAllowedMethods(const String& m) {
@@ -318,7 +323,14 @@ String joinPaths(const String& firstPath, const String& secondPath) {
 bool pathStartsWith(const String& path, const String& prefix) {
     if (prefix.length() > path.length())
         return false;
-    return path.compare(0, prefix.length(), prefix) == 0;
+    if (path.compare(0, prefix.length(), prefix) != 0)
+        return false;
+    if (prefix == "/")
+        return true;
+    if (path.length() == prefix.length() || path[prefix.length()] == '/')
+        return true;
+
+    return false;
 }
 
 bool ensureDirectoryExists(const String& dirPath) {

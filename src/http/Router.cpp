@@ -1,274 +1,242 @@
 #include "Router.hpp"
-Router::Router()
-    : _servers(),
-      _request(),
-      isPathFound(false),
-      pathRootUri(""),
-      matchedPath(""),
-      remainingPath(""),
-      matchLocation(NULL),
-      matchServer(NULL),
-      redirectUrl(""),
-      isRedirect(false),
-      statusCode(0),
-      errorMessage("") {}
-Router::Router(int _statusCode, String errorMessage)
-    : _servers(),
-      _request(),
-      isPathFound(false),
-      pathRootUri(""),
-      matchedPath(""),
-      remainingPath(""),
-      matchLocation(NULL),
-      matchServer(NULL),
-      redirectUrl(""),
-      isRedirect(false),
-      statusCode(_statusCode),
-      errorMessage(errorMessage) {}
 
-Router::Router(const Router& other)
-    : _servers(other._servers),
-      _request(other._request),
-      isPathFound(other.isPathFound),
-      pathRootUri(other.pathRootUri),
-      matchedPath(other.matchedPath),
-      remainingPath(other.remainingPath),
-      matchLocation(other.matchLocation),
-      matchServer(other.matchServer),
-      redirectUrl(other.redirectUrl),
-      isRedirect(other.isRedirect),
-      statusCode(other.statusCode),
-      errorMessage(other.errorMessage) {}
-
+// Constructors / Destructor
+Router::Router() : _servers(), _request() {}
+Router::Router(const VectorServerConfig& servers, const HttpRequest& request) : _servers(servers), _request(request) {}
+Router::Router(const Router& other) : _servers(other._servers), _request(other._request) {}
 Router& Router::operator=(const Router& other) {
     if (this != &other) {
-        _servers      = other._servers;
-        _request      = other._request;
-        isPathFound   = other.isPathFound;
-        pathRootUri   = other.pathRootUri;
-        matchedPath   = other.matchedPath;
-        remainingPath = other.remainingPath;
-        matchLocation = other.matchLocation;
-        matchServer   = other.matchServer;
-        redirectUrl   = other.redirectUrl;
-        isRedirect    = other.isRedirect;
-        statusCode    = other.statusCode;
-        errorMessage  = other.errorMessage;
+        _servers = other._servers;
+        _request = other._request;
     }
     return *this;
 }
+Router::~Router() {}
 
-Router::Router(const VectorServerConfig& servers, const HttpRequest& request)
-    : _servers(servers),
-      _request(request),
-      isPathFound(false),
-      pathRootUri(""),
-      matchedPath(""),
-      remainingPath(""),
-      matchLocation(NULL),
-      matchServer(NULL),
-      redirectUrl(""),
-      isRedirect(false),
-      statusCode(0),
-      errorMessage("") {}
+// Resolve CGI script and PATH_INFO by walking the URI path components
+void Router::resolveCgiScriptAndPathInfo(const LocationConfig* loc, String& scriptPath, String& pathInfo) const {
+    pathInfo.clear();
 
-Router::~Router() {
-    _servers.clear();
-}
-
-void Router::processRequest() {
-    // TODO: client request port validation
-    // TODO: check if must server has unique port
-    // steps:
-    // 1. find server based on Host header and port from request
-    matchServer = findServer();
-    if (!matchServer) {
-        isPathFound  = false;
-        statusCode   = 500;
-        errorMessage = "No server configured for this port";
+    if (!loc || !loc->hasCgi())
         return;
-    }
 
-    // 2. find best matching location with match server
-    matchLocation = bestMatchLocation(matchServer->getLocations());
-    if (!matchLocation) {
-        isPathFound  = false;
-        statusCode   = 404;
-        errorMessage = "No location matches the requested URI";
-        return;
-    }
-    // if matchLocation found
-    // 3. check redirect
-    isPathFound = true;
-    matchedPath = matchLocation->getPath();
-    if (!matchLocation->getRedirect().empty()) {
-        isRedirect  = true;
-        redirectUrl = matchLocation->getRedirect();
-        statusCode  = 301;
-        return;
-    }
+    // Get the base root for this location
+    String root    = loc->getRoot();
+    String locPath = normalizePath(loc->getPath());
+    String uri     = normalizePath(_request.getUri());
 
-    // 4. check if method allowed in location
-    if (!isKeyInVector(_request.getMethod(), matchLocation->getAllowedMethods())) {
-        statusCode   = 405;
-        errorMessage = "Method Not Allowed";
-        return;
-    }
+    // Strip query string from URI
+    size_t qpos = uri.find('?');
+    if (qpos != String::npos)
+        uri = uri.substr(0, qpos);
 
-    // 5. check body size if is less than client_max_body_size from conf file
-    if (_request.getContentLength() > 0) {
-        if (!checkBodySize(*matchLocation)) {
-            statusCode   = 413;
-            errorMessage = "Request Entity Too Large";
+    // Get the part of the URI after the location prefix
+    String rest = (locPath == "/") ? uri : (pathStartsWith(uri, locPath) ? uri.substr(locPath.length()) : uri);
+    String accumulated;
+    size_t pos = 0;
+    while (pos < rest.length()) {
+        // Find next slash
+        size_t nextSlash = rest.find('/', pos == 0 && rest[0] == '/' ? 1 : pos);
+        if (nextSlash == 0) {
+            pos = 1;
+            continue;
+        } // skip leading slash
+        String segment = (nextSlash == String::npos) ? rest.substr(pos) : rest.substr(pos, nextSlash - pos);
+        if (segment.empty()) {
+            pos = (nextSlash == String::npos) ? rest.length() : nextSlash + 1;
+            continue;
+        }
+
+        if (accumulated.empty())
+            accumulated = "/" + segment;
+        else
+            accumulated += "/" + segment;
+
+        String candidate = joinPaths(root, accumulated);
+        if (fileExists(candidate) && getFileType(candidate) == SINGLEFILE && isCgiRequest(candidate, *loc)) {
+            scriptPath = candidate;
+            // Everything after this segment is PATH_INFO
+            size_t afterScript = (nextSlash == String::npos) ? rest.length() : nextSlash;
+            if (afterScript < rest.length())
+                pathInfo = rest.substr(afterScript);
             return;
         }
+        pos = (nextSlash == String::npos) ? rest.length() : nextSlash + 1;
     }
 
-    // 6. resolve filesystem path
-    pathRootUri = resolveFilesystemPath();
-    if (_request.getUri().length() > matchLocation->getPath().length()) {
-        remainingPath = _request.getUri().substr(matchLocation->getPath().length());
-    }
-
-    std::cout << "Resolved path: " << pathRootUri << std::endl;
-    statusCode = 200;
-    return;
+    // Fallback: try the full resolved path
+    scriptPath = joinPaths(root, rest.empty() ? "/" : rest);
 }
 
-const ServerConfig* Router::findServer() const {
-    int    requestPort = _request.getPort();
-    String requestHost = _request.getHost();
+// Main request processing
+RouteResult Router::processRequest() {
+    RouteResult result;
+    result.setRequest(_request);
 
-    for (size_t i = 0; i < _servers.size(); i++) {
-        if (_servers[i].hasPort(requestPort)) {
-            if (_servers[i].hasServerName(requestHost)) {
-                return &_servers[i];
-            }
+    // 1. Find server
+    const ServerConfig* srv = findServer();
+    if (!srv)
+        return result.setCodeAndMessage(HTTP_BAD_REQUEST, "No matching server found");
+    result.setServer(srv);
+
+    // 2. Find location
+    const LocationConfig* loc = bestMatchLocation(srv->getLocations());
+    if (!loc)
+        return result.setCodeAndMessage(HTTP_NOT_FOUND, "No matching location found");
+    result.setLocation(loc);
+
+    // 3. Redirect
+    if (!loc->getRedirect().empty())
+        return result.setRedirect(loc->getRedirect());
+
+    // 4. Method check
+    if (!isKeyInVector(_request.getMethod(), loc->getAllowedMethods()))
+        return result.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED, "Method Not Allowed");
+
+    // 5. Body size check
+    if (_request.getContentLength() > 0 && !checkBodySize(*loc))
+        return result.setCodeAndMessage(HTTP_PAYLOAD_TOO_LARGE, "Request Entity Too Large");
+
+    // 6. CGI handling — check BEFORE upload so POST to .py/.php goes to CGI
+    if (loc->hasCgi()) {
+        // Walk the URI segments to find the CGI script and extract PATH_INFO
+        String scriptPath, pathInfo;
+        resolveCgiScriptAndPathInfo(loc, scriptPath, pathInfo);
+
+        if (fileExists(scriptPath) && isCgiRequest(scriptPath, *loc)) {
+            result.setPathRootUri(scriptPath);
+            result.setRemainingPath(pathInfo);
+            result.setMatchedPath(loc->getPath());
+            result.setCgiRequest(true);
+            result.setStatusCode(HTTP_OK);
+            return result;
         }
     }
-    return getDefaultServer(requestPort);
+
+    // 7. Upload handling (POST/PUT to a location with upload_dir)
+    if (!loc->getUploadDir().empty() && (_request.getMethod() == "POST" || _request.getMethod() == "PUT")) {
+        result.setUploadRequest(true);
+        result.setMatchedPath(loc->getPath());
+        result.setStatusCode(HTTP_OK);
+        return result;
+    }
+    // 8. Resolve filesystem path for static/directory
+    String fsPath = resolveFilesystemPath(loc);
+    if (!fileExists(fsPath)) {
+        return result.setCodeAndMessage(HTTP_NOT_FOUND, "File not found");
+    }
+    // If path is a directory, try to resolve index file
+    if (getFileType(fsPath) == DIRECTORY) {
+        const VectorString& indexes    = loc->getIndexes();
+        bool                foundIndex = false;
+        for (size_t i = 0; i < indexes.size(); ++i) {
+            String indexPath = joinPaths(fsPath, indexes[i]);
+            if (fileExists(indexPath) && getFileType(indexPath) == SINGLEFILE) {
+                fsPath     = indexPath;
+                foundIndex = true;
+                break;
+            }
+        }
+
+        if (!foundIndex) {
+            if (loc->getAutoIndex()) {
+                result.setPathRootUri(fsPath);
+                result.setMatchedPath(loc->getPath());
+                result.setStatusCode(200);
+                return result;
+            }
+            return result.setCodeAndMessage(HTTP_FORBIDDEN, "Forbidden");
+        }
+    }
+
+    if (!fileExists(fsPath))
+        return result.setCodeAndMessage(HTTP_NOT_FOUND, "File not found");
+    result.setPathRootUri(fsPath);
+    result.setMatchedPath(loc->getPath());
+
+    // 9. Compute remaining path
+    String remaining;
+    if (_request.getUri().length() > result.getMatchedPath().length())
+        remaining = _request.getUri().substr(result.getMatchedPath().length());
+    result.setRemainingPath(remaining);
+    result.setStatusCode(HTTP_OK);
+    return result;
+}
+
+// Server lookup
+const ServerConfig* Router::findServer() const {
+    int    port = _request.getPort();
+    String host = _request.getHost();
+
+    for (size_t i = 0; i < _servers.size(); ++i) {
+        if (_servers[i].hasPort(port) && _servers[i].hasServerName(host))
+            return &_servers[i];
+    }
+    return getDefaultServer(port);
 }
 
 const ServerConfig* Router::getDefaultServer(int port) const {
-    for (size_t i = 0; i < _servers.size(); i++) {
-        if (_servers[i].hasPort(port)) {
+    for (size_t i = 0; i < _servers.size(); ++i)
+        if (_servers[i].hasPort(port))
             return &_servers[i];
-        }
-    }
     return NULL;
 }
 
-const LocationConfig* Router::bestMatchLocation(const VectorLocationConfig& locationsMatchServer) const {
-    String                normalizedUri = normalizePath(_request.getUri());
-    const LocationConfig* bestMatch     = NULL;
+// Best matching location
+const LocationConfig* Router::bestMatchLocation(const VectorLocationConfig& locations) const {
+    String                uri     = normalizePath(_request.getUri());
+    const LocationConfig* best    = NULL;
+    size_t                bestLen = 0;
 
-    size_t bestMatchLength = 0;
-    for (size_t i = 0; i < locationsMatchServer.size(); i++) {
-        size_t locPathLength = locationsMatchServer[i].getPath().length();
-        String locPath       = normalizePath(locationsMatchServer[i].getPath());
-        if (pathStartsWith(normalizedUri, locPath)) {
-            if (locPathLength > bestMatchLength) {
-                bestMatchLength = locPathLength;
-                bestMatch       = &locationsMatchServer[i];
-            }
+    for (size_t i = 0; i < locations.size(); ++i) {
+        String path = normalizePath(locations[i].getPath());
+        if (pathStartsWith(uri, path) && path.length() > bestLen) {
+            best    = &locations[i];
+            bestLen = path.length();
         }
     }
-
-    return bestMatch;
+    return best;
 }
 
-String Router::resolveFilesystemPath() const {
-    if (!matchLocation)
+// Resolve filesystem path
+String Router::resolveFilesystemPath(const LocationConfig* loc) const {
+    if (!loc)
         return "";
 
-    String root    = matchLocation->getRoot();
-    String locPath = normalizePath(matchLocation->getPath());
-    String uri     = normalizePath(_request.getUri());
+    String root    = loc->getRoot();
+    String locPath = normalizePath(loc->getPath());
 
-    if (!root.empty() && root[0] == '/')
-        root = "." + root;
-
+    String uri = normalizePath(_request.getUri());
+    // compute the part of URI after the location prefix
+    // firstgo topath start with rest for /login and location /login rest is empty becasue when location and uri pic.jpg rest is /pic.jpg
     String rest;
-    if (locPath == "/")
+    if (locPath == "/") {
         rest = uri;
-    else if (pathStartsWith(uri, locPath))
+    } else if (pathStartsWith(uri, locPath)) {
         rest = uri.substr(locPath.length());
-    else
+    } else {
         rest = uri;
-
-    if (rest.empty())
-        rest = "/";
-
-    return joinPaths(root, rest);
-}
-
-bool Router::checkBodySize(const LocationConfig& location) const {
-    String maxBodyStr = location.getClientMaxBody();
-    if (maxBodyStr.empty())
-        return true;
-    size_t maxBody = convertMaxBodySize(maxBodyStr);
-    return _request.getContentLength() <= maxBody;
-}
-
-bool Router::isCgiRequest(const String& path, const LocationConfig& location) const {
-    MapString cgiPass = location.getCgiPass();
-    for (MapString::const_iterator it = cgiPass.begin(); it != cgiPass.end(); ++it) {
-        std::cout << "CGI Pass: " << it->first << " => " << it->second << std::endl;
     }
-    std::cout << "Checking if cgipass map is empty: " << location.getCgiPass().empty() << std::endl;
-    if (!location.hasCgi())
+    if (rest.empty() || rest[0] != '/')
+        rest = "/" + rest;
+    String fullPath = joinPaths(root, locPath);
+    return joinPaths(fullPath, rest);
+}
+
+// Body size
+bool Router::checkBodySize(const LocationConfig& loc) const {
+    String maxBody = loc.getClientMaxBody();
+    return maxBody.empty() || _request.getContentLength() <= convertMaxBodySize(maxBody);
+}
+
+// Check CGI request
+bool Router::isCgiRequest(const String& path, const LocationConfig& loc) const {
+    if (!loc.hasCgi())
         return false;
-    std::cout << "Checking CGI for path: " << path << std::endl;
-    size_t dotPos = path.rfind('.');
-    std::cout << "Dot position: " << dotPos << std::endl;
-    if (dotPos == String::npos)
+
+    String name, ext;
+    if (!splitByChar(path, name, ext, '.', true))
         return false;
 
-    String extension = path.substr(dotPos);
-    std::cout << "Extension: " << extension << std::endl;
-    std::cout << "Has CGI for extension: " << location.hasCgi() << std::endl;
-    std::cout << "CGI Interpreter: " << location.getCgiInterpreter(extension) << std::endl;
-
-    return !location.getCgiInterpreter(extension).empty();
-}
-
-bool Router::isUploadRequest(const String& method, const LocationConfig& location) const {
-    return !location.getUploadDir().empty() && method == "POST";
-}
-
-// Getters
-bool Router::getIsPathFound() const {
-    return isPathFound;
-}
-bool Router::getIsRedirect() const {
-    return isRedirect;
-}
-int Router::getStatusCode() const {
-    return statusCode;
-}
-
-const LocationConfig* Router::getLocation() const {
-    return matchLocation;
-}
-const ServerConfig* Router::getServer() const {
-    return matchServer;
-}
-const String& Router::getPathRootUri() const {
-    return pathRootUri;
-}
-const String& Router::getMatchedPath() const {
-    return matchedPath;
-}
-const String& Router::getRemainingPath() const {
-    return remainingPath;
-}
-const String& Router::getRedirectUrl() const {
-    return redirectUrl;
-}
-const String& Router::getErrorMessage() const {
-    return errorMessage;
-}
-
-const HttpRequest& Router::getRequest() const {
-    return _request;
+    return !loc.getCgiInterpreter("." + ext).empty();
 }

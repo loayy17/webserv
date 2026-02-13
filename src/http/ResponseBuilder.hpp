@@ -10,7 +10,7 @@
 #include "../handlers/UploaderHandler.hpp"
 #include "../utils/Utils.hpp"
 #include "HttpResponse.hpp"
-#include "Router.hpp"
+#include "RouteResult.hpp"
 
 class ResponseBuilder {
    public:
@@ -18,20 +18,20 @@ class ResponseBuilder {
     ResponseBuilder(const MimeTypes& _mimeTypes);
     ~ResponseBuilder();
 
-    HttpResponse build(const Router& router);
+    HttpResponse build(const RouteResult& resultRouter);
     HttpResponse buildError(int code, const std::string& msg);
 
    private:
     MimeTypes mimeTypes;
 
-    bool handleStatic(HttpResponse& response, const Router& router) const;
-    bool handleDirectory(HttpResponse& response, const Router& router) const;
-    bool handleCgi(HttpResponse& response, const Router& router) const;
-    bool handleUpload(HttpResponse& response, const Router& router) const;
-    void handleError(HttpResponse& response, const Router& router);
+    bool handleStatic(HttpResponse& response, const RouteResult& resultRouter) const;
+    bool handleDirectory(HttpResponse& response, const RouteResult& resultRouter) const;
+    bool handleCgi(HttpResponse& response, const RouteResult& resultRouter) const;
+    bool handleUpload(HttpResponse& response, const RouteResult& resultRouter) const;
+    void handleError(HttpResponse& response, const RouteResult& resultRouter);
 
     // Helpers
-    String getErrorPagePath(const Router& router, int code) const;
+    String getErrorPagePath(const RouteResult& resultRouter, int code) const;
 };
 
 #endif

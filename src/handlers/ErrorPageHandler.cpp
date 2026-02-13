@@ -27,13 +27,13 @@ std::string ErrorPageHandler::generateHtml(int code, const std::string& msg) con
     return errorPage;
 }
 
-void ErrorPageHandler::handle(HttpResponse& response, const Router& router, const MimeTypes& mimeTypes) const {
-    int         code = router.getStatusCode() ? router.getStatusCode() : 500;
-    std::string msg  = router.getErrorMessage().empty() ? "Error" : router.getErrorMessage();
+void ErrorPageHandler::handle(HttpResponse& response, const RouteResult& resultRouter, const MimeTypes& mimeTypes) const {
+    int         code = resultRouter.getStatusCode() ? resultRouter.getStatusCode() : 500;
+    std::string msg  = resultRouter.getErrorMessage().empty() ? "Error" : resultRouter.getErrorMessage();
 
     std::string body;
     // Check for custom error page in location first, then server
-    const std::string customPage = router.getLocation() ? router.getLocation()->getErrorPage(code) : "";
+    const std::string customPage = resultRouter.getLocation() ? resultRouter.getLocation()->getErrorPage(code) : "";
     if (!customPage.empty() && readFileContent(customPage, body)) {
         response.setStatus(code, "Error");
         response.addHeader("Content-Type", mimeTypes.get(customPage));
@@ -42,7 +42,7 @@ void ErrorPageHandler::handle(HttpResponse& response, const Router& router, cons
         return;
     }
 
-    const std::string serverPage = router.getServer() ? router.getServer()->getErrorPage(code) : "";
+    const std::string serverPage = resultRouter.getServer() ? resultRouter.getServer()->getErrorPage(code) : "";
     if (!serverPage.empty() && readFileContent(serverPage, body)) {
         response.setStatus(code, "Error");
         response.addHeader("Content-Type", mimeTypes.get(serverPage));

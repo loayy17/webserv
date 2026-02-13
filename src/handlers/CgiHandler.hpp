@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 #include "../http/HttpResponse.hpp"
+#include "../http/RouteResult.hpp"
 #include "IHandler.hpp"
-
 class CgiHandler : public IHandler {
    public:
     CgiHandler();
@@ -13,10 +13,10 @@ class CgiHandler : public IHandler {
     CgiHandler& operator=(const CgiHandler& other);
     ~CgiHandler();
 
-    bool handle(const Router& router, HttpResponse& response) const;
+    bool handle(const RouteResult& resultRouter, HttpResponse& response) const;
 
    private:
-    std::vector<std::string> buildEnv(const Router& router) const;
+    std::vector<std::string> buildEnv(const RouteResult& resultRouter) const;
     std::vector<char*>       convertEnv(const std::vector<std::string>& env) const;
 };
 

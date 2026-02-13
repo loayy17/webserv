@@ -41,10 +41,10 @@ String DirectoryListingHandler::buildRow(const FileHandler& fileInfo) const {
            "</tr>\n";
 }
 
-bool DirectoryListingHandler::handle(const Router& router, HttpResponse& response) const {
+bool DirectoryListingHandler::handle(const RouteResult& resultRouter, HttpResponse& response) const {
     std::vector<FileHandler> entries;
-    String                   path = router.getPathRootUri();
-    String                   uri  = router.getRequest().getUri();
+    String                   path = resultRouter.getPathRootUri();
+    String                   uri  = resultRouter.getPathRootUri();
 
     if (path.empty() || !readDirectoryEntries(path, uri, entries))
         return false;

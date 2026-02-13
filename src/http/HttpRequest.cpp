@@ -71,7 +71,6 @@ bool HttpRequest::parse(const String& raw) {
     size_t headerEnd = raw.find(DOUBLE_CRLF);
     if (headerEnd == String::npos) {
         errorCode = HTTP_BAD_REQUEST;
-        std::cout << "header not end" << std::endl;
         return false;
     }
     String headerSection = raw.substr(0, headerEnd);
@@ -79,14 +78,11 @@ bool HttpRequest::parse(const String& raw) {
     if (!parseHeaders(headerSection)) {
         if (errorCode == 0)
             errorCode = HTTP_BAD_REQUEST;
-        std::cout << "parseHeaders" << std::endl;
         return Logger::error("Failed to parse headers");
     }
     if (!parseBody(bodySection)) {
         if (errorCode == 0)
             errorCode = HTTP_BAD_REQUEST;
-        std::cout << "parseBody" << std::endl;
-
         return Logger::error("Failed to parse body");
     }
     return true;
@@ -94,25 +90,21 @@ bool HttpRequest::parse(const String& raw) {
 bool HttpRequest::parseHeaders(const String& headerSection) {
     size_t lineEnd = headerSection.find(CRLF);
     if (lineEnd == String::npos && (errorCode = HTTP_BAD_REQUEST)) {
-        std::cout << "line end not found" << std::endl;
         return Logger::error("Failed to find end of request line");
     }
 
     String       requestLine = headerSection.substr(0, lineEnd);
     VectorString values;
     if (!parseKeyValue(requestLine, method, values) && (errorCode = HTTP_BAD_REQUEST)) {
-        std::cout << "parseKeyValue failed" << std::endl;
         return Logger::error("Failed to parse request line");
     }
     if (values.size() != 2 && (errorCode = HTTP_BAD_REQUEST)) {
-        std::cout << "invalid request line format" << std::endl;
         return Logger::error("Invalid request line format");
     }
 
     uri         = values[0];
     httpVersion = values[1];
     if (method.empty() || uri.empty() || httpVersion.empty()) {
-        std::cout << "method, uri, or http version is empty" << std::endl;
         errorCode = HTTP_BAD_REQUEST;
         return Logger::error("Empty method, URI, or HTTP version");
     }
@@ -206,9 +198,6 @@ bool HttpRequest::parseBody(const String& bodySection) {
 
     if (hasNonEmptyValue(headers, String("content-length"))) {
         // ! Content-Length is present, validate body size matches
-        std::cout << "content length " << contentLength << std::endl;
-        std::cout << "body size " << body.size() << std::endl;
-        std::cout << "body " << body << std::endl;
         if (body.size() != contentLength) {
             errorCode = HTTP_BAD_REQUEST;
             return Logger::error("Body length does not match Content-Length");

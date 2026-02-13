@@ -29,6 +29,7 @@ bool   splitByString(const String& line, VectorString& values, const String& del
 // File methods
 bool        convertFileToLines(String file, VectorString& lines);
 bool        readFileContent(const String& filePath, String& content);
+bool        fileExists(const String& path);
 struct stat getFileStat(const String& path);
 FileType    getFileType(const struct stat& st);
 FileType    getFileType(const String& path);

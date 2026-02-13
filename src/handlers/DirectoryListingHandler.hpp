@@ -16,7 +16,7 @@ class DirectoryListingHandler : public IHandler {
     DirectoryListingHandler& operator=(const DirectoryListingHandler& other);
     ~DirectoryListingHandler();
 
-    bool handle(const Router& router, HttpResponse& response) const;
+    bool handle(const RouteResult& resultRouter, HttpResponse& response) const;
 
    private:
     String buildRow(const FileHandler& fileInfo) const;

@@ -21,6 +21,7 @@ String formatTime(time_t t);
 String toUpperWords(const String& str);
 String toLowerWords(const String& str);
 String trimSpaces(const String& s);
+String trimQuotes(const String& s);
 String trimSpacesComments(const String& s);
 String cleanCharEnd(const String& v, char c);
 bool   splitByChar(const String& line, String& key, String& value, char endChar, bool reverse = false);

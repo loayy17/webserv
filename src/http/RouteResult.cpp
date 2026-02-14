@@ -53,10 +53,12 @@ void RouteResult::setStatusCode(int code) {
     statusCode = code;
 }
 
-RouteResult& RouteResult::setRedirect(const String& url) {
+RouteResult& RouteResult::setRedirect(const String& url, int code) {
     isRedirect  = true;
-    redirectUrl = url;
-    statusCode  = HTTP_MOVED_PERMANENTLY;
+    // TODO
+    if (url[0] == '/')
+        redirectUrl = url;
+    statusCode  = code;
     return *this;
 }
 

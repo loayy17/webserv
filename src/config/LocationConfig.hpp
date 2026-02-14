@@ -23,7 +23,6 @@ class LocationConfig {
     void setUploadDir(const String& p);
     bool setUploadDir(const VectorString& p);
     bool setCgiPass(const VectorString& c);
-    void setRedirect(const String& r);
     bool setRedirect(const VectorString& r);
     bool setErrorPage(const VectorString& values);
 
@@ -40,10 +39,12 @@ class LocationConfig {
     const MapString& getCgiPass() const;
     String           getCgiInterpreter(const String& extension) const;
     bool             hasCgi() const;
-    String           getRedirect() const;
     String           getClientMaxBody() const;
     VectorString     getAllowedMethods() const;
     String           getErrorPage(int code) const;
+    bool             getIsRedirect() const;
+    int              getRedirectCode() const;
+    String           getRedirectValue() const;
 
    private:
     // required location parameters
@@ -55,10 +56,13 @@ class LocationConfig {
     VectorString indexes;        // default: root if not set be default "index.html"
     String       uploadDir;      // upload directory path
     MapString    cgiPass;        // maps extension to interpreter path
-    String       redirect;       // default: ""
     String       clientMaxBody;  // default: ""
     VectorString allowedMethods; // default: GET
     MapIntString errorPage;      // maps error code to error page path
+    bool         hasRedirect;
+    int          redirectCode;     
+    String       redirectValue;
+
 };
 
 #endif

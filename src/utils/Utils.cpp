@@ -49,6 +49,12 @@ String trimSpaces(const String& s) {
     return s.substr(start, end - start + 1);
 }
 
+String trimQuotes(const String& s) {
+    if (s.size() >= 2 && ((s[0] == '"' && s[s.size() - 1] == '"') || (s[0] == '\'' && s[s.size() - 1] == '\'')))
+        return s.substr(1, s.size() - 2);
+    return s;
+}
+
 String findValueStrInMap(const MapString& map, const String& key) {
     MapString::const_iterator it = map.find(key);
     if (it != map.end()) {
@@ -243,10 +249,10 @@ bool parseKeyValue(const String& line, String& key, VectorString& values) {
     ss >> key;
     if (key.empty())
         return false;
-
+    key = trimQuotes(key);
     String v;
     while (ss >> v) {
-        values.push_back(cleanCharEnd(v, ';'));
+        values.push_back(trimQuotes(cleanCharEnd(v, ';')));
     }
     return !values.empty();
 }

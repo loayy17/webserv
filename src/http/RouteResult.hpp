@@ -13,7 +13,7 @@ class RouteResult {
     ~RouteResult();
 
     RouteResult& setCodeAndMessage(int code, const String& message);
-    RouteResult& setRedirect(const String& url);
+    RouteResult& setRedirect(const String& url, int code);
     // Setters
     void setStatusCode(int code);
     void setPathRootUri(const String& uri);

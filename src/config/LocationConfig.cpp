@@ -8,9 +8,12 @@ LocationConfig::LocationConfig()
       indexes(),
       uploadDir(""),
       cgiPass(),
-      redirect(""),
       clientMaxBody(""),
-      allowedMethods() {}
+      allowedMethods(),
+      errorPage(),
+      hasRedirect(false),
+      redirectCode(0),
+      redirectValue("") {}
 
 LocationConfig::LocationConfig(const LocationConfig& other)
     : path(other.path),
@@ -20,9 +23,12 @@ LocationConfig::LocationConfig(const LocationConfig& other)
       indexes(other.indexes),
       uploadDir(other.uploadDir),
       cgiPass(other.cgiPass),
-      redirect(other.redirect),
       clientMaxBody(other.clientMaxBody),
-      allowedMethods(other.allowedMethods) {}
+      allowedMethods(other.allowedMethods), 
+      errorPage(other.errorPage),
+      hasRedirect(other.hasRedirect),
+      redirectCode(other.redirectCode),
+      redirectValue(other.redirectValue) {}
 
 LocationConfig& LocationConfig::operator=(const LocationConfig& other) {
     if (this != &other) {
@@ -33,9 +39,12 @@ LocationConfig& LocationConfig::operator=(const LocationConfig& other) {
         indexes        = other.indexes;
         uploadDir      = other.uploadDir;
         cgiPass        = other.cgiPass;
-        redirect       = other.redirect;
         clientMaxBody  = other.clientMaxBody;
         allowedMethods = other.allowedMethods;
+        errorPage      = other.errorPage;
+        hasRedirect    = other.hasRedirect;
+        redirectCode   = other.redirectCode;
+        redirectValue  = other.redirectValue;
     }
     return *this;
 }
@@ -48,14 +57,18 @@ LocationConfig::LocationConfig(const String& p)
       indexes(),
       uploadDir(""),
       cgiPass(),
-      redirect(""),
       clientMaxBody(""),
-      allowedMethods() {}
+      allowedMethods(),
+      errorPage(),
+      hasRedirect(false),
+      redirectCode(0),
+      redirectValue("") {}
 
 LocationConfig::~LocationConfig() {
     indexes.clear();
     allowedMethods.clear();
     cgiPass.clear();
+    errorPage.clear();
 }
 // setters
 bool LocationConfig::setRoot(const VectorString& r) {
@@ -129,18 +142,17 @@ bool LocationConfig::setCgiPass(const VectorString& c) {
     return true;
 }
 
-void LocationConfig::setRedirect(const String& r) {
-    redirect = r;
-}
-
 bool LocationConfig::setRedirect(const VectorString& r) {
-    if (!redirect.empty())
+    if (hasRedirect)
         return Logger::error("duplicate return directive");
-    if (r.size() != 1)
+    if (r.size() != 1 && r.size() != 2)
         return Logger::error("return takes exactly one value");
-    if (r[0].empty() || r[0][0] != '/')
-        return Logger::error("return url must start with /");
-    redirect = r[0];
+    redirectCode = stringToType<int>(r[0]);
+    if (redirectCode <= 0 || redirectCode > 1000)
+        return Logger::error("return code must be between 0 and 1000");
+    if (r.size() == 2) 
+        redirectValue = r[1];
+    hasRedirect = true;
     return true;
 }
 
@@ -218,9 +230,7 @@ String LocationConfig::getCgiInterpreter(const String& extension) const {
 bool LocationConfig::hasCgi() const {
     return !cgiPass.empty();
 }
-String LocationConfig::getRedirect() const {
-    return redirect;
-}
+
 VectorString LocationConfig::getAllowedMethods() const {
     return allowedMethods;
 }
@@ -232,4 +242,17 @@ VectorString LocationConfig::getIndexes() const {
 }
 String LocationConfig::getErrorPage(int code) const {
     return findValueIntInMap(errorPage, code);
+}
+
+bool LocationConfig::getIsRedirect() const
+{
+    return hasRedirect;
+}
+int LocationConfig::getRedirectCode() const
+{
+    return redirectCode;
+}
+String LocationConfig::getRedirectValue() const
+{
+    return redirectValue;
 }

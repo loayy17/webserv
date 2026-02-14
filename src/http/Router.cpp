@@ -86,8 +86,8 @@ RouteResult Router::processRequest() {
     result.setLocation(loc);
 
     // 3. Redirect
-    if (!loc->getRedirect().empty())
-        return result.setRedirect(loc->getRedirect());
+    if (loc->getIsRedirect())
+        return result.setRedirect(loc->getRedirectValue(), loc->getRedirectCode());
 
     // 4. Method check
     if (!isKeyInVector(_request.getMethod(), loc->getAllowedMethods()))

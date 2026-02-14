@@ -48,7 +48,8 @@ bool ConfigParser::parse() {
     String line;
     bool   is_http_defined = false;
     while (getNextLine(line)) {
-        if (line == "http {") {
+        // TODO Make support single and double quotes
+        if (line == "http {" || line == "\"http\" {") {
             if (is_http_defined)
                 return Logger::error("only one http block allowed");
             is_http_defined = true;
@@ -58,7 +59,7 @@ bool ConfigParser::parse() {
             if (!parseHttp())
                 return false;
             scope = NONE;
-        } else if (line == "server {") {
+        } else if (line == "server {" || line == "\"server\" {") {
             if (scope != NONE)
                 return Logger::error("server block in invalid position");
             scope = SERVER;
@@ -81,7 +82,7 @@ bool ConfigParser::parseHttp() {
             scope = NONE;
             break;
         }
-        if (t == "server {") {
+        if (t == "server {" || t == "\"server\" {") {
             if (!parseServer())
                 return false;
             continue;
@@ -134,8 +135,7 @@ bool ConfigParser::parseServer() {
             scope = HTTP;
             break;
         }
-
-        if (t.find("location ") == 0) {
+        if ((t.find("location") == 0 || t.find("\"location\"") == 0) && t[t.size() - 1] == '{') {
             if (!parseLocation(srv, t))
                 return false;
             continue;
@@ -238,7 +238,7 @@ bool ConfigParser::validate() {
             s.setClientMaxBody(httpClientMaxBody);
         VectorLocationConfig& locs = s.getLocations();
         for (size_t j = 0; j < locs.size(); j++) {
-            if (locs[j].getRoot().empty()) {
+            if (locs[j].getRoot().empty() && !locs[j].getIsRedirect()) {
                 if (s.getRoot().empty())
                     return Logger::error("location has no root and server has no root");
                 locs[j].setRoot(s.getRoot());

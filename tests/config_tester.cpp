@@ -18,6 +18,7 @@ void printLocation(const LocationConfig& loc, const String& resolvedBody) {
     std::cout << "  Location: " << loc.getPath() << "\n";
     std::cout << "    root       : " << loc.getRoot() << "\n";
     std::cout << "    autoindex  : " << (loc.getAutoIndex() ? "on" : "off") << "\n";
+    std::cout << "    return     : " << (loc.getIsRedirect() ? (loc.getRedirectValue() + " " + typeToString<int>(loc.getRedirectCode())) : "none") << "\n";
     for (size_t i = 0; i < loc.getAllowedMethods().size(); i++) {
         std::cout << "    method     : " << loc.getAllowedMethods()[i] << "\n";
     }

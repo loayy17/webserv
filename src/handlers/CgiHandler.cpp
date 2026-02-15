@@ -18,6 +18,10 @@ CgiHandler::~CgiHandler() {}
 // ─── IHandler interface ──────────────────────────────────────────────────────
 
 bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response) const {
+    return handle(resultRouter, response, VectorInt());
+}
+
+bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response, const VectorInt& openFds) const {
     (void)response;
     if (!_cgi)
         return false;
@@ -57,6 +61,8 @@ bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response)
         dup2(childToParent[1], STDOUT_FILENO);
         close(parentToChild[0]);
         close(childToParent[1]);
+        for (size_t i = 0; i < openFds.size(); ++i) 
+                close(openFds[i]);
 
         String scriptDir = extractDirectoryFromPath(resultRouter.getPathRootUri());
         if (!scriptDir.empty() && chdir(scriptDir.c_str()) != 0) {

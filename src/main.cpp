@@ -4,15 +4,11 @@
 #include "server/ServerManager.hpp"
 #include "utils/Logger.hpp"
 
-ServerManager* g_serverManager = NULL;
+volatile sig_atomic_t g_running = 1;
 
 void signalHandler(int signum) {
-    if (signum == SIGINT || signum == SIGTERM) {
-        std::cout << "\nShutdown signal received..." << std::endl;
-        if (g_serverManager) {
-            g_serverManager->shutdown();
-        }
-    }
+    (void)signum;
+    g_running = 0;
 }
 
 void setupSignals() {
@@ -40,7 +36,6 @@ int main(int ac, char** av) {
     }
 
     ServerManager serverManager(configs);
-    g_serverManager = &serverManager;
 
     if (!serverManager.initialize()) {
         std::cout << "[ERROR]: Failed to initialize server manager" << std::endl;

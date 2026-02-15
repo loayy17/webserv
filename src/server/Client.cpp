@@ -1,14 +1,14 @@
 #include "Client.hpp"
-#include "../utils/Utils.hpp"
 
-Client::Client() : client_fd(-1), lastActivity(0) {}
+Client::Client() : client_fd(-1), lastActivity(0), _keepAlive(false) {}
 
 Client::Client(const Client& other)
     : client_fd(other.client_fd),
       storeReceiveData(other.storeReceiveData),
       storeSendData(other.storeSendData),
       lastActivity(other.lastActivity),
-      _cgi(other._cgi) {}
+      _cgi(other._cgi),
+      _keepAlive(other._keepAlive) {}
 
 Client& Client::operator=(const Client& other) {
     if (this != &other) {
@@ -17,11 +17,12 @@ Client& Client::operator=(const Client& other) {
         storeSendData    = other.storeSendData;
         lastActivity     = other.lastActivity;
         _cgi             = other._cgi;
+        _keepAlive       = other._keepAlive;
     }
     return *this;
 }
 
-Client::Client(int fd) : client_fd(fd) {
+Client::Client(int fd) : client_fd(fd), _keepAlive(false) {
     lastActivity = getCurrentTime();
 }
 
@@ -61,6 +62,13 @@ void Client::clearStoreReceiveData() {
     storeReceiveData.clear();
 }
 
+void Client::removeReceivedData(size_t len) {
+    if (len >= storeReceiveData.size())
+        storeReceiveData.clear();
+    else
+        storeReceiveData.erase(0, len);
+}
+
 bool Client::isTimedOut(int timeout) const {
     return getDifferentTime(lastActivity, getCurrentTime()) > timeout;
 }
@@ -72,10 +80,10 @@ void Client::closeConnection() {
     }
 }
 
-String Client::getStoreReceiveData() const {
+const String& Client::getStoreReceiveData() const {
     return storeReceiveData;
 }
-String Client::getStoreSendData() const {
+const String& Client::getStoreSendData() const {
     return storeSendData;
 }
 int Client::getFd() const {
@@ -87,4 +95,11 @@ CgiProcess& Client::getCgi() {
 }
 const CgiProcess& Client::getCgi() const {
     return _cgi;
+}
+
+void Client::setKeepAlive(bool keepAlive) {
+    _keepAlive = keepAlive;
+}
+bool Client::isKeepAlive() const {
+    return _keepAlive;
 }

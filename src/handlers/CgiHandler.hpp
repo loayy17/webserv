@@ -16,6 +16,7 @@ class CgiHandler : public IHandler {
     ~CgiHandler();
 
     bool handle(const RouteResult& resultRouter, HttpResponse& response) const;
+    bool handle(const RouteResult& resultRouter, HttpResponse& response, const VectorInt& openFds) const;
 
     static bool parseOutput(const String& raw, HttpResponse& response);
 

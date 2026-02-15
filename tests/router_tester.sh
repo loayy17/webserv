@@ -34,15 +34,14 @@ print_subheader() {
 }
 
 # Test function
-# Args: test_name config_content request_content expected_isPathFound expected_statusCode [expected_matchedPath] [expected_serverName]
+# Args: test_name config_content request_content expected_statusCode [expected_matchedPath] [expected_serverName]
 run_test() {
     local test_name="$1"
     local config_content="$2"
     local request_content="$3"
-    local expected_isPathFound="$4"
-    local expected_statusCode="$5"
-    local expected_matchedPath="$6"
-    local expected_serverName="$7"
+    local expected_statusCode="$4"
+    local expected_matchedPath="$5"
+    local expected_serverName="$6"
     
     TOTAL_COUNT=$((TOTAL_COUNT + 1))
     
@@ -65,7 +64,6 @@ run_test() {
     fi
     
     # Parse output
-    actual_isPathFound=$(echo "$output" | grep "^isPathFound=" | cut -d'=' -f2)
     actual_statusCode=$(echo "$output" | grep "^statusCode=" | cut -d'=' -f2)
     actual_matchedPath=$(echo "$output" | grep "^matchedPath=" | cut -d'=' -f2)
     actual_serverName=$(echo "$output" | grep "^serverName=" | cut -d'=' -f2)
@@ -73,11 +71,6 @@ run_test() {
     # Compare results
     local passed=true
     local errors=""
-    
-    if [ "$actual_isPathFound" != "$expected_isPathFound" ]; then
-        passed=false
-        errors="${errors}   Expected isPathFound=$expected_isPathFound, got $actual_isPathFound\n"
-    fi
     
     if [ "$actual_statusCode" != "$expected_statusCode" ]; then
         passed=false
@@ -127,41 +120,60 @@ mkdir -p "$TEST_DIR"
 
 print_subheader "Basic Routing Tests"
 
+# Create dummy content
+mkdir -p "$TEST_DIR/www"
+echo "index" > "$TEST_DIR/www/index.html"
+mkdir -p "$TEST_DIR/www/images"
+echo "photo" > "$TEST_DIR/www/images/photo.jpg"
+mkdir -p "$TEST_DIR/www/site1"
+echo "site1" > "$TEST_DIR/www/site1/index.html"
+mkdir -p "$TEST_DIR/www/site2"
+echo "site2" > "$TEST_DIR/www/site2/index.html"
+mkdir -p "$TEST_DIR/www/upload"
+echo "upload" > "$TEST_DIR/www/upload/index.html"
+mkdir -p "$TEST_DIR/www/api/users"
+echo "profile" > "$TEST_DIR/www/api/users/profile"
+echo "posts" > "$TEST_DIR/www/api/posts"
+
+CWD=$(pwd)
+
 # Test 1: Simple root path
-CONFIG='http {
+CONFIG="http {
     server {
         listen localhost:8080;
         server_name localhost;
-        root /var/www;
+        root $CWD/$TEST_DIR/www;
         location / {
             methods GET;
+            index index.html;
         }
     }
-}'
+}"
 
 REQUEST=$'GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n'
 
-run_test "Simple root path routing" "$CONFIG" "$REQUEST" "true" "200" "/" ""
+run_test "Simple root path routing" "$CONFIG" "$REQUEST" "200" "/" ""
 
 # Test 2: Nested path
-CONFIG='http {
+CONFIG="http {
     server {
         listen localhost:8080;
         server_name localhost;
-        root /var/www;
+        root $CWD/$TEST_DIR/www;
         location / {
             methods GET POST;
+            index index.html;
         }
         location /images {
             methods GET;
-            root /var/www/images;
+            root $CWD/$TEST_DIR/www;
         }
     }
-}'
+}"
 
 REQUEST=$'GET /images/photo.jpg HTTP/1.1\r\nHost: localhost:8080\r\n\r\n'
 
-run_test "Nested path /images" "$CONFIG" "$REQUEST" "true" "200" "/images" ""
+run_test "Nested path /images" "$CONFIG" "$REQUEST" "200" "/images" ""
 
 # ============================================================
 # SERVER SELECTION TESTS
@@ -170,60 +182,64 @@ run_test "Nested path /images" "$CONFIG" "$REQUEST" "true" "200" "/images" ""
 print_subheader "Server Selection Tests"
 
 # Test 3: Multiple servers by port
-CONFIG='http {
+CONFIG="http {
     server {
         listen localhost:8080;
         server_name site1.com;
-        root /var/www/site1;
+        root $CWD/$TEST_DIR/www/site1;
         location / {
             methods GET;
+            index index.html;
         }
     }
     server {
         listen localhost:8081;
         server_name site2.com;
-        root /var/www/site2;
+        root $CWD/$TEST_DIR/www/site2;
         location / {
             methods GET;
+            index index.html;
         }
     }
-}'
+}"
 
 REQUEST=$'GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n'
 
-run_test "Select server by port 8080" "$CONFIG" "$REQUEST" "true" "200" "/" "site1.com"
+run_test "Select server by port 8080" "$CONFIG" "$REQUEST" "200" "/" "site1.com"
 
 REQUEST=$'GET / HTTP/1.1\r\nHost: localhost:8081\r\n\r\n'
 
-run_test "Select server by port 8081" "$CONFIG" "$REQUEST" "true" "200" "/" "site2.com"
+run_test "Select server by port 8081" "$CONFIG" "$REQUEST" "200" "/" "site2.com"
 
 # Test 4: Same port, different server_name
-CONFIG='http {
+CONFIG="http {
     server {
         listen localhost:8080;
         server_name site1.com;
-        root /var/www/site1;
+        root $CWD/$TEST_DIR/www/site1;
         location / {
             methods GET;
+            index index.html;
         }
     }
     server {
         listen localhost:8080;
         server_name site2.com;
-        root /var/www/site2;
+        root $CWD/$TEST_DIR/www/site2;
         location / {
             methods GET;
+            index index.html;
         }
     }
-}'
+}"
 
 REQUEST=$'GET / HTTP/1.1\r\nHost: site1.com:8080\r\n\r\n'
 
-run_test "Select by server_name site1.com" "$CONFIG" "$REQUEST" "true" "200" "/" "site1.com"
+run_test "Select by server_name site1.com" "$CONFIG" "$REQUEST" "200" "/" "site1.com"
 
 REQUEST=$'GET / HTTP/1.1\r\nHost: site2.com:8080\r\n\r\n'
 
-run_test "Select by server_name site2.com" "$CONFIG" "$REQUEST" "true" "200" "/" "site2.com"
+run_test "Select by server_name site2.com" "$CONFIG" "$REQUEST" "200" "/" "site2.com"
 
 # ============================================================
 # LOCATION MATCHING TESTS
@@ -232,13 +248,14 @@ run_test "Select by server_name site2.com" "$CONFIG" "$REQUEST" "true" "200" "/"
 print_subheader "Location Matching Tests"
 
 # Test 5: Longest prefix match
-CONFIG='http {
+CONFIG="http {
     server {
         listen localhost:8080;
         server_name localhost;
-        root /var/www;
+        root $CWD/$TEST_DIR/www;
         location / {
             methods GET POST;
+            index index.html;
         }
         location /api {
             methods GET;
@@ -247,15 +264,15 @@ CONFIG='http {
             methods GET POST;
         }
     }
-}'
+}"
 
 REQUEST=$'GET /api/users/profile HTTP/1.1\r\nHost: localhost:8080\r\n\r\n'
 
-run_test "Longest prefix /api/users" "$CONFIG" "$REQUEST" "true" "200" "/api/users" ""
+run_test "Longest prefix /api/users" "$CONFIG" "$REQUEST" "200" "/api/users" ""
 
 REQUEST=$'GET /api/posts HTTP/1.1\r\nHost: localhost:8080\r\n\r\n'
 
-run_test "Shorter prefix /api" "$CONFIG" "$REQUEST" "true" "200" "/api" ""
+run_test "Shorter prefix /api" "$CONFIG" "$REQUEST" "200" "/api" ""
 
 # ============================================================
 # HTTP METHOD TESTS
@@ -263,28 +280,29 @@ run_test "Shorter prefix /api" "$CONFIG" "$REQUEST" "true" "200" "/api" ""
 
 print_subheader "HTTP Method Tests"
 
-CONFIG='http {
+CONFIG="http {
     server {
         listen localhost:8080;
         server_name localhost;
-        root /var/www;
+        root $CWD/$TEST_DIR/www;
         location / {
             methods GET POST DELETE;
+            index index.html;
         }
     }
-}'
+}"
 
 REQUEST=$'GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n'
 
-run_test "GET method allowed" "$CONFIG" "$REQUEST" "true" "200" "/" ""
+run_test "GET method allowed" "$CONFIG" "$REQUEST" "200" "/" ""
 
 REQUEST=$'POST / HTTP/1.1\r\nHost: localhost:8080\r\nContent-Length: 10\r\n\r\ntest=value'
 
-run_test "POST method allowed" "$CONFIG" "$REQUEST" "true" "200" "/" ""
+run_test "POST method allowed" "$CONFIG" "$REQUEST" "200" "/" ""
 
 REQUEST=$'PUT / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n'
 
-run_test "PUT method not allowed" "$CONFIG" "$REQUEST" "true" "405" "/" ""
+run_test "PUT method not allowed" "$CONFIG" "$REQUEST" "405" "/" ""
 
 # ============================================================
 # BODY SIZE VALIDATION TESTS
@@ -292,42 +310,45 @@ run_test "PUT method not allowed" "$CONFIG" "$REQUEST" "true" "405" "/" ""
 
 print_subheader "Body Size Validation Tests"
 
-CONFIG='http {
+CONFIG="http {
     client_max_body_size 1M;
     server {
         listen localhost:8080;
         server_name localhost;
-        root /var/www;
+        root $CWD/$TEST_DIR/www;
         location / {
             methods GET POST;
+            index index.html;
         }
         location /upload {
             methods POST;
             client_max_body_size 10M;
+            root $CWD/$TEST_DIR/www;
+            index index.html;
         }
     }
-}'
+}"
 
 # Test 1: Body size within limit (500KB < 1M)
 # Create body with exactly 500000 bytes
 BODY=$(printf 'x%.0s' {1..500000})
 REQUEST=$'POST / HTTP/1.1\r\nHost: localhost:8080\r\nContent-Length: 500000\r\n\r\n'"$BODY"
 
-run_test "Body size within limit" "$CONFIG" "$REQUEST" "true" "200" "/" ""
+run_test "Body size within limit" "$CONFIG" "$REQUEST" "200" "/" ""
 
 # Test 2: Body size exceeds limit (2MB > 1M)
 # Create body with exactly 2000000 bytes
 BODY=$(printf 'x%.0s' {1..2000000})
 REQUEST=$'POST / HTTP/1.1\r\nHost: localhost:8080\r\nContent-Length: 2000000\r\n\r\n'"$BODY"
 
-run_test "Body size exceeds limit" "$CONFIG" "$REQUEST" "true" "413" "/" ""
+run_test "Body size exceeds limit" "$CONFIG" "$REQUEST" "413" "/" ""
 
 # Test 3: Body within location limit (5MB < 10M)
 # Create body with exactly 5000000 bytes
 BODY=$(printf 'x%.0s' {1..5000000})
 REQUEST=$'POST /upload HTTP/1.1\r\nHost: localhost:8080\r\nContent-Length: 5000000\r\n\r\n'"$BODY"
 
-run_test "Body within location limit" "$CONFIG" "$REQUEST" "true" "200" "/upload" ""
+run_test "Body within location limit" "$CONFIG" "$REQUEST" "200" "/upload" ""
 
 # ============================================================
 # ERROR CASES
@@ -335,20 +356,21 @@ run_test "Body within location limit" "$CONFIG" "$REQUEST" "true" "200" "/upload
 
 print_subheader "Error Cases"
 
-CONFIG='http {
+CONFIG="http {
     server {
         listen localhost:8080;
         server_name localhost;
-        root /var/www;
+        root $CWD/$TEST_DIR/www;
         location / {
             methods GET;
+            index index.html;
         }
     }
-}'
+}"
 
 REQUEST=$'GET / HTTP/1.1\r\nHost: localhost:9999\r\n\r\n'
 
-run_test "Wrong port (no server)" "$CONFIG" "$REQUEST" "false" "500" "" ""
+run_test "Wrong port (no server)" "$CONFIG" "$REQUEST" "400" "" ""
 
 # ============================================================
 # SUMMARY

@@ -118,7 +118,15 @@ bool CgiProcess::finish() {
         _readFd = INVALID_FD;
     }
     int status = 0;
-    waitpid(_pid, &status, 0);
+    // WNOHANG is used to check if the child process has finished
+    // when i give them to waitpid it will wait for the child process to finish
+    // without WNOHANG it will block the main thread until the child process finishes
+    // withit the main process not being blocked we can handle other requests
+    pid_t ret = waitpid(_pid, &status, WNOHANG);
+    if (ret == 0) {
+        kill(_pid, SIGKILL);
+        waitpid(_pid, &status, 0);
+    }
     _active = false;
     return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }

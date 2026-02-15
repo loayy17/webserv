@@ -67,6 +67,14 @@ int PollManager::getFd(size_t index) const {
     return fds[index].fd;
 }
 
+VectorInt PollManager::getFds() const {
+    VectorInt result;
+    for (size_t i = 0; i < fds.size(); i++) {
+        result.push_back(fds[i].fd);
+    }
+    return result;
+}
+
 size_t PollManager::size() const {
     return fds.size();
 }

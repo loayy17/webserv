@@ -13,6 +13,7 @@ class Client;
 class Server;
 typedef std::string                          String;
 typedef std::vector<String>                  VectorString;
+typedef std::vector<int>                     VectorInt;
 typedef std::map<String, String>             MapString;
 typedef std::map<int, int>                   MapInt;
 typedef std::map<String, VectorString>       MapValueVector;

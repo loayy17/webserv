@@ -19,7 +19,7 @@ HandlerType getHandlerType(const RouteResult& resultRouter) {
     return NOT_FOUND;
 }
 
-HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess* cgi) {
+HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess* cgi, const VectorInt& openFds) {
     HttpResponse response;
 
     // Handle redirect
@@ -46,7 +46,7 @@ HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess*
                 return response;
             break;
         case CGI:
-            if (cgi && handleCgi(response, resultRouter, cgi))
+            if (cgi && handleCgi(response, resultRouter, cgi, openFds))
                 return response;
             break;
         case STATIC:
@@ -144,11 +144,11 @@ String ResponseBuilder::getErrorPagePath(const RouteResult& resultRouter, int co
     return "";
 }
 
-bool ResponseBuilder::handleCgi(HttpResponse& response, const RouteResult& resultRouter, CgiProcess* cgi) const {
+bool ResponseBuilder::handleCgi(HttpResponse& response, const RouteResult& resultRouter, CgiProcess* cgi, const VectorInt& openFds) const {
     if (!cgi)
         return false;
     CgiHandler handler(*cgi);
-    return handler.handle(resultRouter, response);
+    return handler.handle(resultRouter, response, openFds);
 }
 
 HttpResponse ResponseBuilder::buildCgiResponse(CgiProcess& cgi) {

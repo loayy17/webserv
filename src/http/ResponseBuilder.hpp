@@ -20,7 +20,7 @@ class ResponseBuilder {
     ResponseBuilder(const MimeTypes& _mimeTypes);
     ~ResponseBuilder();
 
-    HttpResponse build(const RouteResult& resultRouter, CgiProcess* cgi = NULL);
+    HttpResponse build(const RouteResult& resultRouter, CgiProcess* cgi = NULL, const VectorInt& openFds = VectorInt());
     HttpResponse buildError(int code, const std::string& msg);
     HttpResponse buildCgiResponse(CgiProcess& cgi);
 
@@ -31,7 +31,7 @@ class ResponseBuilder {
     bool handleDelete(HttpResponse& response, const RouteResult& resultRouter) const;
     bool handleDirectory(HttpResponse& response, const RouteResult& resultRouter) const;
     bool handleUpload(HttpResponse& response, const RouteResult& resultRouter) const;
-    bool handleCgi(HttpResponse& response, const RouteResult& resultRouter, CgiProcess* cgi) const;
+    bool handleCgi(HttpResponse& response, const RouteResult& resultRouter, CgiProcess* cgi, const VectorInt& openFds) const;
     void handleError(HttpResponse& response, const RouteResult& resultRouter);
 
     // Helpers

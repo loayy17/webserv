@@ -71,6 +71,7 @@ RouteResult Router::processRequest() {
     if (!loc)
         return result.setCodeAndMessage(HTTP_NOT_FOUND, "No matching location found");
     result.setLocation(loc);
+    result.setMatchedPath(loc->getPath());
 
     // 3. Redirect
     if (loc->getIsRedirect())

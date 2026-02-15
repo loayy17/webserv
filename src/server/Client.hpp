@@ -6,8 +6,7 @@
 #include <ctime>
 #include <iostream>
 #include "../handlers/CgiProcess.hpp"
-#include "../utils/Types.hpp"
-
+#include "../utils/Utils.hpp"
 class Client {
    private:
     int        client_fd;
@@ -15,6 +14,7 @@ class Client {
     String     storeSendData;
     time_t     lastActivity;
     CgiProcess _cgi;
+    bool       _keepAlive;
 
    public:
     Client(const Client&);
@@ -29,12 +29,15 @@ class Client {
     void    clearStoreReceiveData();
     bool    isTimedOut(int timeout) const;
     void    closeConnection();
-    String  getStoreReceiveData() const;
-    String  getStoreSendData() const;
+    void    removeReceivedData(size_t len);
+    const String& getStoreReceiveData() const;
+    const String& getStoreSendData() const;
     int     getFd() const;
 
     CgiProcess&       getCgi();
     const CgiProcess& getCgi() const;
+    void              setKeepAlive(bool keepAlive);
+    bool              isKeepAlive() const;
 };
 
 #endif

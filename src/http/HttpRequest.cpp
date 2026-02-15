@@ -258,8 +258,8 @@ void HttpRequest::parseCookies(const String& cookieHeader) {
     splitByString(cookieHeader, cookiePairs, ";");
     for (size_t i = 0; i < cookiePairs.size(); ++i) {
         String key, value;
-        if (splitByChar(trimSpacesComments(cookiePairs[i]), key, value, EQUALS)) {
-            cookies[toLowerWords(trimSpacesComments(key))] = trimSpacesComments(value);
+        if (splitByChar(trimSpaces(cookiePairs[i]), key, value, EQUALS)) {
+            cookies[trimSpaces(key)] = trimSpaces(value);
         }
     }
 }
@@ -313,8 +313,7 @@ bool HttpRequest::hasBody() const {
     return !body.empty();
 }
 String HttpRequest::getCookie(const String& key) const {
-    String                          lowerKey = toLowerWords(key);
-    const MapString::const_iterator it       = cookies.find(lowerKey);
+    const MapString::const_iterator it = cookies.find(key);
     if (it == cookies.end()) {
         return "";
     }

@@ -56,8 +56,7 @@ void RouteResult::setStatusCode(int code) {
 RouteResult& RouteResult::setRedirect(const String& url, int code) {
     isRedirect  = true;
     // TODO
-    if (url[0] == '/')
-        redirectUrl = url;
+    redirectUrl = url;
     statusCode  = code;
     return *this;
 }

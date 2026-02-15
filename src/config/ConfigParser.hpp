@@ -33,10 +33,8 @@ class ConfigParser {
     LocationDirectiveMap      locationDirectives;
 
     bool getNextLine(String& out);
-
     ServerDirectiveMap   getServerDirectives();
     LocationDirectiveMap getLocationDirectives();
-
     bool parseHttp();
     bool parseServer();
     bool parseLocation(ServerConfig& srv, const String& header);

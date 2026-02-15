@@ -90,7 +90,7 @@ RouteResult Router::processRequest() {
         // Walk the URI segments to find the CGI script and extract PATH_INFO
         String scriptPath, pathInfo;
         resolveCgiScriptAndPathInfo(loc, scriptPath, pathInfo);
-
+        
         if (fileExists(scriptPath) && isCgiRequest(scriptPath, *loc)) {
             result.setPathRootUri(scriptPath);
             result.setRemainingPath(pathInfo);
@@ -195,8 +195,7 @@ String Router::resolveFilesystemPath(const LocationConfig* loc) const {
     String locPath = normalizePath(loc->getPath());
     String uri     = normalizePath(_request.getUri());
     String rest    = getUriRemainder(uri, locPath);
-    String fullPath = joinPaths(root, locPath);
-    return joinPaths(fullPath, rest);
+    return joinPaths(root, rest);
 }
 
 // Body size

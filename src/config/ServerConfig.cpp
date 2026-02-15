@@ -39,7 +39,7 @@ bool ServerConfig::setIndexes(const VectorString& i) {
 }
 bool ServerConfig::setClientMaxBody(const VectorString& c) {
     if (!clientMaxBodySize.empty())
-        return Logger::error("duplicate client_max_body_size");
+        return Logger::error("Duplicate client_max_body_size");
     if (c.size() != 1)
         return Logger::error("client_max_body_size takes exactly one value");
     clientMaxBodySize = c[0];
@@ -62,7 +62,7 @@ bool ServerConfig::setRoot(const VectorString& r) {
     if (r.size() != 1)
         return Logger::error("root takes exactly one value");
     root = r[0];
-    if (root[root.length() - 1] == '/')
+    if (root[root.length() - 1] == SLASH)
         root.erase(root.length() - 1);
     return true;
 }
@@ -73,7 +73,7 @@ bool ServerConfig::setListen(const VectorString& l) {
     if (l.size() != 1)
         return Logger::error("listen takes exactly one value");
     String interface, portStr;
-    if (!splitByChar(l[0], interface, portStr, ':'))
+    if (!splitByChar(l[0], interface, portStr, COLON))
         return Logger::error("invalid listen format");
     if (portStr.empty() || interface.empty())
         return Logger::error("invalid port");

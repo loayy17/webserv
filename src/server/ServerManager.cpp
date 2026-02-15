@@ -35,9 +35,9 @@ ServerManager::~ServerManager() {
 
 bool ServerManager::initialize() {
     if (serverConfigs.empty())
-        return Logger::error("[ERROR]: No server configurations provided");
+        return Logger::error("No server configurations provided");
     if (!initializeServers(serverConfigs) || servers.empty())
-        return Logger::error("[ERROR]: Failed to initialize servers");
+        return Logger::error("Failed to initialize servers");
     Logger::info("[INFO]: All servers initialized successfully");
     running = true;
     return Logger::info("[INFO]: ServerManager initialized");
@@ -76,7 +76,7 @@ Server* ServerManager::createServerForListener(const String& listenerKey, const 
         if (!server->init())
             throw std::runtime_error("Server init failed");
     } catch (...) {
-        Logger::error("[ERROR]: Failed to create server for listener " + listenerKey);
+        Logger::error("Failed to create server for listener " + listenerKey);
         if (server)
             delete server;
         return NULL;
@@ -110,7 +110,7 @@ bool ServerManager::initializeServers(const VectorServerConfig& configs) {
 
 bool ServerManager::run() {
     if (!running)
-        return Logger::error("[ERROR]: Cannot run server manager");
+        return Logger::error("Cannot run server manager");
 
     while (running && g_running) {
         int eventCount = pollManager.pollConnections(100);
@@ -165,13 +165,13 @@ bool ServerManager::run() {
 bool ServerManager::acceptNewConnection(Server* server) {
     int clientFd = server->acceptConnection();
     if (clientFd < 0)
-        return Logger::error("[ERROR]: Failed to accept new connection");
+        return Logger::error("Failed to accept new connection");
 
     Client* client = NULL;
     try {
         client = new Client(clientFd);
     } catch (const std::bad_alloc& e) {
-        Logger::error("[ERROR]: Memory allocation failed for client");
+        Logger::error("Memory allocation failed for client");
         close(clientFd);
         return false;
     }

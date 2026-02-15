@@ -24,10 +24,3 @@ class ListenAddress {
 };
 
 #endif
-//
-/*
-listen 192.0.0.1:8080
-listen 193.0.0.1:8080
-listen 194.0.0.1:8080
-
-*/

@@ -77,7 +77,7 @@ bool LocationConfig::setRoot(const VectorString& r) {
     if (r.size() != 1)
         return Logger::error("root takes exactly one value");
     root = r[0];
-    if (root[root.length() - 1] == '/')
+    if (root[root.length() - 1] == SLASH)
         root.erase(root.length() - 1);
     return true;
 }
@@ -129,10 +129,10 @@ bool LocationConfig::setCgiPass(const VectorString& c) {
     String extension   = trimSpaces(c[0]);
     String interpreter = trimSpaces(c[1]);
 
-    if (extension.empty() || extension[0] != '.')
+    if (extension.empty() || extension[0] != DOT)
         return Logger::error("cgi_pass extension must start with '.'");
 
-    if (interpreter.empty() || interpreter[0] != '/')
+    if (interpreter.empty() || interpreter[0] != SLASH)
         return Logger::error("cgi_pass interpreter must be an absolute path");
 
     if (findValueStrInMap(cgiPass, extension) != "")
@@ -158,7 +158,7 @@ bool LocationConfig::setRedirect(const VectorString& r) {
 
 bool LocationConfig::setClientMaxBody(const VectorString& c) {
     if (!clientMaxBody.empty())
-        return Logger::error("duplicate client_max_body_size");
+        return Logger::error("Duplicate client_max_body_size");
     if (c.size() != 1)
         return Logger::error("client_max_body_size takes exactly one value");
     clientMaxBody = c[0];

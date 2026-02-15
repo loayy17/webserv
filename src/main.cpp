@@ -31,14 +31,14 @@ int main(int ac, char** av) {
 
     VectorServerConfig configs = parser.getServers();
     if (configs.empty()) {
-        std::cout << "[ERROR]: No server configurations found" << std::endl;
+        std::cout << "No server configurations found" << std::endl;
         return 1;
     }
 
     ServerManager serverManager(configs);
 
     if (!serverManager.initialize()) {
-        std::cout << "[ERROR]: Failed to initialize server manager" << std::endl;
+        std::cout << "Failed to initialize server manager" << std::endl;
         return 1;
     }
 

@@ -1,16 +1,4 @@
 #include "HttpRequest.hpp"
-/* Header Section */
-// POST ?user=loay&id=42 HTTP/1.1\r\n (request line)
-// Host: localhost:8080\r\n (header lines)
-// User-Agent: curl/7.88.1\r\n (header lines)
-// Accept: */*\r\n (header lines)
-// Content-Type: text/plain\r\n (header lines)
-// Content-Length: 11\r\n (header lines)
-// Connection: keep-alive\r\n\r\n (\r\n\r\n indicates end of headers)
-// Cookie: session=42; theme=dark; lang=en\r\n (header lines)
-
-/* Body Section */
-// hello world
 
 HttpRequest::HttpRequest()
     : method(""),

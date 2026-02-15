@@ -1,36 +1,48 @@
 #include "Utils.hpp"
+
+// ============================================================================
+// Time Methods
+// ============================================================================
+
 time_t getCurrentTime() {
     return time(NULL);
 }
+
 void updateTime(time_t& t) {
     t = getCurrentTime();
 }
+
 time_t getDifferentTime(const time_t& start, const time_t& end) {
     return end - start;
 }
+
 String formatTime(time_t t) {
     char* raw = ctime(&t);
     if (!raw)
         return "-";
     String result(raw);
+    // Remove the trailing newline added by ctime
     if (!result.empty() && result[result.size() - 1] == '\n')
         result.erase(result.size() - 1);
     return result;
 }
 
+// ============================================================================
+// String Methods
+// ============================================================================
+
 String toUpperWords(const String& str) {
     String result = str;
     for (size_t i = 0; i < result.size(); ++i) {
-        if (result[i] >= 'a' && result[i] <= 'z')
-            result[i] = std::toupper(result[i]);
+        result[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(result[i])));
     }
     return result;
 }
+
 String toLowerWords(const String& str) {
     String result = str;
     for (size_t i = 0; i < result.size(); ++i) {
-        if (result[i] >= 'A' && result[i] <= 'Z')
-            result[i] = std::tolower(result[i]);
+        result[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(result[i])));
     }
     return result;
 }
@@ -42,10 +54,11 @@ String cleanCharEnd(const String& v, char c) {
 }
 
 String trimSpaces(const String& s) {
-    size_t start = s.find_first_not_of(" \t\r\n");
+    const char* whitespace = " \t\r\n";
+    size_t      start      = s.find_first_not_of(whitespace);
     if (start == String::npos)
         return "";
-    size_t end = s.find_last_not_of(" \t\r\n");
+    size_t end = s.find_last_not_of(whitespace);
     return s.substr(start, end - start + 1);
 }
 
@@ -55,180 +68,64 @@ String trimQuotes(const String& s) {
     return s;
 }
 
-String findValueStrInMap(const MapString& map, const String& key) {
-    MapString::const_iterator it = map.find(key);
-    if (it != map.end()) {
-        return it->second;
-    }
-    return "";
-}
-
-String findValueIntInMap(const MapIntString& map, int key) {
-    MapIntString::const_iterator it = map.find(key);
-    if (it != map.end()) {
-        return it->second;
-    }
-    return "";
-}
-
 String trimSpacesComments(const String& s) {
-    size_t start = s.find_first_not_of(" \t\r\n");
+    const char* whitespace = " \t\r\n";
+    size_t      start      = s.find_first_not_of(whitespace);
     if (start == String::npos || s[start] == '#')
         return "";
     size_t end = s.find('#', start);
     if (end != String::npos)
         end--;
     else
-        end = s.find_last_not_of(" \t\r\n");
+        end = s.find_last_not_of(whitespace);
     return s.substr(start, end - start + 1);
-}
-
-bool convertFileToLines(String file, VectorString& lines) {
-    std::ifstream ff(file.c_str());
-    if (!ff.is_open()) {
-        std::cerr << "Error: Could not open file " << file << std::endl;
-        return false;
-    }
-
-    String line;
-    String current;
-
-    while (std::getline(ff, line)) {
-        for (size_t i = 0; i < line.size(); ++i) {
-            char c = line[i];
-            if (c == '{' || c == ';' || c == '}') {
-                String t = trimSpacesComments(current);
-                if (!t.empty())
-                    lines.push_back(t + ((c == '{') ? " {" : (c == ';') ? ";" : ""));
-                else if (c == '{' && !lines.empty())
-                    lines[lines.size() - 1] += " {";
-                if (c == '}')
-                    lines.push_back("}");
-                current.clear();
-            } else {
-                current += c;
-            }
-        }
-        String t = trimSpacesComments(current);
-
-        if (!t.empty())
-            lines.push_back(t);
-        current.clear();
-    }
-    ff.close();
-    return true;
-}
-
-struct stat getFileStat(const String& path) {
-    struct stat st;
-    String      actualPath = path;
-
-    if (stat(actualPath.c_str(), &st) == 0)
-        return st;
-
-    if (actualPath.size() > 2 && actualPath[0] == '.' && actualPath[1] == '/') {
-        actualPath = actualPath.substr(2);
-        if (stat(actualPath.c_str(), &st) == 0)
-            return st;
-    }
-
-    if (!actualPath.empty() && actualPath[0] == '/') {
-        actualPath = "." + actualPath;
-        if (stat(actualPath.c_str(), &st) == 0)
-            return st;
-
-        actualPath = actualPath.substr(1);
-        if (stat(actualPath.c_str(), &st) == 0)
-            return st;
-    }
-
-    // mark invalid
-    st.st_mode = 0;
-    return st;
-}
-
-FileType getFileType(const struct stat& st) {
-    if (st.st_mode == 0)
-        return UNKNOWN;
-    if (S_ISDIR(st.st_mode))
-        return DIRECTORY;
-    if (S_ISREG(st.st_mode))
-        return SINGLEFILE;
-    return UNKNOWN;
-}
-
-FileType getFileType(const String& path) {
-    struct stat st = getFileStat(path);
-    return getFileType(st);
-}
-
-String sanitizeFilename(const String& filename) {
-    String safe;
-    for (size_t i = 0; i < filename.size(); ++i) {
-        char c = filename[i];
-        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_')
-            safe += c;
-        else
-            safe += '_';
-    }
-    return safe;
 }
 
 String htmlEntities(const String& str) {
     String result;
+    result.reserve(str.size()); // Optimization: reserve at least input size
     for (size_t i = 0; i < str.size(); ++i) {
         char c = str[i];
-        if (c == '&')
-            result += "&amp;";
-        else if (c == '<')
-            result += "&lt;";
-        else if (c == '>')
-            result += "&gt;";
-        else if (c == '"')
-            result += "&quot;";
-        else if (c == '\'')
-            result += "&#39;";
-        else
-            result += c;
+        switch (c) {
+            case '&':
+                result += "&amp;";
+                break;
+            case '<':
+                result += "&lt;";
+                break;
+            case '>':
+                result += "&gt;";
+                break;
+            case '"':
+                result += "&quot;";
+                break;
+            case '\'':
+                result += "&#39;";
+                break;
+            default:
+                result += c;
+        }
     }
     return result;
 }
 
-bool readFileContent(const String& filePath, String& content) {
-    content.clear();
-    std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
-    if (!file.is_open())
-        return false;
-    std::ostringstream ss;
-    ss << file.rdbuf();
-    content = ss.str();
-    file.close();
-    return true;
-}
-bool fileExists(const String& path) {
-    struct stat st;
-    return stat(path.c_str(), &st) == 0;
+String generateGUID() {
+    String guid;
+    for (int i = 0; i < GUID_LENGTH; i++) {
+        if (i == 8 || i == 12 || i == 16 || i == 20)
+            guid += '-';
+        int index = std::rand() % (sizeof(GUID_CHARSET) - 1);
+        guid += GUID_CHARSET[index];
+    }
+    return guid;
 }
 
-bool checkAllowedMethods(const String& m) {
-    VectorString methods;
-    methods.push_back(METHOD_GET);
-    methods.push_back(METHOD_POST);
-    methods.push_back(METHOD_DELETE);
-    methods.push_back(METHOD_PUT);
-    methods.push_back(METHOD_PATCH);
-    methods.push_back(METHOD_HEAD);
-    methods.push_back(METHOD_OPTIONS);
-    return isKeyInVector(m, methods);
-}
-// ./www/html/index.html
 bool splitByChar(const String& line, String& key, String& value, char endChar, bool reverse) {
-    String s   = line;
-    size_t pos = reverse ? s.rfind(endChar) : s.find(endChar);
+    size_t pos = reverse ? line.rfind(endChar) : line.find(endChar);
     if (pos == String::npos)
         return false;
-    key   = s.substr(0, pos);
-    value = s.substr(pos + 1);
+    key   = line.substr(0, pos);
+    value = line.substr(pos + 1);
     return true;
 }
 
@@ -257,117 +154,132 @@ bool parseKeyValue(const String& line, String& key, VectorString& values) {
     return !values.empty();
 }
 
-size_t convertMaxBodySize(const String& maxBody) {
-    if (maxBody.empty())
-        return 0;
-
-    size_t            size = 0;
-    char              unit = maxBody[maxBody.size() - 1];
-    std::stringstream ss(std::isdigit(unit) ? maxBody : maxBody.substr(0, maxBody.size() - 1));
-    ss >> size;
-    if (unit == 'K' || unit == 'k')
-        return size * 1024;
-    if (unit == 'M' || unit == 'm')
-        return size * 1024 * 1024;
-    if (unit == 'G' || unit == 'g')
-        return size * 1024 * 1024 * 1024;
-    return size;
-}
-String formatSize(double size) {
-    String units[] = {"B", "KB", "MB", "GB", "TB"};
-    int    unit    = 0;
-
-    while (size >= 1024.0 && unit < 4) {
-        size /= 1024.0;
-        unit++;
-    }
-    size_t num    = static_cast<size_t>(size);
-    String result = typeToString<size_t>(num);
-    if (unit) {
-        size_t dicemal = static_cast<size_t>(size - num) * 100;
-        if (dicemal > 0) {
-            result += "'";
-            result += typeToString<size_t>(dicemal);
-        }
-    }
-    result += units[unit];
-    return result;
+String findValueStrInMap(const MapString& map, const String& key) {
+    MapString::const_iterator it = map.find(key);
+    return (it != map.end()) ? it->second : "";
 }
 
-String normalizePath(const String& path) {
-    if (path.empty())
-        return "/";
+String findValueIntInMap(const MapIntString& map, int key) {
+    MapIntString::const_iterator it = map.find(key);
+    return (it != map.end()) ? it->second : "";
+}
 
-    // First pass: remove double slashes and build clean path
-    String cleaned;
-    if (path[0] != '/')
-        cleaned += '/';
-    for (size_t i = 0; i < path.length(); i++) {
-        if (path[i] == '/' && i + 1 < path.length() && path[i + 1] == '/')
-            continue;
-        cleaned += path[i];
+// ============================================================================
+// File System Methods
+// ============================================================================
+
+bool convertFileToLines(const String& file, VectorString& lines) {
+    std::ifstream ff(file.c_str());
+    if (!ff.is_open()) {
+        std::cerr << "Error: Could not open file " << file << std::endl;
+        return false;
     }
 
-    // Second pass: resolve "." and ".." segments
-    VectorString segments;
-    size_t       start = 0;
-    for (size_t i = 0; i <= cleaned.length(); i++) {
-        if (i == cleaned.length() || cleaned[i] == '/') {
-            if (i > start) {
-                String seg = cleaned.substr(start, i - start);
-                if (seg == "..") {
-                    if (!segments.empty())
-                        segments.pop_back();
-                } else if (seg != ".") {
-                    segments.push_back(seg);
-                }
+    String line;
+    String current;
+
+    // Tokenizer logic specific to the Nginx-like config format
+    while (std::getline(ff, line)) {
+        for (size_t i = 0; i < line.size(); ++i) {
+            char c = line[i];
+            if (c == '{' || c == ';' || c == '}') {
+                String t = trimSpacesComments(current);
+                if (!t.empty())
+                    lines.push_back(t + ((c == '{') ? " {" : (c == ';') ? ";" : ""));
+                else if (c == '{' && !lines.empty())
+                    lines[lines.size() - 1] += " {";
+
+                if (c == '}')
+                    lines.push_back("}");
+                current.clear();
+            } else {
+                current += c;
             }
-            start = i + 1;
         }
+        String t = trimSpacesComments(current);
+        if (!t.empty())
+            lines.push_back(t);
+        current.clear();
     }
-
-    // Rebuild path
-    String result = "/";
-    for (size_t i = 0; i < segments.size(); i++) {
-        result += segments[i];
-        if (i + 1 < segments.size())
-            result += "/";
-    }
-
-    // Preserve trailing slash if original had one (and path isn't just "/")
-    if (result.size() > 1 && !cleaned.empty() && cleaned[cleaned.size() - 1] == '/')
-        result += "/";
-
-    return result;
+    ff.close();
+    return true;
 }
 
-String joinPaths(const String& firstPath, const String& secondPath) {
-    if (firstPath.empty())
-        return secondPath.empty() ? "/" : secondPath;
-    if (secondPath.empty())
-        return firstPath;
-    String result = firstPath;
-    if (result[result.size() - 1] == '/' && secondPath[0] == '/')
-        result += secondPath.substr(1);
-    else if (result[result.size() - 1] != '/' && secondPath[0] != '/')
-        result += "/" + secondPath;
-    else
-        result += secondPath;
-
-    return result;
+bool readFileContent(const String& filePath, String& content) {
+    content.clear();
+    std::ifstream file(filePath.c_str(), std::ios::in | std::ios::binary);
+    if (!file.is_open())
+        return false;
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    content = ss.str();
+    file.close();
+    return true;
 }
 
-bool pathStartsWith(const String& path, const String& prefix) {
-    if (prefix.length() > path.length())
-        return false;
-    if (path.compare(0, prefix.length(), prefix) != 0)
-        return false;
-    if (prefix == "/")
-        return true;
-    if (path.length() == prefix.length() || path[prefix.length()] == '/')
-        return true;
+bool fileExists(const String& path) {
+    struct stat st;
+    return stat(path.c_str(), &st) == 0;
+}
 
-    return false;
+struct stat getFileStat(const String& path) {
+    struct stat st;
+    String      actualPath = path;
+
+    // Try path as is
+    if (stat(actualPath.c_str(), &st) == 0)
+        return st;
+
+    // Remove leading ./ if present
+    if (actualPath.size() > 2 && actualPath[0] == DOT && actualPath[1] == SLASH) {
+        actualPath = actualPath.substr(2);
+        if (stat(actualPath.c_str(), &st) == 0)
+            return st;
+    }
+
+    // Handle leading slash or ./ prefixing
+    if (!actualPath.empty() && actualPath[0] == SLASH) {
+        // Try adding . at start
+        String dotPrefix = DOT + actualPath;
+        if (stat(dotPrefix.c_str(), &st) == 0)
+            return st;
+
+        // Try removing the slash
+        String noSlash = actualPath.substr(1);
+        if (stat(noSlash.c_str(), &st) == 0)
+            return st;
+    }
+
+    st.st_mode = 0; // Mark invalid
+    return st;
+}
+
+FileType getFileType(const struct stat& st) {
+    if (st.st_mode == 0)
+        return UNKNOWN;
+    if (S_ISDIR(st.st_mode))
+        return DIRECTORY;
+    if (S_ISREG(st.st_mode))
+        return SINGLEFILE;
+    return UNKNOWN;
+}
+
+FileType getFileType(const String& path) {
+    struct stat st = getFileStat(path);
+    return getFileType(st);
+}
+
+String sanitizeFilename(const String& filename) {
+    String safe;
+    safe.reserve(filename.size());
+    for (size_t i = 0; i < filename.size(); ++i) {
+        char c = filename[i];
+        if (std::isalnum(c) || c == '.' || c == '-' || c == '_')
+            safe += c;
+        else
+            safe += '_';
+    }
+    return safe;
 }
 
 bool ensureDirectoryExists(const String& dirPath) {
@@ -381,21 +293,218 @@ bool ensureDirectoryExists(const String& dirPath) {
 
 String extractFileExtension(const String& path) {
     size_t dotPos = path.rfind(DOT);
-    if (dotPos == String::npos)
+    if (dotPos == String::npos || dotPos == path.length() - 1)
         return "";
     return path.substr(dotPos);
 }
 
+String extractDirectoryFromPath(const String& path) {
+    size_t lastSlash = path.rfind(SLASH);
+    if (lastSlash == String::npos)
+        return ".";
+    if (lastSlash == 0)
+        return "/";
+    return path.substr(0, lastSlash);
+}
+
+// ============================================================================
+// Path Methods
+// ============================================================================
+
+String normalizePath(const String& path) {
+    if (path.empty())
+        return "/";
+
+    // 1. Remove duplicate slashes
+    String cleaned;
+    cleaned.reserve(path.size());
+    if (path[0] != SLASH)
+        cleaned += '/';
+
+    for (size_t i = 0; i < path.length(); ++i) {
+        if (path[i] == SLASH && i + 1 < path.length() && path[i + 1] == SLASH)
+            continue;
+        cleaned += path[i];
+    }
+
+    // 2. Resolve . and ..
+    VectorString segments;
+    size_t       start = 0;
+    // Iterate through path, splitting by slash
+    for (size_t i = 0; i <= cleaned.length(); ++i) {
+        if (i == cleaned.length() || cleaned[i] == SLASH) {
+            if (i > start) {
+                String seg = cleaned.substr(start, i - start);
+                if (seg == "..") {
+                    if (!segments.empty())
+                        segments.pop_back();
+                } else if (seg != ".") {
+                    segments.push_back(seg);
+                }
+            }
+            start = i + 1;
+        }
+    }
+
+    // 3. Rebuild
+    if (segments.empty())
+        return "/";
+
+    String result = "/";
+    for (size_t i = 0; i < segments.size(); ++i) {
+        result += segments[i];
+        if (i + 1 < segments.size())
+            result += SLASH;
+    }
+
+    // Preserve trailing slash if originally present (and not root)
+    if (result.size() > 1 && !cleaned.empty() && cleaned[cleaned.size() - 1] == SLASH)
+        result += SLASH;
+
+    return result;
+}
+
+String joinPaths(const String& firstPath, const String& secondPath) {
+    if (firstPath.empty())
+        return secondPath.empty() ? "/" : secondPath;
+    if (secondPath.empty())
+        return firstPath;
+
+    bool firstEndsSlash    = (firstPath[firstPath.size() - 1] == SLASH);
+    bool secondStartsSlash = (secondPath[0] == SLASH);
+
+    if (firstEndsSlash && secondStartsSlash)
+        return firstPath + secondPath.substr(1);
+    if (!firstEndsSlash && !secondStartsSlash)
+        return firstPath + SLASH + secondPath;
+
+    return firstPath + secondPath;
+}
+
+bool pathStartsWith(const String& path, const String& prefix) {
+    if (prefix.length() > path.length())
+        return false;
+    if (path.compare(0, prefix.length(), prefix) != 0)
+        return false;
+
+    // Exact match or prefix ends with slash or path continues with slash
+    if (prefix == "/" || path.length() == prefix.length() || path[prefix.length()] == SLASH)
+        return true;
+
+    return false;
+}
+
+String getUriRemainder(const String& uri, const String& locPath) {
+    String normalUri = normalizePath(uri);
+    String normalLoc = normalizePath(locPath);
+
+    if (normalLoc == "/")
+        return normalUri;
+
+    if (pathStartsWith(normalUri, normalLoc)) {
+        String rest = normalUri.substr(normalLoc.length());
+        if (rest.empty() || rest[0] != '/')
+            return "/" + rest;
+        return rest;
+    }
+
+    // Should typically not happen if logic is correct upstream
+    return normalUri;
+}
+
+// ============================================================================
+// HTTP/Network Helpers
+// ============================================================================
+
+bool checkAllowedMethods(const String& m) {
+    // Optimization: Avoid constructing vector on every call
+    static const char* allowed[] = {METHOD_GET, METHOD_POST, METHOD_DELETE, METHOD_PUT, METHOD_PATCH, METHOD_HEAD, METHOD_OPTIONS, NULL};
+
+    for (int i = 0; allowed[i]; ++i) {
+        if (m == allowed[i])
+            return true;
+    }
+    return false;
+}
+
+bool setNonBlocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1)
+        return Logger::error("Failed to get fd flags");
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+        return Logger::error("Failed to set non-blocking mode");
+    return true;
+}
+
+size_t convertMaxBodySize(const String& maxBody) {
+    if (maxBody.empty())
+        return 0;
+
+    size_t size       = 0;
+    char   unit       = maxBody[maxBody.size() - 1];
+    String numberPart = std::isdigit(unit) ? maxBody : maxBody.substr(0, maxBody.size() - 1);
+
+    std::stringstream ss(numberPart);
+    ss >> size;
+    if (ss.fail())
+        return 0;
+
+    switch (unit) {
+        case 'K':
+        case 'k':
+            return size * 1024;
+        case 'M':
+        case 'm':
+            return size * 1024 * 1024;
+        case 'G':
+        case 'g':
+            return size * 1024 * 1024 * 1024;
+        default:
+            return size;
+    }
+}
+
+String formatSize(double size) {
+    const char* units[] = {"B", "KB", "MB", "GB", "TB"};
+    int         unit    = 0;
+
+    while (size >= 1024.0 && unit < 4) {
+        size /= 1024.0;
+        unit++;
+    }
+
+    size_t num    = static_cast<size_t>(size);
+    String result = typeToString<size_t>(num);
+
+    // Add up to 2 decimal places if needed and not B
+    if (unit > 0) {
+        size_t decimal = static_cast<size_t>((size - num) * 100);
+        if (decimal > 0) {
+            result += "."; // changed from ' to . for standard notation
+            if (decimal < 10)
+                result += "0";
+            result += typeToString<size_t>(decimal);
+        }
+    }
+    result += units[unit];
+    return result;
+}
+
+// ============================================================================
+// Header/Body Parsing
+// ============================================================================
+
 String extractFilenameFromHeader(const String& contentDisposition) {
+    // Look for filename=
     size_t filenamePos = contentDisposition.find("filename=");
     if (filenamePos == String::npos)
         return "";
 
-    size_t start = filenamePos + 9; // length of "filename="
+    size_t start = filenamePos + 9;
     if (start >= contentDisposition.length())
         return "";
 
-    // Handle quoted filenames
+    // Handle quoted: filename="My File.txt"
     if (contentDisposition[start] == '"') {
         start++;
         size_t end = contentDisposition.find('"', start);
@@ -404,7 +513,7 @@ String extractFilenameFromHeader(const String& contentDisposition) {
         return contentDisposition.substr(start, end - start);
     }
 
-    // Handle unquoted filenames
+    // Handle unquoted: filename=MyFile.txt;
     size_t end = contentDisposition.find(SEMICOLON, start);
     if (end == String::npos)
         end = contentDisposition.length();
@@ -416,11 +525,8 @@ String extractBoundaryFromContentType(const String& contentType) {
     if (boundaryPos == String::npos)
         return "";
 
-    size_t start = boundaryPos + 9; // length of "boundary="
-    if (start >= contentType.length())
-        return "";
-
-    // Find end of boundary (semicolon or end of string)
+    size_t start = boundaryPos + 9;
+    // Boundary might be end of string or followed by semicolon
     size_t end = contentType.find(SEMICOLON, start);
     if (end == String::npos)
         end = contentType.length();
@@ -432,29 +538,28 @@ bool parseMultipartFormData(const String& body, const String& boundary, String& 
     if (boundary.empty() || body.empty())
         return false;
 
-    // Construct the boundary markers
     String startBoundary = "--" + boundary;
-    String endBoundary   = "--" + boundary + "--";
+    // String endBoundary   = "--" + boundary + "--"; // Not explicitly needed for first part
 
-    // Find the first part
+    // 1. Find Start
     size_t partStart = body.find(startBoundary);
     if (partStart == String::npos)
         return false;
-
     partStart += startBoundary.length();
 
-    // Skip CRLF after boundary
+    // Consume CRLF if present
     if (partStart + 2 <= body.length() && body.substr(partStart, 2) == CRLF)
         partStart += 2;
 
-    // Find the next boundary (end of this part)
+    // 2. Find End of this part (next boundary)
     size_t partEnd = body.find(startBoundary, partStart);
     if (partEnd == String::npos)
         return false;
 
+    // Extract the raw part
     String part = body.substr(partStart, partEnd - partStart);
 
-    // Find the separator between headers and content (double CRLF)
+    // 3. Separate Headers and Content
     size_t headerEnd = part.find(DOUBLE_CRLF);
     if (headerEnd == String::npos)
         return false;
@@ -462,46 +567,46 @@ bool parseMultipartFormData(const String& body, const String& boundary, String& 
     String headers = part.substr(0, headerEnd);
     String content = part.substr(headerEnd + 4); // Skip \r\n\r\n
 
-    // Remove trailing CRLF from content
-    while (content.length() >= 2 && content.substr(content.length() - 2) == CRLF)
-        content = content.substr(0, content.length() - 2);
+    // 4. Remove trailing CRLF from content (part of multipart protocol)
+    if (content.length() >= 2 && content.substr(content.length() - 2) == CRLF)
+        content.resize(content.length() - 2);
 
-    // Parse headers to find Content-Disposition
-    size_t pos = 0;
-    while (pos < headers.length()) {
-        size_t lineEnd = headers.find(CRLF, pos);
-        if (lineEnd == String::npos)
-            lineEnd = headers.length();
+    // 5. Parse Headers for filename
+    filename.clear();
+    VectorString lines;
+    splitByString(headers, lines, CRLF);
 
-        String line = headers.substr(pos, lineEnd - pos);
-
-        if (toLowerWords(line).find("content-disposition") != String::npos) {
-            filename = extractFilenameFromHeader(line);
+    for (size_t i = 0; i < lines.size(); ++i) {
+        if (toLowerWords(lines[i]).find("content-disposition") != String::npos) {
+            filename = extractFilenameFromHeader(lines[i]);
+            break;
         }
-
-        pos = lineEnd + 2;
     }
 
     fileContent = content;
     return !filename.empty();
 }
 
-// --- Chunked transfer helpers -------------------------------------------------
 bool getHeaderValue(const String& headers, const String& headerName, String& outValue) {
     outValue.clear();
     if (headerName.empty() || headers.empty())
         return false;
-    String lowerHeaders = toLowerWords(headers);
+
     String search = toLowerWords(headerName);
     if (search.find(':') == String::npos)
         search += ':';
-    size_t pos = lowerHeaders.find(search);
+
+    String lowerHeaders = toLowerWords(headers);
+    size_t pos          = lowerHeaders.find(search);
     if (pos == String::npos)
         return false;
+
     size_t valueStart = pos + search.size();
-    size_t endLine = lowerHeaders.find("\r\n", valueStart);
+    size_t endLine    = lowerHeaders.find("\r\n", valueStart);
     if (endLine == String::npos)
-        endLine = lowerHeaders.size();
+        endLine = lowerHeaders.size(); // handle last line without CRLF
+
+    // Extract from original headers to preserve case of value
     outValue = trimSpaces(headers.substr(valueStart, endLine - valueStart));
     return !outValue.empty();
 }
@@ -510,30 +615,35 @@ bool isChunkedTransferEncoding(const String& headers) {
     String val;
     if (!getHeaderValue(headers, "transfer-encoding", val))
         return false;
-    val = toLowerWords(val);
-    return val.find("chunked") != String::npos;
+    return toLowerWords(val).find("chunked") != String::npos;
 }
 
 bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
     decodedBody.clear();
-    size_t pos = 0;
+    size_t pos      = 0;
+    size_t totalLen = chunkedBody.size();
 
-    while (pos < chunkedBody.size()) {
-        // Find end of chunk size line
+    while (pos < totalLen) {
+        // 1. Find line end for chunk size
         size_t lineEnd = chunkedBody.find("\r\n", pos);
         if (lineEnd == String::npos)
             return false;
 
-        // Parse chunk size (hex)
-        String sizeStr = trimSpaces(chunkedBody.substr(pos, lineEnd - pos));
-        // Remove chunk extensions (after optional semicolon)
-        size_t semiPos = sizeStr.find(';');
-        if (semiPos != String::npos)
-            sizeStr = sizeStr.substr(0, semiPos);
+        String sizeLine = chunkedBody.substr(pos, lineEnd - pos);
 
+        // Remove extensions (e.g., 4A; extension=value)
+        size_t semiPos = sizeLine.find(';');
+        if (semiPos != String::npos)
+            sizeLine = sizeLine.substr(0, semiPos);
+
+        sizeLine = trimSpaces(sizeLine);
+        if (sizeLine.empty())
+            return false;
+
+        // 2. Parse Hex Size
         unsigned long chunkSize = 0;
-        for (size_t i = 0; i < sizeStr.size(); i++) {
-            char c = sizeStr[i];
+        for (size_t i = 0; i < sizeLine.size(); i++) {
+            char c = sizeLine[i];
             chunkSize *= 16;
             if (c >= '0' && c <= '9')
                 chunkSize += c - '0';
@@ -547,71 +657,31 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
 
         pos = lineEnd + 2; // skip \r\n
 
+        // 3. Last Chunk (0)
         if (chunkSize == 0)
-            return true; // last chunk
+            return true;
 
-        if (pos + chunkSize > chunkedBody.size())
-            return false; // incomplete chunk
+        // 4. Validate limits
+        if (pos + chunkSize > totalLen)
+            return false; // incomplete data
 
-        decodedBody += chunkedBody.substr(pos, chunkSize);
+        // 5. Append Data
+        decodedBody.append(chunkedBody, pos, chunkSize);
         pos += chunkSize;
 
-        // Skip trailing \r\n after chunk data
-        if (pos + 2 > chunkedBody.size() || chunkedBody.substr(pos, 2) != "\r\n")
+        // 6. Check trailing CRLF
+        if (pos + 2 > totalLen || chunkedBody.substr(pos, 2) != "\r\n")
             return false;
         pos += 2;
     }
-    return false; // didn't find terminating 0-size chunk
+
+    // Should end with 0 chunk, so if we exit loop, it might be incomplete
+    return false;
 }
 
 size_t extractContentLength(const String& headers) {
     String val;
     if (!getHeaderValue(headers, "content-length", val))
         return 0;
-    val = trimSpaces(val);
-    if (val.empty())
-        return 0;
     return stringToType<size_t>(val);
-}
-
-String GUID() {
-    String guid;
-    for (int i = 0; i < GUID_LENGTH; i++) {
-        if (i == 8 || i == 12 || i == 16 || i == 20)
-            guid += '-';
-        int index = std::rand() % (sizeof(GUID_CHARSET) - 1);
-        guid += GUID_CHARSET[index];
-    }
-    return guid;
-}
-
-bool setNonBlocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1)
-        return Logger::error("Failed to get fd flags");
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
-        return Logger::error("Failed to set non-blocking mode");
-    return true;
-}
-
-String getUriRemainder(const String& uri, const String& locPath) {
-    String normalUri = normalizePath(uri);
-    String normalLoc = normalizePath(locPath);
-    String rest;
-    if (normalLoc == "/")
-        rest = normalUri;
-    else if (pathStartsWith(normalUri, normalLoc))
-        rest = normalUri.substr(normalLoc.length());
-    else
-        rest = normalUri;
-    if (rest.empty() || rest[0] != '/')
-        rest = "/" + rest;
-    return rest;
-}
-
-String extractDirectoryFromPath(const String& path) {
-    String dir, file;
-    if (splitByChar(path, dir, file, '/', true))
-        return dir;
-    return ".";
 }

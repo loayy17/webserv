@@ -54,9 +54,9 @@ bool Server::bindSocket() {
 }
 bool Server::startListening() {
     if (listen(server_fd, 10) < 0) {
-        return Logger::error("[ERROR]: Failed to listen on socket");
+        return Logger::error("Failed to listen on socket");
     }
-    return Logger::info("[INFO]: Server is listening on socket");
+    return Logger::info("Server is listening on socket");
 }
 
 bool Server::init() {
@@ -65,12 +65,12 @@ bool Server::init() {
             close(server_fd);
             server_fd = -1;
         }
-        return Logger::error("[ERROR]: Server initialization failed");
+        return Logger::error("Server initialization failed");
     }
     if (!setNonBlocking(server_fd)) {
         close(server_fd);
         server_fd = -1;
-        return Logger::error("[ERROR]: Server initialization failed");
+        return Logger::error("Server initialization failed");
     }
 
     running = true;
@@ -87,7 +87,7 @@ void Server::stop() {
 
 int Server::acceptConnection(sockaddr_in* client_addr) {
     if (!running || server_fd == -1) {
-        Logger::error("[ERROR]: Cannot accept connection: server not running");
+        Logger::error("Cannot accept connection: server not running");
         return -1;
     }
 
@@ -96,12 +96,12 @@ int Server::acceptConnection(sockaddr_in* client_addr) {
     sockaddr_in* addr_ptr  = client_addr ? client_addr : &addr;
     int          client_fd = accept(server_fd, (sockaddr*)addr_ptr, &addr_len);
     if (client_fd < 0) {
-        Logger::error("[ERROR]: Failed to accept new connection");
+        Logger::error("Failed to accept new connection");
         return -1;
     }
     if (!setNonBlocking(client_fd)) {
         close(client_fd);
-        Logger::error("[ERROR]: Failed to set non-blocking mode for client socket");
+        Logger::error("Failed to set non-blocking mode for client socket");
         return -1;
     }
     return client_fd;

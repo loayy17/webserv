@@ -120,6 +120,8 @@ bool CgiHandler::parseOutput(const String& raw, HttpResponse& response) {
         if (toLowerWords(key) == "status") {
             response.setStatus(atoi(val.c_str()), "OK");
             statusSet = true;
+        } else if (toLowerWords(key) == "set-cookie") {
+            response.addSetCookie(val);
         } else {
             response.addHeader(key, val);
         }

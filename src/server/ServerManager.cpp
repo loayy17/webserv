@@ -1,7 +1,7 @@
 #include "ServerManager.hpp"
 
 ServerManager::ServerManager()
-    : running(false), pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes() {}
+    : running(false), pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
 
 ServerManager::ServerManager(const ServerManager& other)
     : running(other.running),
@@ -11,7 +11,8 @@ ServerManager::ServerManager(const ServerManager& other)
       clients(other.clients),
       clientToServer(other.clientToServer),
       serverToConfigs(other.serverToConfigs),
-      mimeTypes(other.mimeTypes) {}
+      mimeTypes(other.mimeTypes),
+      sessionManager(other.sessionManager) {}
 
 ServerManager& ServerManager::operator=(const ServerManager& other) {
     if (this != &other) {
@@ -22,12 +23,13 @@ ServerManager& ServerManager::operator=(const ServerManager& other) {
         clientToServer  = other.clientToServer;
         serverToConfigs = other.serverToConfigs;
         mimeTypes       = other.mimeTypes;
+        sessionManager  = other.sessionManager;
     }
     return *this;
 }
 
 ServerManager::ServerManager(const VectorServerConfig& _configs)
-    : running(false), pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes() {}
+    : running(false), pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
 
 ServerManager::~ServerManager() {
     shutdown();
@@ -112,9 +114,18 @@ bool ServerManager::run() {
     if (!running)
         return Logger::error("Cannot run server manager");
 
+    time_t lastSessionCleanup = getCurrentTime();
+
     while (running && g_running) {
         int eventCount = pollManager.pollConnections(100);
         checkTimeouts(CLIENT_TIMEOUT);
+
+        if (getDifferentTime(lastSessionCleanup, getCurrentTime()) > SESSION_CLEANUP_INTERVAL)
+        {
+            sessionManager.cleanupExpiredSessions(SESSION_TIMEOUT);
+            lastSessionCleanup = getCurrentTime();
+        }
+
         if (eventCount <= 0)
             continue;
 
@@ -395,14 +406,39 @@ void ServerManager::processRequest(Client* client, Server* server) {
             keepAlive = true;
     }
     client->setKeepAlive(keepAlive);
+ 
+     String   sessionId = request.getCookie(SESSION_COOKIE_NAME);
+    SessionResult* session   = NULL;
+    if (!sessionId.empty())
+        session = sessionManager.getSession(sessionId);
 
-    // 8. Process Logic
+    String newSessionId;
+    if (!session && request.getMethod() == "POST" && !request.getBody().empty())
+    {
+        String body = request.getBody();
+        String username;
+        VectorString pairs;
+        splitByString(body, pairs, "&");
+        for (size_t i = 0; i < pairs.size(); ++i) {
+            String key, val;
+            if (splitByChar(pairs[i], key, val, '=') && trimSpaces(key) == "username")
+                username = trimSpaces(val);
+        }
+        if (!username.empty()) {
+            newSessionId = sessionManager.createSession(username);
+            session = sessionManager.getSession(newSessionId);
+        }
+    }
+
     Router      router(serverToConfigs[server->getFd()], request);
     RouteResult result = router.processRequest();
     VectorInt openFds = pollManager.getFds();
 
     ResponseBuilder builder(mimeTypes);
     HttpResponse response = builder.build(result, &client->getCgi(), openFds);
+
+    if (!newSessionId.empty())
+        response.addSetCookie(SessionManager::buildSetCookieHeader(newSessionId));
 
     if (keepAlive)
         response.addHeader("Connection", "keep-alive");

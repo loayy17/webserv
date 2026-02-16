@@ -14,6 +14,7 @@
 #include "../http/ResponseBuilder.hpp"
 #include "../http/Router.hpp"
 #include "../utils/Logger.hpp"
+#include "../utils/SessionManager.hpp"
 #include "../utils/Utils.hpp"
 #include "Client.hpp"
 #include "PollManager.hpp"
@@ -44,6 +45,7 @@ class ServerManager {
     MapIntServerPtr          clientToServer;
     MapIntVectorServerConfig serverToConfigs;
     MimeTypes                mimeTypes;
+    SessionManager           sessionManager;
     MapInt                   cgiPipeToClient;
 
     // Internal helpers

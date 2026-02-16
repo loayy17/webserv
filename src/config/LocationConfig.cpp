@@ -142,16 +142,32 @@ bool LocationConfig::setCgiPass(const VectorString& c) {
     return true;
 }
 
-bool LocationConfig::setRedirect(const VectorString& r) {
+bool LocationConfig::setRedirect(const VectorString& r)
+{
     if (hasRedirect)
         return Logger::error("duplicate return directive");
-    if (r.size() != 1 && r.size() != 2)
-        return Logger::error("return takes exactly one value");
+    if (r.empty())
+        return Logger::error("return requires at least a status code");
     redirectCode = stringToType<int>(r[0]);
     if (redirectCode <= 0 || redirectCode > 1000)
-        return Logger::error("return code must be between 0 and 1000");
-    if (r.size() == 2) 
-        redirectValue = r[1];
+        return Logger::error("invalid HTTP status code");
+    redirectValue.clear();
+    if (r.size() > 1)
+    {
+        for (size_t i = 1; i < r.size(); ++i)
+        {
+            if (i > 1)
+                redirectValue += " ";
+            redirectValue += r[i];
+        }
+
+        if (redirectValue.size() >= 2 &&
+            redirectValue[0] == '"' &&
+            redirectValue[redirectValue.size() - 1] == '"')
+        {
+            redirectValue = redirectValue.substr(1, redirectValue.size() - 2);
+        }
+    }
     hasRedirect = true;
     return true;
 }

@@ -148,7 +148,7 @@ EOF
     cat > "$TEST_DIR/03_multiple_servers.conf" << 'EOF'
 http {
     server {
-        listen localhost:8080;
+        listen localhost:1234;
         root /var/www/site1;
         server_name site1.com;
         location / {
@@ -156,7 +156,7 @@ http {
         }
     }
     server {
-        listen localhost:8081;
+        listen localhost:4321;
         root /var/www/site2;
         server_name site2.com;
         location / {
@@ -1378,7 +1378,7 @@ run_tests() {
     # ----------------------------------------------------------
     print_subheader "FAILURE Cases (Expected to FAIL)"
 
-    test_failure "Empty configuration file" "$TEST_DIR/20_empty.conf" "No server defined"
+    test_failure "Empty configuration file" "$TEST_DIR/20_empty.conf" "[ERROR]: Configuration file is empty"
     test_failure "No server block in http" "$TEST_DIR/21_no_server.conf" "No server defined"
     test_failure "Multiple http blocks" "$TEST_DIR/22_multiple_http.conf" "[ERROR]: Only one http block allowed"
     test_failure "Missing listen directive" "$TEST_DIR/23_no_listen.conf" "[ERROR]: Server missing listen directive"
@@ -1469,8 +1469,8 @@ run_tests() {
     test_failure "Semicolon in value" "$TEST_DIR/80_semicolon_value.conf" ""
     
     # Whitespace/comments only = no server
-    test_failure "Whitespace only file" "$TEST_DIR/81_whitespace_only.conf" "No server defined"
-    test_failure "Comments only file" "$TEST_DIR/82_comments_only.conf" "No server defined"
+    test_failure "Whitespace only file" "$TEST_DIR/81_whitespace_only.conf" "[ERROR]: Configuration file is empty"
+    test_failure "Comments only file" "$TEST_DIR/82_comments_only.conf" "[ERROR]: Configuration file is empty"
     
     # Empty root value should fail
     test_failure "Directive without value" "$TEST_DIR/83_no_value.conf" ""

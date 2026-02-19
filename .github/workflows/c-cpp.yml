@@ -75,7 +75,7 @@ jobs:
           done
 
       - name: Run tester
-        run: yes "" | ./tester http://localhost:1234
+        run: printf "\n\n\n\n\n\n\n\n" | ./tester http://localhost:1234
 
       - name: Stop server
         if: always()

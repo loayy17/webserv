@@ -53,6 +53,7 @@ jobs:
       - name: Setup tester files
         run: |
           chmod +x cgi_test
+          chmod +x tester
           mkdir -p YoupiBanane/nop
           mkdir -p YoupiBanane/Yeah
           touch YoupiBanane/youpi.bad_extension

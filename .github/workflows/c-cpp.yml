@@ -48,7 +48,7 @@ jobs:
         run: ./tests/router_tester.sh ./router_tester
 
       - name: Build webserv
-        run: make
+        run: make re
 
       - name: Setup tester files
         run: |
@@ -69,13 +69,15 @@ jobs:
 
       - name: Wait for server
         run: |
-          for i in {1..10}; do
+          for i in {1..20}; do
             nc -z localhost 1234 && break
             sleep 1
-          done
+            done
+          sleep 3 
+
 
       - name: Run tester
-        run: printf "\n\n\n\n\n\n\n\n" | ./tester http://localhost:1234
+        run: printf "\n%.0s" {1..20} | ./tester http://localhost:1234
 
       - name: Stop server
         if: always()

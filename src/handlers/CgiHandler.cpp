@@ -180,12 +180,8 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     env.push_back("REQUEST_METHOD=" + req.getMethod());
     env.push_back("QUERY_STRING=" + req.getQueryString());
     env.push_back("REQUEST_URI=" + req.getUri());
-
-    // --- Script info ---
-    // NOTE: The cgi_test binary expects non-standard CGI environment:
-    // Both SCRIPT_NAME and PATH_INFO should be set to the full request URI
     String requestUri     = req.getUri();
-    String scriptFilename = resultRouter.getPathRootUri(); // full path on disk
+    String scriptFilename = resultRouter.getPathRootUri();
 
     env.push_back("SCRIPT_NAME=" + requestUri);
     env.push_back("SCRIPT_FILENAME=" + scriptFilename);
@@ -195,11 +191,7 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     if (!req.getContentType().empty())
         env.push_back("CONTENT_TYPE=" + req.getContentType());
     env.push_back("CONTENT_LENGTH=" + typeToString<size_t>(req.getContentLength()));
-
-    // --- Client info ---
-    env.push_back("REMOTE_ADDR=127.0.0.1");
-    env.push_back("REMOTE_HOST=localhost"); // optional
-    env.push_back("REDIRECT_STATUS=200");   // required by PHP and cgi_test
+    env.push_back("REMOTE_HOST=" + req.getHost());
 
     // --- HTTP headers ---
     const MapString& headers = req.getHeaders();

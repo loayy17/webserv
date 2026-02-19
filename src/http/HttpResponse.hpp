@@ -19,13 +19,16 @@ class HttpResponse {
     void   setBody(const String&);
     String getBody() const;
     String toString() const;
+    int    getStatusCode() const;
+
+    String getStatusMessage() const;
 
    private:
-    int             statusCode;
-    String          statusMessage;
-    MapString       headers;
-    VectorString    setCookies;
-    String          body;
+    int          statusCode;
+    String       statusMessage;
+    MapString    headers;
+    VectorString setCookies;
+    String       body;
 };
 
 #endif

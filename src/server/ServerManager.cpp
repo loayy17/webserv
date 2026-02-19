@@ -244,8 +244,9 @@ void ServerManager::handleClientRead(int clientFd) {
     if (client->getCgi().isActive())
         return;
     Server* server = getValue(clientToServer, clientFd, (Server*)NULL);
-    if (server)
+    if (server) {
         processRequest(client, server);
+    }
 }
 
 void ServerManager::handleClientWrite(int clientFd) {
@@ -262,7 +263,6 @@ void ServerManager::handleClientWrite(int clientFd) {
         return;
     }
 
-    // If all data sent
     if (client->getStoreSendData().empty()) {
         if (client->isKeepAlive()) {
             pollManager.addFd(clientFd, POLLIN);
@@ -298,20 +298,6 @@ void ServerManager::checkTimeouts(int timeout) {
     }
 }
 
-String checkMethod(std::string& buffer) {
-    size_t pos       = buffer.find("\r\n");
-    String firstLine = buffer.substr(0, pos);
-    if (firstLine.find("POST") == 0)
-        return "POST";
-    if (firstLine.find("GET") == 0)
-        return "GET";
-    if (firstLine.find("DELETE") == 0)
-        return "DELETE";
-    if (firstLine.find("PUT") == 0)
-        return "PUT";
-    return "";
-}
-
 void ServerManager::processRequest(Client* client, Server* server) {
     const String& buffer   = client->getStoreReceiveData();
     size_t        dataSize = buffer.size();
@@ -335,6 +321,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
             client->setKeepAlive(false);
             pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
         }
+        std::cout << "the status code is 431" << std::endl;
         return; // Wait for more data
     }
 
@@ -347,6 +334,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
         client->removeReceivedData(headerEnd + headerEndLen);
         client->setKeepAlive(false);
         pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+        std::cout << "the status code is 431" << std::endl;
         return;
     }
 
@@ -362,6 +350,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
         client->clearStoreReceiveData();
         client->setKeepAlive(false);
         pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+        std::cout << "the status code is 400" << std::endl;
         return;
     }
 
@@ -386,6 +375,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
             client->clearStoreReceiveData(); // Lost sync
             client->setKeepAlive(false);
             pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+            std::cout << "the status code is 400" << std::endl;
             return;
         }
 
@@ -399,6 +389,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
             client->removeReceivedData(requestSize);
             client->setKeepAlive(false);
             pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+            std::cout << "the status code is 413" << std::endl;
             return;
         }
         fullRequest = headerSection + "\r\nContent-Length: " + typeToString<size_t>(decodedBody.size()) + "\r\n\r\n" + decodedBody;
@@ -420,6 +411,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
                 client->clearStoreReceiveData();
             client->setKeepAlive(false);
             pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+            std::cout << "the status code is 413" << std::endl;
             return;
         }
 
@@ -439,6 +431,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
         client->setKeepAlive(false);
         client->removeReceivedData(requestSize);
         pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+        std::cout << "the status code is 400" << std::endl;
         return;
     }
 
@@ -474,8 +467,12 @@ void ServerManager::processRequest(Client* client, Server* server) {
                 username = trimSpaces(val);
         }
         if (!username.empty()) {
-            newSessionId = sessionManager.createSession(username);
-            session      = sessionManager.getSession(newSessionId);
+            try {
+                newSessionId = sessionManager.createSession(username);
+                session      = sessionManager.getSession(newSessionId);
+            } catch (const std::exception& e) {
+                Logger::error("Failed to create session: " + String(e.what()));
+            }
         }
     }
 
@@ -495,6 +492,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
         response.addHeader("Connection", "close");
 
     if (client->getCgi().isActive()) {
+        std::cout << "the status code is " << response.getStatusCode() << std::endl;
         registerCgiPipes(client);
         client->removeReceivedData(requestSize);
         return;
@@ -503,6 +501,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
     client->setSendData(response.toString());
     client->removeReceivedData(requestSize);
     pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+    std::cout << "the status code is " << response.getStatusCode() << std::endl;
 }
 
 void ServerManager::closeClientConnection(int clientFd) {

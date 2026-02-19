@@ -30,9 +30,17 @@ void HttpResponse::addSetCookie(const String& cookie) {
     setCookies.push_back(cookie);
 }
 
-void HttpResponse::setResponseHeaders(const String& contentType, size_t contentLength) {
+void HttpResponse::setResponseHeaders(const String& contentType, size_t contentLength = 0) {
     addHeader(HEADER_CONTENT_TYPE, contentType);
     addHeader(HEADER_CONTENT_LENGTH, typeToString<size_t>(contentLength));
+}
+
+int HttpResponse::getStatusCode() const {
+    return statusCode;
+}
+
+String HttpResponse::getStatusMessage() const {
+    return statusMessage;
 }
 
 void HttpResponse::setBody(const String& _body) {

@@ -90,7 +90,7 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
         return Logger::error("Invalid request line format");
     }
 
-    uri         = values[0];
+    uri         = urlDecode(values[0]);
     httpVersion = values[1];
     if (method.empty() || uri.empty() || httpVersion.empty()) {
         errorCode = HTTP_BAD_REQUEST;
@@ -187,7 +187,8 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
             }
         }
     }
-
+    
+    std::cout << "Parsed Request: " << method << " " << uri << " " << httpVersion << std::endl;
     return true;
 }
 

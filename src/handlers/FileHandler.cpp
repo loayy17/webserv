@@ -5,21 +5,20 @@ FileHandler::FileHandler(struct dirent* entry, const String& basePath, String pa
     link         = "";
     size         = "-";
     lastModified = "";
-
-    String fileName = entry->d_name;
-    bool   isRoot   = (pathUri == "/" || pathUri.empty());
-    if (fileName == "." || fileName == "..") {
+    bool isRoot  = (pathUri == "/" || pathUri.empty());
+    if (!entry) {
         if (isRoot)
             return; // skip
-        name = fileName == "." ? "Go To Parent" : "Back";
-        link = fileName == "." ? "/" : "../";
-        icon = fileName == "." ? "    https://cdn-icons-png.flaticon.com/512/17578/17578298.png"
+        name = basePath == "." ? "Go To Parent" : "Back";
+        link = basePath == "." ? "/" : "../";
+        icon = basePath == "." ? "    https://cdn-icons-png.flaticon.com/512/17578/17578298.png"
                                : "https://cdn-icons-png.flaticon.com/512/7945/7945195.png";
         return;
     }
+    String fileName = entry->d_name;
 
     name             = htmlEntities(fileName);
-    link             = fileName;
+    link             = htmlEntities(fileName);
     icon             = "https://cdn-icons-png.flaticon.com/512/9166/9166568.png"; // UNKnown
     struct stat st   = getFileStat(joinPaths(basePath, fileName));
     FileType    type = getFileType(st);

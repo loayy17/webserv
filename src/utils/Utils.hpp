@@ -126,5 +126,5 @@ bool isKeyInVector(const K& key, const std::vector<K, V>& vector) {
             return true;
     return false;
 }
-
+String urlDecode(const String& input);
 #endif

@@ -15,11 +15,13 @@ bool DirectoryListingHandler::readDirectoryEntries(const String& path, const Str
     if (!dir)
         return Logger::error("Failed to open directory: " + path);
     struct dirent* entry;
+    // add . and .. entries for navigation
+    entries.push_back(FileHandler(NULL, ".", uri));  // . entry
+    entries.push_back(FileHandler(NULL, "..", uri)); // .. entry
     while ((entry = readdir(dir)) != NULL) {
         String filename = entry->d_name;
         if (filename[0] == '.')
             continue;
-
         entries.push_back(FileHandler(entry, path, uri));
     }
     if (closedir(dir) == -1)
@@ -49,11 +51,11 @@ String DirectoryListingHandler::buildRow(const FileHandler& fileInfo) const {
 bool DirectoryListingHandler::handle(const RouteResult& resultRouter, HttpResponse& response) const {
     std::vector<FileHandler> entries;
     String                   path = resultRouter.getPathRootUri();
-    String                   uri  = resultRouter.getPathRootUri();
-
+    String                   uri  = resultRouter.getRequest().getUri();
     if (path.empty() || !readDirectoryEntries(path, uri, entries))
         return false;
-
+    uri = uri == "/" ? uri : uri.substr(0, uri.length() - 1);
+    uri = htmlEntities(uri);
     String html =
         "<!DOCTYPE html>\n"
         "<html lang=\"en\">\n"

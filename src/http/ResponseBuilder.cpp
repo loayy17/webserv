@@ -9,12 +9,14 @@ HandlerType getHandlerType(const RouteResult& resultRouter) {
         return UPLOAD;
     if (resultRouter.getIsCgiRequest())
         return CGI;
-    String path = resultRouter.getPathRootUri();
-    if (getFileType(path) == DIRECTORY && resultRouter.getLocation()->getAutoIndex() && resultRouter.getRequest().getMethod() == "GET")
+    String path        = resultRouter.getPathRootUri();
+    String method      = resultRouter.getRequest().getMethod();
+    bool   isAutoIndex = resultRouter.getLocation()->getAutoIndex();
+    if (getFileType(path) == DIRECTORY && isAutoIndex && (method == "GET" || method == "HEAD"))
         return DIRECTORY_LISTING;
-    if (getFileType(path) == SINGLEFILE && resultRouter.getRequest().getMethod() == "GET")
+    if (getFileType(path) == SINGLEFILE && (method == "GET" || method == "HEAD"))
         return STATIC;
-    if (getFileType(path) == SINGLEFILE && resultRouter.getRequest().getMethod() == "DELETE")
+    if (getFileType(path) == SINGLEFILE && method == "DELETE")
         return DELETE_FILE;
     return NOT_FOUND;
 }
@@ -24,7 +26,7 @@ HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess*
 
     // Handle redirect
     if (resultRouter.getIsRedirect()) {
-        response.setStatus(HTTP_MOVED_PERMANENTLY, "Moved Permanently");
+        response.setStatus(resultRouter.getStatusCode(), getHttpStatusMessage(resultRouter.getStatusCode()));
         response.addHeader("Location", resultRouter.getRedirectUrl());
         response.addHeader("Content-Length", "0");
         return response;
@@ -60,7 +62,10 @@ HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess*
         default:
             break;
     }
-    handleError(response, resultRouter);
+    RouteResult errResult = resultRouter;
+    if (resultRouter.getStatusCode() == HTTP_OK)
+        errResult.setCodeAndMessage(HTTP_INTERNAL_SERVER_ERROR, "Internal Server Error");
+    handleError(response, errResult);
     return response;
 }
 

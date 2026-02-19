@@ -124,8 +124,9 @@ bool CgiProcess::finish() {
     // withit the main process not being blocked we can handle other requests
     pid_t ret = waitpid(_pid, &status, WNOHANG);
     if (ret == 0) {
-        kill(_pid, SIGKILL);
+        kill(_pid, SIGTERM);
         waitpid(_pid, &status, 0);
+        kill(_pid, SIGKILL);
     }
     _active = false;
     return WIFEXITED(status) && WEXITSTATUS(status) == 0;

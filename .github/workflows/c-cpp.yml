@@ -52,15 +52,21 @@ jobs:
 
       - name: Setup tester files
         run: |
-          chmod +x cgi_test
+          chmod +x cgi_tester
           chmod +x tester
           mkdir -p YoupiBanane/nop
           mkdir -p YoupiBanane/Yeah
+          mkdir -p YoupiBanane/directory
           touch YoupiBanane/youpi.bad_extension
+          chmod +x YoupiBanane/youpi.bad_extension
           touch YoupiBanane/youpi.bla
+          chmod +x YoupiBanane/youpi.bla
           touch YoupiBanane/nop/youpi.bad_extension
+          chmod +x YoupiBanane/nop/youpi.bad_extension
           touch YoupiBanane/nop/other.pouic
+          chmod +x YoupiBanane/nop/other.pouic
           touch YoupiBanane/Yeah/not_happy.bad_extension
+          chmod +x YoupiBanane/Yeah/not_happy.bad_extension
 
       - name: Start webserv
         run: |

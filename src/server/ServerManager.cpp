@@ -378,20 +378,6 @@ void ServerManager::processRequest(Client* client, Server* server) {
             std::cout << "the status code is 400" << std::endl;
             return;
         }
-
-        String maxBodyStr  = clientToServer[client->getFd()]->getConfig().getClientMaxBody();
-        size_t maxBodySize = convertMaxBodySize(maxBodyStr);
-        if (!maxBodyStr.empty() && decodedBody.size() > maxBodySize) {
-            ResponseBuilder builder;
-            HttpResponse    response = builder.buildError(HTTP_PAYLOAD_TOO_LARGE, "Payload Too Large");
-            response.addHeader("Connection", "close"); // Close on 413
-            client->setSendData(response.toString());
-            client->removeReceivedData(requestSize);
-            client->setKeepAlive(false);
-            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-            std::cout << "the status code is 413" << std::endl;
-            return;
-        }
         fullRequest = headerSection + "\r\nContent-Length: " + typeToString<size_t>(decodedBody.size()) + "\r\n\r\n" + decodedBody;
 
     } else {
@@ -434,7 +420,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
         std::cout << "the status code is 400" << std::endl;
         return;
     }
-
+    
     // 6. Set Metadata
     request.setPort(server->getPort());
 

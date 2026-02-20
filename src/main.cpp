@@ -26,7 +26,6 @@ int main(int ac, char** av) {
     std::cout << "========================================" << std::endl;
     std::cout << "       Webserv HTTP Server v1.0        " << std::endl;
     std::cout << "========================================\n" << std::endl;
-
     ConfigParser parser(configFile);
     if (!parser.parse()) {
         return 1;

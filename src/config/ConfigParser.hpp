@@ -1,45 +1,38 @@
 #ifndef CONFIG_PARSER_HPP
 #define CONFIG_PARSER_HPP
 
-#include <cstdlib>
-#include <iostream>
-#include <map>
-#include <vector>
-#include "../utils/Logger.hpp"
+#include "../config/LocationConfig.hpp"
+#include "../config/ServerConfig.hpp"
 #include "../utils/Utils.hpp"
-#include "LocationConfig.hpp"
-#include "ServerConfig.hpp"
+#include "ConfigLexer.hpp"
 
 class ConfigParser {
    public:
-    ConfigParser();
-    ConfigParser(const ConfigParser& other);
-    ConfigParser& operator=(const ConfigParser& other);
-    ConfigParser(const String& f);
+    ConfigParser(const String& filename);
     ~ConfigParser();
 
-    bool               parse();
-    String             getHttpClientMaxBody() const;
-    VectorServerConfig getServers() const;
+    bool                      parse();
+    const VectorServerConfig& getServers() const;
+    const String&             getHttpClientMaxBody() const;
 
    private:
-    String                    file;
-    std::vector<ServerConfig> servers;
-    ScopeConfig               scope;
-    size_t                    curr_index;
-    String                    httpClientMaxBody;
-    VectorString              lines;
-    ServerDirectiveMap        serverDirectives;
-    LocationDirectiveMap      locationDirectives;
+    ConfigLexer               _lexer;
+    ConfigToken               _current;
+    bool                      _haveHttp;
+    VectorServerConfig        _servers;
+    String                    _httpClientMaxBody;
 
-    bool getNextLine(String& out);
-    ServerDirectiveMap   getServerDirectives();
-    LocationDirectiveMap getLocationDirectives();
+    // Directive maps – initialised in constructor
+    ServerDirectiveMap   _serverDirectives;
+    LocationDirectiveMap _locationDirectives;
+
+    void nextToken();
+    bool error(const String& msg);
+    bool expect(Type type, const String& expectedDesc);
+
     bool parseHttp();
     bool parseServer();
-    bool parseLocation(ServerConfig& srv, const String& header);
-    bool parseServerDirective(const String& l, ServerConfig& srv);
-    bool parseLocationDirective(const String& l, LocationConfig& loc);
+    bool parseLocation(ServerConfig& srv);
     bool validate();
 };
 

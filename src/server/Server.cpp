@@ -53,9 +53,8 @@ bool Server::bindSocket() {
     return Logger::info("Socket bound to http://" + iface + ":" + typeToString<int>(portNum));
 }
 bool Server::startListening() {
-    if (listen(server_fd, 10) < 0) {
+    if (listen(server_fd, SOMAXCONN) < 0)
         return Logger::error("Failed to listen on socket");
-    }
     return Logger::info("Server is listening on socket");
 }
 

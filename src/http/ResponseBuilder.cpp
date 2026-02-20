@@ -63,8 +63,17 @@ HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess*
             break;
     }
     RouteResult errResult = resultRouter;
-    if (resultRouter.getStatusCode() == HTTP_OK)
-        errResult.setCodeAndMessage(HTTP_INTERNAL_SERVER_ERROR, "Internal Server Error");
+    if (resultRouter.getStatusCode() == HTTP_OK) {
+        String path   = resultRouter.getPathRootUri();
+        String method = resultRouter.getRequest().getMethod();
+        if (getFileType(path) == SINGLEFILE &&
+            method != "GET" && method != "DELETE" && method != "HEAD") {
+            errResult.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED,
+                                        getHttpStatusMessage(HTTP_METHOD_NOT_ALLOWED));
+        } else {
+            errResult.setCodeAndMessage(HTTP_INTERNAL_SERVER_ERROR, "Internal Server Error");
+        }
+    }
     handleError(response, errResult);
     return response;
 }

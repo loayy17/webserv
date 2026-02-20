@@ -1,297 +1,226 @@
 #include "ConfigParser.hpp"
 
-// ============================================================================
-// Constructors and Destructor
-// ============================================================================
+ConfigParser::ConfigParser(const String& filename) : _lexer(filename), _haveHttp(false), _httpClientMaxBody("") {
+    nextToken();
 
-ConfigParser::ConfigParser()
-    : file(""), servers(), scope(NONE), curr_index(0), httpClientMaxBody(""), lines(), serverDirectives(), locationDirectives() {}
+    // ---- Server directives ----
+    _serverDirectives["listen"]               = &ServerConfig::setListen;
+    _serverDirectives["server_name"]          = &ServerConfig::setServerName;
+    _serverDirectives["root"]                 = &ServerConfig::setRoot;
+    _serverDirectives["index"]                = &ServerConfig::setIndexes;
+    _serverDirectives["client_max_body_size"] = &ServerConfig::setClientMaxBody;
+    _serverDirectives["error_page"]           = &ServerConfig::setErrorPage;
 
-ConfigParser::ConfigParser(const ConfigParser& other)
-    : file(other.file),
-      servers(other.servers),
-      scope(other.scope),
-      curr_index(other.curr_index),
-      httpClientMaxBody(other.httpClientMaxBody),
-      lines(other.lines),
-      serverDirectives(other.serverDirectives),
-      locationDirectives(other.locationDirectives) {}
-
-ConfigParser& ConfigParser::operator=(const ConfigParser& other) {
-    if (this != &other) {
-        file               = other.file;
-        servers            = other.servers;
-        scope              = other.scope;
-        curr_index         = other.curr_index;
-        httpClientMaxBody  = other.httpClientMaxBody;
-        lines              = other.lines;
-        serverDirectives   = other.serverDirectives;
-        locationDirectives = other.locationDirectives;
-    }
-    return *this;
-}
-
-ConfigParser::ConfigParser(const String& f) : file(f), scope(NONE), curr_index(0) {
-    if (!convertFileToLines(file, lines))
-        Logger::error("Failed to read configuration file: " + file);
+    // ---- Location directives ----
+    _locationDirectives["root"]                 = &LocationConfig::setRoot;
+    _locationDirectives["autoindex"]            = &LocationConfig::setAutoIndex;
+    _locationDirectives["index"]                = &LocationConfig::setIndexes;
+    _locationDirectives["client_max_body_size"] = &LocationConfig::setClientMaxBody;
+    _locationDirectives["methods"]              = &LocationConfig::setAllowedMethods;
+    _locationDirectives["return"]               = &LocationConfig::setRedirect;
+    _locationDirectives["cgi_pass"]             = &LocationConfig::setCgiPass;
+    _locationDirectives["upload_dir"]           = &LocationConfig::setUploadDir;
+    _locationDirectives["error_page"]           = &LocationConfig::setErrorPage;
 }
 
 ConfigParser::~ConfigParser() {}
 
-// ============================================================================
-// Core Helpers
-// ============================================================================
+void ConfigParser::nextToken() {
+    _current = _lexer.nextToken();
+}
 
-bool ConfigParser::getNextLine(String& out) {
-    if (curr_index >= lines.size())
-        return false;
-    out = lines[curr_index++];
+bool ConfigParser::error(const String& msg) {
+    Logger::error("Config error at line " + typeToString(_current.getLine()) + ": " + msg);
+    return false;
+}
+
+bool ConfigParser::expect(Type type, const String& expectedDesc) {
+    if (_current.getType() != type) {
+        return error("Expected " + expectedDesc + ", got '" + _current.getValue() + "'");
+    }
+    nextToken();
     return true;
 }
 
-// ============================================================================
-// Directive Maps
-// ============================================================================
-
-ServerDirectiveMap ConfigParser::getServerDirectives() {
-    static ServerDirectiveMap m;
-    if (m.empty()) {
-        m["listen"]               = &ServerConfig::setListen;
-        m["server_name"]          = &ServerConfig::setServerName;
-        m["root"]                 = &ServerConfig::setRoot;
-        m["index"]                = &ServerConfig::setIndexes;
-        m["client_max_body_size"] = &ServerConfig::setClientMaxBody;
-        m["error_page"]           = &ServerConfig::setErrorPage;
+bool ConfigParser::parse() {
+    try {
+        while (_current.getType() != TOKEN_EOF) {
+            if (_current.getType() == TOKEN_WORD && _current.getValue() == "http") {
+                if (_haveHttp)
+                    return error("Duplicate http block");
+                if (!parseHttp())
+                    return false;
+                _haveHttp = true;
+            } else if (_current.getType() == TOKEN_WORD && _current.getValue() == "server") {
+                if (!parseServer())
+                    return false;
+            } else {
+                return error("Unexpected top-level token '" + _current.getValue() + "'");
+            }
+        }
+        return validate();
+    } catch (const std::exception& e) {
+        Logger::error(String("Parser exception: ") + e.what());
+        return false;
     }
-    return m;
 }
-
-LocationDirectiveMap ConfigParser::getLocationDirectives() {
-    static LocationDirectiveMap m;
-    if (m.empty()) {
-        m["root"]                 = &LocationConfig::setRoot;
-        m["autoindex"]            = &LocationConfig::setAutoIndex;
-        m["index"]                = &LocationConfig::setIndexes;
-        m["client_max_body_size"] = &LocationConfig::setClientMaxBody;
-        m["methods"]              = &LocationConfig::setAllowedMethods;
-        m["return"]               = &LocationConfig::setRedirect;
-        m["cgi_pass"]             = &LocationConfig::setCgiPass;
-        m["upload_dir"]           = &LocationConfig::setUploadDir;
-        m["error_page"]           = &LocationConfig::setErrorPage;
-    }
-    return m;
-}
-
-// ============================================================================
-// Block Parsers
-// ============================================================================
 
 bool ConfigParser::parseHttp() {
-    String line;
-    bool   serverFound = false;
+    nextToken();
+    if (!expect(TOKEN_LBRACE, "'{' after http"))
+        return false;
 
-    while (getNextLine(line)) {
-        if (line == "}")
-            return serverFound || Logger::error("No server defined");
-
-        String       key;
-        VectorString values;
-        if (!parseKeyValue(line, key, values))
-            return Logger::error("Invalid http directive: " + line);
-
-        if (key == "server" && values.size() == 1 && values[0] == "{") {
+    while (_current.getType() != TOKEN_RBRACE) {
+        if (_current.getType() == TOKEN_WORD && _current.getValue() == "server") {
             if (!parseServer())
                 return false;
-            serverFound = true;
-        } else if (key == "client_max_body_size") {
-            if (!httpClientMaxBody.empty())
-                return Logger::error("Duplicate client_max_body_size");
-            httpClientMaxBody = values[0];
+        } else if (_current.getType() == TOKEN_WORD && _current.getValue() == "client_max_body_size") {
+            nextToken();
+            if (_current.getType() != TOKEN_WORD && _current.getType() != TOKEN_STRING)
+                return error("Expected size value after client_max_body_size");
+            if (!_httpClientMaxBody.empty())
+                return error("Duplicate client_max_body_size in http block");
+            _httpClientMaxBody = _current.getValue();
+            nextToken();
+            if (!expect(TOKEN_SEMICOLON, "';' after client_max_body_size"))
+                return false;
         } else {
-            return Logger::error("Unknown http directive: " + key);
+            return error("Invalid directive in http block: '" + _current.getValue() + "'");
         }
     }
-
-    return Logger::error("Unexpected end of file in http block");
+    nextToken();
+    return true;
 }
 
 bool ConfigParser::parseServer() {
+    nextToken(); // consume "server"
+    if (!expect(TOKEN_LBRACE, "'{' after server"))
+        return false;
+
     ServerConfig srv;
-    serverDirectives = getServerDirectives();
-    String line;
-
-    while (getNextLine(line)) {
-        if (line == "}") {
-            if (srv.getListenAddresses().empty())
-                return Logger::error("Server missing listen directive");
-            if (srv.getLocations().empty())
-                return Logger::error("At least one location is required");
-            servers.push_back(srv);
-            return true;
-        }
-
-        String       key;
-        VectorString values;
-        if (!parseKeyValue(line, key, values))
-            return Logger::error("Invalid server directive: " + line);
-
-        if (key == "location" && values.size() == 2 && values[1] == "{") {
-            if (!parseLocation(srv, values[0]))
+    while (_current.getType() != TOKEN_RBRACE) {
+        if (_current.getType() == TOKEN_WORD && _current.getValue() == "location") {
+            if (!parseLocation(srv))
                 return false;
         } else {
-            ServerDirectiveMap::const_iterator it = serverDirectives.find(key);
-            if (it == serverDirectives.end())
-                return Logger::error("Unknown server directive: " + key);
-            if (!(srv.*(it->second))(values))
+            if (_current.getType() != TOKEN_WORD)
+                return error("Expected directive name");
+            String key = _current.getValue();
+            nextToken();
+
+            VectorString values;
+            while (_current.getType() != TOKEN_SEMICOLON) {
+                if (_current.getType() != TOKEN_WORD && _current.getType() != TOKEN_STRING)
+                    return error("Expected value or ';'");
+                values.push_back(_current.getValue());
+                nextToken();
+            }
+            nextToken();
+
+            if (!keyExists(_serverDirectives, key))
+                return error("Unknown server directive '" + key + "'");
+            const ServerSetter setter = getValue<ServerDirectiveMap, String, ServerSetter>(_serverDirectives, key);
+            if (!(srv.*(setter))(values))
                 return false;
         }
     }
-
-    return Logger::error("Unexpected end of file in server block");
+    nextToken();
+    _servers.push_back(srv);
+    return true;
 }
 
-bool ConfigParser::parseLocation(ServerConfig& srv, const String& path) {
-    if (path.empty() || path[0] != SLASH)
-        return Logger::error("Location path must start with '/'");
+bool ConfigParser::parseLocation(ServerConfig& srv) {
+    nextToken();
+    if (_current.getType() != TOKEN_WORD && _current.getType() != TOKEN_STRING)
+        return error("Expected location path");
+    String path = _current.getValue();
+    if (path.empty() || path[0] != '/')
+        return error("Location path must start with '/'");
 
-    const VectorLocationConfig& locs = srv.getLocations();
-    for (size_t i = 0; i < locs.size(); i++) {
-        if (locs[i].getPath() == path)
-            return Logger::error("Duplicate location path: " + path);
+    nextToken();
+
+    if (!expect(TOKEN_LBRACE, "'{' after location path"))
+        return false;
+    const VectorLocationConfig& existing = srv.getLocations();
+    for (size_t i = 0; i < existing.size(); ++i) {
+        if (existing[i].getPath() == path)
+            return error("Duplicate location path: " + path);
     }
 
     LocationConfig loc(path);
-    locationDirectives = getLocationDirectives();
-    String line;
-
-    while (getNextLine(line)) {
-        if (line == "}") {
-            srv.addLocation(loc);
-            return true;
-        }
-        String       key;
-        VectorString values;
-        if (!parseKeyValue(line, key, values))
-            return Logger::error("Invalid location directive: " + line);
-
-        LocationDirectiveMap::const_iterator it = locationDirectives.find(key);
-        if (it == locationDirectives.end())
-            return Logger::error("Unknown location directive: " + key);
-        if (!(loc.*(it->second))(values))
-            return false;
-    }
-
-    return Logger::error("Unexpected end of file in location block");
-}
-
-bool ConfigParser::parseServerDirective(const String& l, ServerConfig& srv) {
-    String       key;
-    VectorString values;
-    if (!parseKeyValue(l, key, values))
-        return Logger::error("Invalid server directive: " + l);
-    ServerDirectiveMap::const_iterator it = serverDirectives.find(key);
-    if (it == serverDirectives.end())
-        return Logger::error("Unknown server directive: " + key);
-
-    return (srv.*(it->second))(values);
-}
-
-bool ConfigParser::parseLocationDirective(const String& l, LocationConfig& loc) {
-    String       key;
-    VectorString values;
-    if (!parseKeyValue(l, key, values))
-        return Logger::error("Invalid location directive: " + l);
-
-    LocationDirectiveMap::const_iterator it = locationDirectives.find(key);
-    if (it == locationDirectives.end())
-        return Logger::error("Unknown location directive: " + key);
-
-    return (loc.*(it->second))(values);
-}
-
-// ============================================================================
-// Main Parse
-// ============================================================================
-
-bool ConfigParser::parse() {
-    String line;
-    bool   httpFound = false;
-    if(lines.empty())
-        return Logger::error("Configuration file is empty");
-    while (getNextLine(line)) {
-        String       key;
-        VectorString values;
-
-        if (!parseKeyValue(line, key, values))
-            return Logger::error("Invalid directive: " + line);
-
-        if (key == "http" && values.size() == 1 && values[0] == "{") {
-            if (httpFound)
-                return Logger::error("Only one http block allowed");
-            httpFound = true;
-            if (!parseHttp())
-                return false;
-        } else if (key == "server" && values.size() == 1 && values[0] == "{") {
-            if (!parseServer())
-                return false;
+    while (_current.getType() != TOKEN_RBRACE) {
+        if (_current.getType() == TOKEN_WORD && _current.getValue() == "location") {
+            return error("Nested locations are not supported");
         } else {
-            return Logger::error("Invalid directive: " + line);
+            if (_current.getType() != TOKEN_WORD)
+                return error("Expected directive name");
+            String key = _current.getValue();
+            nextToken();
+
+            VectorString values;
+            while (_current.getType() != TOKEN_SEMICOLON) {
+                if (_current.getType() != TOKEN_WORD && _current.getType() != TOKEN_STRING)
+                    return error("Expected value or ';'");
+                values.push_back(_current.getValue());
+                nextToken();
+            }
+            nextToken();
+
+            if (!keyExists(_locationDirectives, key))
+                return error("Unknown location directive '" + key + "'");
+
+            const LocationSetter setter = getValue<LocationDirectiveMap, String, LocationSetter>(_locationDirectives, key);
+            if (!(loc.*(setter))(values))
+                return false;
         }
     }
-
-    return validate();
+    nextToken();
+    srv.addLocation(loc);
+    return true;
 }
-
-// ============================================================================
-// Validation
-// ============================================================================
-
 bool ConfigParser::validate() {
-    if (servers.empty())
+    if (_servers.empty())
         return Logger::error("No server defined");
 
-    if (httpClientMaxBody.empty())
-        httpClientMaxBody = "1M";
+    if (_httpClientMaxBody.empty())
+        _httpClientMaxBody = "1M";
 
-    for (size_t i = 0; i < servers.size(); i++) {
-        ServerConfig& srv = servers[i];
-
+    for (size_t i = 0; i < _servers.size(); ++i) {
+        ServerConfig& srv = _servers[i];
+        if (srv.getListenAddresses().empty())
+            return Logger::error("Server missing listen directive");
+        if (srv.getLocations().empty())
+            return Logger::error("Server must have at least one location");
         if (srv.getClientMaxBody().empty())
-            srv.setClientMaxBody(httpClientMaxBody);
+            srv.setClientMaxBody(_httpClientMaxBody);
 
         VectorLocationConfig& locs = srv.getLocations();
-        for (size_t j = 0; j < locs.size(); j++) {
+        for (size_t j = 0; j < locs.size(); ++j) {
             LocationConfig& loc = locs[j];
-
             if (loc.getRoot().empty() && !loc.getIsRedirect()) {
                 if (srv.getRoot().empty())
                     return Logger::error("Location has no root and server has no root");
                 loc.setRoot(srv.getRoot());
             }
-
             if (loc.getAllowedMethods().empty())
                 loc.addAllowedMethod("GET");
-
             if (loc.getClientMaxBody().empty())
                 loc.setClientMaxBody(srv.getClientMaxBody());
-
             if (loc.getIndexes().empty()) {
-                loc.setIndexes(srv.getIndexes().empty() ? VectorString(1, "index.html") : srv.getIndexes());
+                if (srv.getIndexes().empty())
+                    loc.setIndexes(VectorString(1, "index.html"));
+                else
+                    loc.setIndexes(srv.getIndexes());
             }
         }
     }
-
     return true;
 }
 
-// ============================================================================
-// Getters
-// ============================================================================
-
-VectorServerConfig ConfigParser::getServers() const {
-    return servers;
+const VectorServerConfig& ConfigParser::getServers() const {
+    return _servers;
 }
 
-String ConfigParser::getHttpClientMaxBody() const {
-    return httpClientMaxBody;
+const String& ConfigParser::getHttpClientMaxBody() const {
+    return _httpClientMaxBody;
 }

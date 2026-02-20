@@ -88,7 +88,7 @@ jobs:
         run: ls -la
         
       - name: Run tester
-        run: printf "\n%.0s" {1..20} | ./tester http://localhost:1234
+        run: printf "\n%.0s" {1..20} | ./tester http://localhost:1234 >> tester.log 2>&1
 
       - name: Print server log (if any)
         if: failure()
@@ -96,4 +96,4 @@ jobs:
 
       - name: Stop server
         if: always()
-        run: kill $(cat server.pid)
+        run: cat tester.log &&  sleep 50 && kill $(cat server.pid)

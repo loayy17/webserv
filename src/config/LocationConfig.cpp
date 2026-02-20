@@ -177,6 +177,11 @@ bool LocationConfig::setClientMaxBody(const VectorString& c) {
         return Logger::error("Duplicate client_max_body_size");
     if (c.size() != 1)
         return Logger::error("client_max_body_size takes exactly one value");
+    std::stringstream ss(c[0].substr(0, c[0].size() - (std::isdigit(c[0][c[0].size() - 1]) ? 0 : 1)));
+    size_t val = 0;
+    ss >> val;
+    if (ss.fail() || !ss.eof())
+        return Logger::error("invalid client_max_body_size value: " + c[0]);
     clientMaxBody = c[0];
     return true;
 }

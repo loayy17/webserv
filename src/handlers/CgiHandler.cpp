@@ -180,12 +180,13 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     env.push_back("REQUEST_METHOD=" + req.getMethod());
     env.push_back("QUERY_STRING=" + req.getQueryString());
     env.push_back("REQUEST_URI=" + req.getUri());
-    String requestUri     = req.getUri();
+    String scriptName     = resultRouter.getMatchedPath();
     String scriptFilename = resultRouter.getPathRootUri();
+    String pathInfo       = resultRouter.getRemainingPath();
 
-    env.push_back("SCRIPT_NAME=" + requestUri);
+    env.push_back("SCRIPT_NAME=" + scriptName);
     env.push_back("SCRIPT_FILENAME=" + scriptFilename);
-    env.push_back("PATH_INFO=" + requestUri);
+    env.push_back("PATH_INFO=" + pathInfo);
 
     // --- POST info ---
     if (!req.getContentType().empty())

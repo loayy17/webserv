@@ -736,14 +736,11 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
     size_t totalLen = chunkedBody.size();
 
     while (pos < totalLen) {
-        // 1. Find line end for chunk size
         size_t lineEnd = chunkedBody.find("\r\n", pos);
         if (lineEnd == String::npos)
             return false;
 
         String sizeLine = chunkedBody.substr(pos, lineEnd - pos);
-
-        // Remove extensions (e.g., 4A; extension=value)
         size_t semiPos = sizeLine.find(';');
         if (semiPos != String::npos)
             sizeLine = sizeLine.substr(0, semiPos);
@@ -752,7 +749,7 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
         if (sizeLine.empty())
             return false;
 
-        // 2. Parse Hex Size
+        // 2. Parse hex chunk size manually
         unsigned long chunkSize = 0;
         for (size_t i = 0; i < sizeLine.size(); i++) {
             char c = sizeLine[i];
@@ -764,31 +761,34 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
             else if (c >= 'A' && c <= 'F')
                 chunkSize += c - 'A' + 10;
             else
-                return false;
+                return false; // invalid hex digit
         }
 
         pos = lineEnd + 2; // skip \r\n
 
-        // 3. Last Chunk (0)
-        if (chunkSize == 0)
-            return true;
+        // 3. Handle last chunk (0)
+        if (chunkSize == 0) {
+            // Expect a final CRLF (or optional trailer headers + CRLF)
+            if (pos + 2 <= totalLen && chunkedBody.substr(pos, 2) == "\r\n")
+                pos += 2;
+            return pos == totalLen; // ensure all input consumed
+        }
 
-        // 4. Validate limits
-        if (pos + chunkSize > totalLen)
-            return false; // incomplete data
+        // 4. Validate chunk size fits remaining data
+        if (pos + chunkSize + 2 > totalLen)
+            return false;
 
-        // 5. Append Data
+        // 5. Append chunk data
         decodedBody.append(chunkedBody, pos, chunkSize);
         pos += chunkSize;
 
-        // 6. Check trailing CRLF
-        if (pos + 2 > totalLen || chunkedBody.substr(pos, 2) != "\r\n")
+        // 6. Check trailing CRLF after chunk
+        if (chunkedBody.substr(pos, 2) != "\r\n")
             return false;
         pos += 2;
     }
 
-    // Should end with 0 chunk, so if we exit loop, it might be incomplete
-    return false;
+    return false; // should never reach here without a zero chunk
 }
 
 size_t extractContentLength(const String& headers) {

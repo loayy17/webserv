@@ -379,7 +379,6 @@ void ServerManager::processRequest(Client* client, Server* server) {
             return;
         }
         fullRequest = headerSection + "\r\nContent-Length: " + typeToString<size_t>(decodedBody.size()) + "\r\n\r\n" + decodedBody;
-
     } else {
         size_t contentLength = extractContentLength(headerSection);
         requestSize          = headerEnd + headerEndLen + contentLength;
@@ -420,7 +419,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
         std::cout << "the status code is 400" << std::endl;
         return;
     }
-    
+
     // 6. Set Metadata
     request.setPort(server->getPort());
 
@@ -465,6 +464,23 @@ void ServerManager::processRequest(Client* client, Server* server) {
     Router      router(serverToConfigs[server->getFd()], request);
     RouteResult result  = router.processRequest();
     VectorInt   openFds = pollManager.getFds();
+
+    // 8. Chunked body size check using location config
+    if (isChunked) {
+        String maxBodyStr  = result.getLocation()->getClientMaxBody();
+        size_t maxBodySize = convertMaxBodySize(maxBodyStr);
+        if (!maxBodyStr.empty() && request.getBody().size() > maxBodySize) {
+            ResponseBuilder builder;
+            HttpResponse    response = builder.buildError(HTTP_PAYLOAD_TOO_LARGE, "Payload Too Large");
+            response.addHeader("Connection", "close");
+            client->setSendData(response.toString());
+            client->removeReceivedData(requestSize);
+            client->setKeepAlive(false);
+            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+            std::cout << "the status code is 413" << std::endl;
+            return;
+        }
+    }
 
     ResponseBuilder builder(mimeTypes);
     HttpResponse    response = builder.build(result, &client->getCgi(), openFds);

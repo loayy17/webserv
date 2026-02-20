@@ -91,8 +91,8 @@ RouteResult Router::processRequest() {
     // 5. Method check
     if (!isKeyInVector(_request.getMethod(), loc->getAllowedMethods()))
         return result.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED, getHttpStatusMessage(HTTP_METHOD_NOT_ALLOWED));
-
-    // 6. Body size check
+        
+        // 6. Body size check
     if (_request.getContentLength() > 0 && !checkBodySize(*loc))
         return result.setCodeAndMessage(HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE));
 

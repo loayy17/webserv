@@ -67,10 +67,11 @@ jobs:
           chmod +x YoupiBanane/nop/other.pouic
           touch YoupiBanane/Yeah/not_happy.bad_extension
           chmod +x YoupiBanane/Yeah/not_happy.bad_extension
+          
 
       - name: Start webserv
         run: |
-          ./webserv default.conf &
+          ./webserv default.conf > server.log 2>&1 &
           echo $! > server.pid
 
       - name: Wait for server
@@ -96,4 +97,4 @@ jobs:
 
       - name: Stop server
         if: always()
-        run: cat tester.log &&  sleep 50 && kill $(cat server.pid)
+        run: kill $(cat server.pid)

@@ -1,6 +1,6 @@
 #include "ServerConfig.hpp"
 
-ServerConfig::ServerConfig() : listenAddresses(), locations(), serverNames(), root(""), indexes(), clientMaxBodySize(""), errorPages() {}
+ServerConfig::ServerConfig() : listenAddresses(), locations(), serverNames(), root(""), indexes(), clientMaxBodySize(-1), errorPages() {}
 
 ServerConfig::ServerConfig(const ServerConfig& other)
     : listenAddresses(other.listenAddresses),
@@ -36,7 +36,7 @@ bool ServerConfig::setIndexes(const VectorString& i) {
 }
 
 bool ServerConfig::setClientMaxBody(const VectorString& c) {
-    if (!clientMaxBodySize.empty())
+    if (clientMaxBodySize != -1)
         return Logger::error("Duplicate client_max_body_size");
     if (!requireSingleValue(c, "client_max_body_size"))
         return false;
@@ -46,11 +46,11 @@ bool ServerConfig::setClientMaxBody(const VectorString& c) {
     String numberPart = std::isdigit(unit) ? c[0] : c[0].substr(0, c[0].size() - 1);
     if (!stringToType<size_t>(numberPart, dummy))
         return Logger::error("invalid client_max_body_size: " + c[0]);
-    clientMaxBodySize = c[0];
+    clientMaxBodySize = convertMaxBodySize(c[0]);
     return true;
 }
 
-void ServerConfig::setClientMaxBody(const String& c) {
+void ServerConfig::setClientMaxBody(ssize_t c) {
     clientMaxBodySize = c;
 }
 
@@ -101,7 +101,6 @@ bool ServerConfig::setListen(const VectorString& l) {
     ListenAddress addr(interface, port);
     if (listenExists(addr))
         return Logger::error("duplicate listen address: " + l[0]);
-
     listenAddresses.push_back(addr);
     return true;
 }
@@ -176,7 +175,7 @@ String ServerConfig::getRoot() const {
     return root;
 }
 
-String ServerConfig::getClientMaxBody() const {
+ssize_t ServerConfig::getClientMaxBody() const {
     return clientMaxBodySize;
 }
 

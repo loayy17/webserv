@@ -1,11 +1,10 @@
 #include "ServerManager.hpp"
 
 ServerManager::ServerManager()
-    : running(false), pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
+    : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
 
 ServerManager::ServerManager(const ServerManager& other)
-    : running(other.running),
-      pollManager(other.pollManager),
+    : pollManager(other.pollManager),
       servers(other.servers),
       serverConfigs(other.serverConfigs),
       clients(other.clients),
@@ -16,7 +15,6 @@ ServerManager::ServerManager(const ServerManager& other)
 
 ServerManager& ServerManager::operator=(const ServerManager& other) {
     if (this != &other) {
-        running         = other.running;
         pollManager     = other.pollManager;
         servers         = other.servers;
         clients         = other.clients;
@@ -29,15 +27,7 @@ ServerManager& ServerManager::operator=(const ServerManager& other) {
 }
 
 ServerManager::ServerManager(const VectorServerConfig& _configs)
-    : running(false),
-      pollManager(),
-      servers(),
-      serverConfigs(_configs),
-      clients(),
-      clientToServer(),
-      serverToConfigs(),
-      mimeTypes(),
-      sessionManager() {}
+    : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
 
 ServerManager::~ServerManager() {
     shutdown();
@@ -48,116 +38,90 @@ bool ServerManager::initialize() {
         return Logger::error("No server configurations provided");
     if (!initializeServers(serverConfigs) || servers.empty())
         return Logger::error("Failed to initialize servers");
-    running = true;
+    g_running = 1;
     return Logger::info("[INFO]: ServerManager initialized");
 }
 
-ListenerToConfigsMap ServerManager::mapListenersToConfigs(const VectorServerConfig& configs) {
+ListenerToConfigsMap ServerManager::mapListenersToConfigs(const VectorServerConfig& serversConfigs) {
     ListenerToConfigsMap result;
-    for (size_t i = 0; i < configs.size(); i++) {
-        const VectorListenAddress& addresses = configs[i].getListenAddresses();
+    for (size_t i = 0; i < serversConfigs.size(); i++) {
+        const VectorListenAddress& addresses = serversConfigs[i].getListenAddresses();
         for (size_t j = 0; j < addresses.size(); j++) {
             String key = addresses[j].getInterface() + ":" + typeToString<int>(addresses[j].getPort());
-            result[key].push_back(configs[i]);
+            result[key].push_back(serversConfigs[i]);
         }
     }
     return result;
 }
-
-Server* ServerManager::createServerForListener(const String& listenerKey, const VectorServerConfig& configsForListener, PollManager& pollManager) {
-    if (configsForListener.empty())
+Server* ServerManager::initializeServer(const ServerConfig& serverConfig, size_t listenIndex) {
+    Server* server = NULL;
+    try {
+        server = new Server(serverConfig, listenIndex);
+        if (!server->init())
+            throw std::runtime_error("Server initialization failed");
+    } catch (...) {
+        Logger::error("Server init failed for listen " + serverConfig.getListenAddresses()[listenIndex].getListenAddress() + ": " +
+                      "Address already in use or insufficient permissions");
+        if (server) {
+            if (server->getFd() >= 0 && close(server->getFd()) == -1)
+                Logger::error("Failed to close server fd: the fd might not have been created or already closed");
+            delete server;
+        }
         return NULL;
+    }
+    return server;
+}
 
-    const ServerConfig& firstConfig = configsForListener[0];
+Server* ServerManager::createServerForListener(const String& listenerKey, const VectorServerConfig& serversConfigsForListener,
+                                               PollManager& pollManager) {
+    if (serversConfigsForListener.empty())
+        return NULL;
+    const ServerConfig& firstConfig = serversConfigsForListener[0];
 
     const VectorListenAddress& addresses   = firstConfig.getListenAddresses();
     size_t                     listenIndex = 0;
     for (size_t i = 0; i < addresses.size(); i++) {
-        String key = addresses[i].getInterface() + ":" + typeToString<int>(addresses[i].getPort());
-        if (key == listenerKey) {
+        if (addresses[i].getListenAddress() == listenerKey) {
             listenIndex = i;
             break;
         }
     }
-    Server* server = NULL;
-    try {
-        server = new Server(firstConfig, listenIndex);
-        if (!server->init()) {
-            Logger::error("Server init failed for listener " + listenerKey + ": " + "Address already in use or insufficient permissions");
-            if (server) {
-                int fd = server->getFd();
-                if (fd >= 0)
-                    if (close(fd) == -1)
-                        Logger::error("Failed to close server fd: the fd might not have been created or already closed");
-                delete server;
-            }
-            return NULL;
-        }
-    } catch (const std::exception& e) {
-        Logger::error("Exception in createServerForListener: " + String(e.what()));
-        if (server) {
-            int fd = server->getFd();
-            if (fd >= 0)
-                if (close(fd) == -1)
-                    Logger::error("Failed to close server fd: the fd might not have been created or already closed");
-            delete server;
-        }
+    Server* server = initializeServer(firstConfig, listenIndex);
+    if (!server)
         return NULL;
-    } catch (...) {
-        Logger::error("Unknown exception in createServerForListener");
-        if (server) {
-            int fd = server->getFd();
-            if (fd >= 0) {
-                if (close(fd) == -1) {
-                    Logger::error("Failed to close server fd: the fd might not have been created or already closed");
-                }
-            }
-            delete server;
-        }
-        return NULL;
-    }
-
     pollManager.addFd(server->getFd(), POLLIN);
     return server;
 }
 
-bool ServerManager::initializeServers(const VectorServerConfig& configs) {
-    ListenerToConfigsMap listenerToConfigs = mapListenersToConfigs(configs);
-
+bool ServerManager::initializeServers(const VectorServerConfig& serversConfigs) {
+    ListenerToConfigsMap      listenerToConfigs = mapListenersToConfigs(serversConfigs);
     std::map<String, Server*> listenerToServerMap;
-
-    ListenerToConfigsMap::iterator it;
-    for (it = listenerToConfigs.begin(); it != listenerToConfigs.end(); ++it) {
-        const String&             listenerKey        = it->first;
-        const VectorServerConfig& configsForListener = it->second;
-
-        Server* server = createServerForListener(listenerKey, configsForListener, pollManager);
+    for (ListenerToConfigsMap::iterator it = listenerToConfigs.begin(); it != listenerToConfigs.end(); ++it) {
+        const String&             listenerKey               = it->first;
+        const VectorServerConfig& serversConfigsForListener = it->second;
+        Server*                   server                    = createServerForListener(listenerKey, serversConfigsForListener, pollManager);
         if (!server)
             continue;
-
         servers.push_back(server);
         listenerToServerMap[listenerKey] = server;
-        serverToConfigs[server->getFd()] = configsForListener;
+        serverToConfigs[server->getFd()] = serversConfigsForListener;
     }
-
     return !servers.empty();
 }
 
 bool ServerManager::run() {
-    if (!running)
+    if (!g_running)
         return Logger::error("Cannot run server manager");
-
     time_t lastSessionCleanup = getCurrentTime();
+    while (g_running) {
+        int eventCount = pollManager.pollConnections(10);
+        // need refactor to avoid calling getCurrentTime() multiple times in loop, but this is simple
 
-    while (running && g_running) {
-        int eventCount = pollManager.pollConnections(100);
         checkTimeouts(CLIENT_TIMEOUT);
-
         if (getDifferentTime(lastSessionCleanup, getCurrentTime()) > SESSION_CLEANUP_INTERVAL) {
             sessionManager.cleanupExpiredSessions(SESSION_TIMEOUT);
             lastSessionCleanup = getCurrentTime();
         }
-
         if (eventCount <= 0)
             continue;
 
@@ -235,7 +199,6 @@ void ServerManager::handleClientRead(int clientFd) {
         closeClientConnection(clientFd);
         return;
     }
-    // dont process request until the cgi done sending response for client to avoid mixing the response of cgi and the new request if client sent another request before reading the cgi response
     if (client->getCgi().isActive())
         return;
     Server* server = getValue(clientToServer, clientFd, (Server*)NULL);
@@ -292,6 +255,23 @@ void ServerManager::checkTimeouts(int timeout) {
     }
 }
 
+void ServerManager::sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove) {
+    ResponseBuilder builder(mimeTypes);
+    HttpResponse    response = builder.buildError(statusCode, message);
+    if (closeConnection) {
+        response.addHeader("Connection", "close");
+        client->setKeepAlive(false);
+    }
+    client->setSendData(response.toString());
+
+    if (bytesToRemove > 0)
+        client->removeReceivedData(bytesToRemove);
+    else
+        client->clearStoreReceiveData();
+
+    pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+}
+
 void ServerManager::processRequest(Client* client, Server* server) {
     const String& buffer   = client->getStoreReceiveData();
     size_t        dataSize = buffer.size();
@@ -306,45 +286,23 @@ void ServerManager::processRequest(Client* client, Server* server) {
 
     // 2. Handle Incomplete or Too Large Headers
     if (headerEnd == String::npos) {
-        if (dataSize > MAX_HEADER_SIZE) {
-            ResponseBuilder builder;
-            HttpResponse    response = builder.buildError(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, "Request Header Fields Too Large");
-            response.addHeader("Connection", "close");
-            client->setSendData(response.toString());
-            client->clearStoreReceiveData();
-            client->setKeepAlive(false);
-            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-        }
-        std::cout << "the status code is 431" << std::endl;
+        if (dataSize > MAX_HEADER_SIZE)
+            sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, 0);
         return; // Wait for more data
     }
 
     // 3. Check Header Size Limit (Header found)
     if (headerEnd > MAX_HEADER_SIZE) {
-        ResponseBuilder builder;
-        HttpResponse    response = builder.buildError(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, "Request Header Fields Too Large");
-        response.addHeader("Connection", "close");
-        client->setSendData(response.toString());
-        client->removeReceivedData(headerEnd + headerEndLen);
-        client->setKeepAlive(false);
-        pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-        std::cout << "the status code is 431" << std::endl;
+        sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true,
+                          headerEnd + headerEndLen);
         return;
     }
 
-    String headerSection      = buffer.substr(0, headerEnd);
-    bool   isChunked          = isChunkedTransferEncoding(headerSection);
-    size_t contentLengthCheck = extractContentLength(headerSection);
-
-    if (isChunked && contentLengthCheck > 0) {
-        ResponseBuilder builder;
-        HttpResponse    response = builder.buildError(HTTP_BAD_REQUEST, "Request has both Transfer-Encoding and Content-Length");
-        response.addHeader("Connection", "close");
-        client->setSendData(response.toString());
-        client->clearStoreReceiveData();
-        client->setKeepAlive(false);
-        pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-        std::cout << "the status code is 400" << std::endl;
+    String  headerSection = buffer.substr(0, headerEnd);
+    bool    isChunked     = isChunkedTransferEncoding(headerSection);
+    ssize_t contentLengthCheck;
+    if (extractContentLength(contentLengthCheck, headerSection) && isChunked) {
+        sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
         return;
     }
 
@@ -362,55 +320,35 @@ void ServerManager::processRequest(Client* client, Server* server) {
         String decodedBody;
 
         if (!decodeChunkedBody(chunkedBody, decodedBody)) {
-            ResponseBuilder builder;
-            HttpResponse    response = builder.buildError(HTTP_BAD_REQUEST, "Invalid chunked encoding");
-            response.addHeader("Connection", "close");
-            client->setSendData(response.toString());
-            client->clearStoreReceiveData(); // Lost sync
-            client->setKeepAlive(false);
-            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-            std::cout << "the status code is 400" << std::endl;
+            sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
             return;
         }
+
         fullRequest = headerSection + "\r\nContent-Length: " + typeToString<size_t>(decodedBody.size()) + "\r\n\r\n" + decodedBody;
     } else {
-        size_t contentLength = extractContentLength(headerSection);
-        requestSize          = headerEnd + headerEndLen + contentLength;
-        String maxBodyStr    = clientToServer[client->getFd()]->getConfig().getClientMaxBody();
-        size_t maxBodySize   = convertMaxBodySize(maxBodyStr);
-
-        if (!maxBodyStr.empty() && contentLength > maxBodySize) {
-            ResponseBuilder builder;
-            HttpResponse    response = builder.buildError(HTTP_PAYLOAD_TOO_LARGE, "Payload Too Large");
-            response.addHeader("Connection", "close");
-            client->setSendData(response.toString());
-            if (dataSize >= requestSize)
-                client->removeReceivedData(requestSize);
-            else
-                client->clearStoreReceiveData();
-            client->setKeepAlive(false);
-            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-            std::cout << "the status code is 413" << std::endl;
+        ssize_t contentLength;
+        if (!extractContentLength(contentLength, headerSection)) {
+            sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
             return;
         }
-
+        requestSize         = headerEnd + headerEndLen + contentLength;
+        ssize_t maxBodysize = clientToServer[client->getFd()]->getConfig().getClientMaxBody();
+        if (maxBodysize != -1 && contentLength > maxBodysize) {
+            if (dataSize >= requestSize)
+                sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, requestSize);
+            else
+                sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, 0);
+            return;
+        }
         if (dataSize < requestSize)
             return;
-
         fullRequest = buffer.substr(0, requestSize);
     }
 
     // 5. Parse Request
     HttpRequest request;
     if (!request.parse(fullRequest)) {
-        ResponseBuilder builder;
-        HttpResponse    response = builder.buildError(HTTP_BAD_REQUEST, "Bad Request");
-        response.addHeader("Connection", "close");
-        client->setSendData(response.toString());
-        client->setKeepAlive(false);
-        client->removeReceivedData(requestSize);
-        pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-        std::cout << "the status code is 400" << std::endl;
+        sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, requestSize);
         return;
     }
 
@@ -418,7 +356,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
     request.setPort(server->getPort());
 
     // 7. Determine Keep-Alive
-    bool   keepAlive  = (request.getHttpVersion() == "HTTP/1.1");
+    bool   keepAlive  = (request.getHttpVersion() == HTTP_VERSION_1_1);
     String connHeader = request.getHeader("connection");
     if (!connHeader.empty()) {
         String connLower = toLowerWords(connHeader);
@@ -426,6 +364,10 @@ void ServerManager::processRequest(Client* client, Server* server) {
             keepAlive = false;
         else if (connLower == "keep-alive")
             keepAlive = true;
+        else {
+            sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, requestSize);
+            return;
+        }
     }
     client->setKeepAlive(keepAlive);
 
@@ -461,24 +403,15 @@ void ServerManager::processRequest(Client* client, Server* server) {
 
     // 8. Chunked body size check using location config
     if (isChunked) {
-        String maxBodyStr  = result.getLocation()->getClientMaxBody();
-        size_t maxBodySize = convertMaxBodySize(maxBodyStr);
-        if (!maxBodyStr.empty() && request.getBody().size() > maxBodySize) {
-            ResponseBuilder builder;
-            HttpResponse    response = builder.buildError(HTTP_PAYLOAD_TOO_LARGE, "Payload Too Large");
-            response.addHeader("Connection", "close");
-            client->setSendData(response.toString());
-            client->removeReceivedData(requestSize);
-            client->setKeepAlive(false);
-            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-            std::cout << "the status code is 413" << std::endl;
+        size_t maxBodySize = result.getLocation()->getClientMaxBody();
+        if (request.getBody().size() > maxBodySize) {
+            sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, requestSize);
             return;
         }
     }
 
     ResponseBuilder builder(mimeTypes);
     HttpResponse    response = builder.build(result, &client->getCgi(), openFds);
-
     if (!newSessionId.empty())
         response.addSetCookie(SessionManager::buildSetCookieHeader(newSessionId));
 
@@ -488,7 +421,6 @@ void ServerManager::processRequest(Client* client, Server* server) {
         response.addHeader("Connection", "close");
 
     if (client->getCgi().isActive()) {
-        std::cout << "the status code is " << response.getStatusCode() << std::endl;
         registerCgiPipes(client);
         client->removeReceivedData(requestSize);
         return;
@@ -497,7 +429,6 @@ void ServerManager::processRequest(Client* client, Server* server) {
     client->setSendData(response.toString());
     client->removeReceivedData(requestSize);
     pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-    std::cout << "the status code is " << response.getStatusCode() << std::endl;
 }
 
 void ServerManager::closeClientConnection(int clientFd) {
@@ -613,11 +544,11 @@ bool ServerManager::isServerSocket(int fd) const {
 }
 
 void ServerManager::shutdown() {
-    if (!running)
+    if (!g_running)
         return;
 
-    std::cout << "[INFO]: Shutting down..." << std::endl;
-    running = false;
+    Logger::info("Shutting down...");
+    g_running = 0;
 
     for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
         if (it->second->getCgi().isActive())
@@ -634,7 +565,7 @@ void ServerManager::shutdown() {
         delete servers[i];
     }
     servers.clear();
-    std::cout << "[INFO]: Shutdown complete" << std::endl;
+    Logger::info("Shutdown complete");
 }
 
 size_t ServerManager::getServerCount() const {

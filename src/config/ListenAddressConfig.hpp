@@ -2,6 +2,8 @@
 #define LISTEN_ADDRESS_CONFIG_HPP
 #include <iostream>
 #include "../utils/Types.hpp"
+#include "../utils/Utils.hpp"
+
 class ListenAddress {
    public:
     ListenAddress();
@@ -13,6 +15,7 @@ class ListenAddress {
     const String& getInterface() const;
     int           getPort() const;
     int           getServerFd() const;
+    String        getListenAddress() const;
 
     // Setters
     void setServerFd(int fd);

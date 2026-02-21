@@ -11,7 +11,7 @@ LocationConfig::LocationConfig()
       indexes(),
       uploadDir(),
       cgiPass(),
-      clientMaxBody(),
+      clientMaxBody(-1),
       allowedMethods(),
       errorPage(),
       hasRedirect(false),
@@ -41,7 +41,7 @@ LocationConfig::LocationConfig(const String& p)
       indexes(),
       uploadDir(),
       cgiPass(),
-      clientMaxBody(),
+      clientMaxBody(-1),
       allowedMethods(),
       errorPage(),
       hasRedirect(false),
@@ -163,17 +163,17 @@ bool LocationConfig::setRedirect(const VectorString& r) {
 }
 
 bool LocationConfig::setClientMaxBody(const VectorString& c) {
-    if (!clientMaxBody.empty())
+    if (clientMaxBody != -1)
         return Logger::error("Duplicate client_max_body_size");
     if (!requireSingleValue(c, "client_max_body_size"))
         return false;
     if (convertMaxBodySize(c[0]) == 0 && c[0] != "0")
         return Logger::error("invalid client_max_body_size value: " + c[0]);
-    clientMaxBody = c[0];
+    clientMaxBody = convertMaxBodySize(c[0]);
     return true;
 }
 
-void LocationConfig::setClientMaxBody(const String& c) {
+void LocationConfig::setClientMaxBody(ssize_t c) {
     clientMaxBody = c;
 }
 
@@ -243,7 +243,7 @@ VectorString LocationConfig::getAllowedMethods() const {
     return allowedMethods;
 }
 
-String LocationConfig::getClientMaxBody() const {
+ssize_t LocationConfig::getClientMaxBody() const {
     return clientMaxBody;
 }
 

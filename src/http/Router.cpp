@@ -77,7 +77,7 @@ RouteResult Router::processRequest() {
     if (loc->hasCgi()) {
         String scriptPath, pathInfo;
         resolveCgiScriptAndPathInfo(loc, scriptPath, pathInfo);
-        
+
         if (isCgiRequest(scriptPath, *loc)) {
             result.setPathRootUri(scriptPath);
             result.setRemainingPath(pathInfo);
@@ -91,9 +91,9 @@ RouteResult Router::processRequest() {
     // 5. Method check
     if (!isKeyInVector(_request.getMethod(), loc->getAllowedMethods()))
         return result.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED, getHttpStatusMessage(HTTP_METHOD_NOT_ALLOWED));
-        
-        // 6. Body size check
-    if (_request.getContentLength() > 0 && !checkBodySize(*loc))
+
+    // 6. Body size check
+    if (_request.getContentLength() > 0 && static_cast<ssize_t>(_request.getContentLength()) > loc->getClientMaxBody())
         return result.setCodeAndMessage(HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE));
 
     // 7. Upload handling (POST/PUT to a location with upload_dir)
@@ -186,17 +186,11 @@ String Router::resolveFilesystemPath(const LocationConfig* loc) const {
     if (!loc)
         return "";
 
-    String root    = loc->getRoot(); // ./www
-    String locPath = normalizePath(loc->getPath()); // path for location like /uploads 
+    String root    = loc->getRoot();                   // ./www
+    String locPath = normalizePath(loc->getPath());    // path for location like /uploads
     String uri     = normalizePath(_request.getUri()); // actual request URI like /uploads/file.txt
-    String rest    = getUriRemainder(uri, locPath); // the part of URI after location path, e.g. /file.txt
+    String rest    = getUriRemainder(uri, locPath);    // the part of URI after location path, e.g. /file.txt
     return joinPaths(root, rest); // join root with the remaining URI to get the filesystem path, e.g. ./www + /file.txt => ./www/file.txt
-}
-
-// Body size
-bool Router::checkBodySize(const LocationConfig& loc) const {
-    String maxBody = loc.getClientMaxBody();
-    return maxBody.empty() || _request.getContentLength() <= convertMaxBodySize(maxBody);
 }
 
 // Check CGI request

@@ -461,13 +461,13 @@ bool setNonBlocking(int fd) {
     return true;
 }
 
-size_t convertMaxBodySize(const String& maxBody) {
-    if (maxBody.empty())
+size_t convertMaxBodySize(const String& clientMaxBodySize) {
+    if (clientMaxBodySize.empty())
         return 0;
 
     size_t size       = 0;
-    char   unit       = maxBody[maxBody.size() - 1];
-    String numberPart = std::isdigit(unit) ? maxBody : maxBody.substr(0, maxBody.size() - 1);
+    char   unit       = clientMaxBodySize[clientMaxBodySize.size() - 1];
+    String numberPart = std::isdigit(unit) ? clientMaxBodySize : clientMaxBodySize.substr(0, clientMaxBodySize.size() - 1);
 
     std::stringstream ss(numberPart);
     ss >> size;
@@ -741,7 +741,7 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
             return false;
 
         String sizeLine = chunkedBody.substr(pos, lineEnd - pos);
-        size_t semiPos = sizeLine.find(';');
+        size_t semiPos  = sizeLine.find(';');
         if (semiPos != String::npos)
             sizeLine = sizeLine.substr(0, semiPos);
 
@@ -791,15 +791,11 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
     return false; // should never reach here without a zero chunk
 }
 
-size_t extractContentLength(const String& headers) {
-    size_t content_length;
-    // TODO make the content length if invalid to be -1 and handle it in the caller instead of returning 0 which is a valid content length
+bool extractContentLength(ssize_t& contentLength, const String& headers) {
     String val;
-    if (!getHeaderValue(headers, "content-length", val))
-        return 0;
-    if (!stringToType<size_t>(val, content_length))
-        return 0;
-    return content_length;
+    if (!getHeaderValue(headers, "content-length", val) || val.empty() || !stringToType<ssize_t>(val, contentLength))
+        return false;
+    return true;
 }
 
 String urlDecode(const String& input) {

@@ -37,7 +37,6 @@ class ServerManager {
     size_t getClientCount() const;
 
    private:
-    bool                     running;
     PollManager              pollManager;
     std::vector<Server*>     servers;
     const VectorServerConfig serverConfigs;
@@ -59,7 +58,8 @@ class ServerManager {
     bool    isServerSocket(int fd) const;
     bool    isCgiPipe(int fd) const;
     void    processRequest(Client* client, Server* server);
-
+    Server *initializeServer(const ServerConfig& serverConfig, size_t listenIndex);
+    void sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove);
     // CGI pipe helpers
     void registerCgiPipes(Client* client);
     void handleCgiRead(int pipeFd);
@@ -69,7 +69,7 @@ class ServerManager {
 
     Server*              createServerForListener(const String& listenerKey, const VectorServerConfig& configs, PollManager& pollMgr);
     ListenerToConfigsMap getListerToConfigs();
-    ListenerToConfigsMap mapListenersToConfigs(const VectorServerConfig& configs);
+    ListenerToConfigsMap mapListenersToConfigs(const VectorServerConfig& serversConfigs);
 };
 
 #endif

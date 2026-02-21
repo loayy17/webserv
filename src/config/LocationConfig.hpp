@@ -26,7 +26,7 @@ class LocationConfig {
     bool setRedirect(const VectorString& r);
     bool setErrorPage(const VectorString& values);
 
-    void setClientMaxBody(const String& c);
+    void setClientMaxBody(ssize_t c);
     bool setClientMaxBody(const VectorString& c);
 
     bool             setAllowedMethods(const VectorString& m);
@@ -38,7 +38,7 @@ class LocationConfig {
     const MapString& getCgiPass() const;
     String           getCgiInterpreter(const String& extension) const;
     bool             hasCgi() const;
-    String           getClientMaxBody() const;
+    ssize_t          getClientMaxBody() const;
     VectorString     getAllowedMethods() const;
     String           getErrorPage(int code) const;
     bool             getIsRedirect() const;
@@ -55,7 +55,7 @@ class LocationConfig {
     VectorString indexes;        // default: root if not set be default "index.html"
     String       uploadDir;      // upload directory path
     MapString    cgiPass;        // maps extension to interpreter path
-    String       clientMaxBody;  // default: ""
+    ssize_t      clientMaxBody;  // default: ""
     VectorString allowedMethods; // default: GET
     MapIntString errorPage;      // maps error code to error page path
     bool         hasRedirect;

@@ -14,15 +14,16 @@ void printLine() {
 /* ----------------------------------------------------
  * Print location
  * ---------------------------------------------------- */
-void printLocation(const LocationConfig& loc, const String& resolvedBody) {
+void printLocation(const LocationConfig& loc, const ssize_t& resolvedBody) {
     std::cout << "  Location: " << loc.getPath() << "\n";
     std::cout << "    root       : " << loc.getRoot() << "\n";
     std::cout << "    autoindex  : " << (loc.getAutoIndex() ? "on" : "off") << "\n";
-    std::cout << "    return     : " << (loc.getIsRedirect() ? (loc.getRedirectValue() + " " + typeToString<int>(loc.getRedirectCode())) : "none") << "\n";
+    std::cout << "    return     : " << (loc.getIsRedirect() ? (loc.getRedirectValue() + " " + typeToString<int>(loc.getRedirectCode())) : "none")
+              << "\n";
     for (size_t i = 0; i < loc.getAllowedMethods().size(); i++) {
         std::cout << "    method     : " << loc.getAllowedMethods()[i] << "\n";
     }
-    if (loc.getClientMaxBody().empty() == false)
+    if (loc.getClientMaxBody() != -1)
         std::cout << "    client_max : " << loc.getClientMaxBody() << " (location)\n";
     else
         std::cout << "    client_max : " << resolvedBody << " (fallback)\n";
@@ -38,7 +39,7 @@ void printServer(const ServerConfig& srv, const ConfigParser& http) {
     std::cout << "  server_name  : " << srv.getServerName() << "\n";
     std::cout << "  root         : " << srv.getRoot() << "\n";
 
-    if (srv.getClientMaxBody().empty() == false)
+    if (srv.getClientMaxBody() != -1)
         std::cout << "  client_max   : " << srv.getClientMaxBody() << " (server)\n";
     else
         std::cout << "  client_max   : " << http.getHttpClientMaxBody() << " (http fallback)\n";
@@ -46,12 +47,12 @@ void printServer(const ServerConfig& srv, const ConfigParser& http) {
     const std::vector<LocationConfig>& locs = srv.getLocations();
 
     for (size_t i = 0; i < locs.size(); i++) {
-        String resolved = http.getHttpClientMaxBody();
+        ssize_t resolved = http.getHttpClientMaxBody();
 
-        if (srv.getClientMaxBody().empty() == false)
+        if (srv.getClientMaxBody() != -1)
             resolved = srv.getClientMaxBody();
 
-        if (locs[i].getClientMaxBody().empty() == false)
+        if (locs[i].getClientMaxBody() != -1)
             resolved = locs[i].getClientMaxBody();
 
         printLocation(locs[i], resolved);

@@ -19,7 +19,7 @@ class ServerConfig {
     // setters
     bool setIndexes(const VectorString& i);
     bool setClientMaxBody(const VectorString& c);
-    void setClientMaxBody(const String& c);
+    void setClientMaxBody(ssize_t c);
     bool setServerName(const VectorString& name);
     bool setRoot(const VectorString& root);
     void setRoot(const String& root);
@@ -39,7 +39,7 @@ class ServerConfig {
     bool                        hasServerName(const String& name) const;
     String                      getRoot() const;
     VectorString                getIndexes() const;
-    String                      getClientMaxBody() const;
+    ssize_t                     getClientMaxBody() const;
     const MapIntString&         getErrorPages() const;
     String                      getErrorPage(int code) const;
     bool                        hasErrorPage(int code) const;
@@ -54,7 +54,7 @@ class ServerConfig {
     VectorString serverNames;       // default: empty, can have multiple names
     String       root;              // default: use for location if not set(be required)
     VectorString indexes;           // default: "index.html"
-    String       clientMaxBodySize; // default: "1M" or inherited from http config
+    ssize_t      clientMaxBodySize; // default: "1M" or inherited from http config
     MapIntString errorPages;        // maps error code to page path
 };
 #endif

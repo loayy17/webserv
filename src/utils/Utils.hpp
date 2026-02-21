@@ -68,7 +68,7 @@ bool   parseMultipartFormData(const String& body, const String& boundary, String
 bool   isChunkedTransferEncoding(const String& headers);
 bool   decodeChunkedBody(const String& chunkedBody, String& decodedBody);
 bool   getHeaderValue(const String& headers, const String& headerName, String& outValue);
-size_t extractContentLength(const String& headers);
+bool   extractContentLength(ssize_t& contentLength, const String& headers);
 bool   requireSingleValue(const VectorString& v, const String& directive);
 // --- Templates ---
 

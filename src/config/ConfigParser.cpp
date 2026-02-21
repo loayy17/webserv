@@ -1,6 +1,6 @@
 #include "ConfigParser.hpp"
 
-ConfigParser::ConfigParser(const String& filename) : _lexer(filename), _haveHttp(false), _httpClientMaxBody("") {
+ConfigParser::ConfigParser(const String& filename) : _lexer(filename), _haveHttp(false), _httpClientMaxBody(-1) {
     nextToken();
 
     // ---- Server directives ----
@@ -79,9 +79,9 @@ bool ConfigParser::parseHttp() {
             nextToken();
             if (_current.getType() != TOKEN_WORD && _current.getType() != TOKEN_STRING)
                 return error("Expected size value after client_max_body_size");
-            if (!_httpClientMaxBody.empty())
+            if (_httpClientMaxBody != -1)
                 return error("Duplicate client_max_body_size in http block");
-            _httpClientMaxBody = _current.getValue();
+            _httpClientMaxBody = convertMaxBodySize(_current.getValue());
             nextToken();
             if (!expect(TOKEN_SEMICOLON, "';' after client_max_body_size"))
                 return false;
@@ -183,8 +183,8 @@ bool ConfigParser::validate() {
     if (_servers.empty())
         return Logger::error("No server defined");
 
-    if (_httpClientMaxBody.empty())
-        _httpClientMaxBody = "1M";
+    if (_httpClientMaxBody == -1)
+        _httpClientMaxBody = 1024 * 1024; // default 1M
 
     for (size_t i = 0; i < _servers.size(); ++i) {
         ServerConfig& srv = _servers[i];
@@ -192,7 +192,7 @@ bool ConfigParser::validate() {
             return Logger::error("Server missing listen directive");
         if (srv.getLocations().empty())
             return Logger::error("Server must have at least one location");
-        if (srv.getClientMaxBody().empty())
+        if (srv.getClientMaxBody() == -1)
             srv.setClientMaxBody(_httpClientMaxBody);
 
         VectorLocationConfig& locs = srv.getLocations();
@@ -205,7 +205,7 @@ bool ConfigParser::validate() {
             }
             if (loc.getAllowedMethods().empty())
                 loc.setAllowedMethods(VectorString(1, "GET"));
-            if (loc.getClientMaxBody().empty())
+            if (loc.getClientMaxBody() == -1)
                 loc.setClientMaxBody(srv.getClientMaxBody());
             if (loc.getIndexes().empty()) {
                 if (srv.getIndexes().empty())
@@ -222,6 +222,6 @@ const VectorServerConfig& ConfigParser::getServers() const {
     return _servers;
 }
 
-const String& ConfigParser::getHttpClientMaxBody() const {
+const ssize_t& ConfigParser::getHttpClientMaxBody() const {
     return _httpClientMaxBody;
 }

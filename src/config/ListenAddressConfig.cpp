@@ -24,3 +24,6 @@ int ListenAddress::getServerFd() const {
 void ListenAddress::setServerFd(int fd) {
     _serverFd = fd;
 }
+String ListenAddress::getListenAddress() const {
+    return _interface + ":" + typeToString<int>(_port);
+}

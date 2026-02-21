@@ -184,8 +184,6 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
             return Logger::error("Invalid port number in Host header");
         }
     }
-
-    std::cout << "Parsed Request: " << method << " " << uri << " " << httpVersion << std::endl;
     return true;
 }
 

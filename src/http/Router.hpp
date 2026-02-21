@@ -26,7 +26,6 @@ class Router {
     const ServerConfig*   getDefaultServer(int port) const;
     const LocationConfig* bestMatchLocation(const VectorLocationConfig& locations) const;
     String                resolveFilesystemPath(const LocationConfig* loc) const;
-    bool                  checkBodySize(const LocationConfig& loc) const;
     bool                  isCgiRequest(const String& path, const LocationConfig& loc) const;
     void                  resolveCgiScriptAndPathInfo(const LocationConfig* loc, String& scriptPath, String& pathInfo) const;
     VectorServerConfig    _servers; // params from config

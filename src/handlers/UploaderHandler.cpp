@@ -5,6 +5,13 @@
 #include "../utils/Utils.hpp"
 
 UploaderHandler::UploaderHandler() {}
+UploaderHandler::UploaderHandler(const UploaderHandler& other) {
+    (void)other;
+}
+UploaderHandler& UploaderHandler::operator=(const UploaderHandler& other) {
+    (void)other;
+    return *this;
+}
 UploaderHandler::~UploaderHandler() {}
 
 bool UploaderHandler::handle(const String& uploadDir, const String& filename, const String& content, HttpResponse& response) const {

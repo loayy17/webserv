@@ -18,6 +18,8 @@ class ResponseBuilder {
    public:
     ResponseBuilder();
     ResponseBuilder(const MimeTypes& _mimeTypes);
+    ResponseBuilder(const ResponseBuilder& other);
+    ResponseBuilder& operator=(const ResponseBuilder& other);
     ~ResponseBuilder();
 
     HttpResponse build(const RouteResult& resultRouter, CgiProcess* cgi = NULL, const VectorInt& openFds = VectorInt());

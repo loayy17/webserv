@@ -2,6 +2,13 @@
 
 ResponseBuilder::ResponseBuilder() : mimeTypes() {}
 ResponseBuilder::ResponseBuilder(const MimeTypes& _mimeTypes) : mimeTypes(_mimeTypes) {}
+ResponseBuilder::ResponseBuilder(const ResponseBuilder& other) : mimeTypes(other.mimeTypes) {}
+ResponseBuilder& ResponseBuilder::operator=(const ResponseBuilder& other) {
+    if (this != &other) {
+        mimeTypes = other.mimeTypes;
+    }
+    return *this;
+}
 ResponseBuilder::~ResponseBuilder() {}
 
 HandlerType getHandlerType(const RouteResult& resultRouter) {

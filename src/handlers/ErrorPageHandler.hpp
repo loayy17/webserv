@@ -8,8 +8,10 @@
 
 class ErrorPageHandler {
    public:
-    ErrorPageHandler() {}
-    ~ErrorPageHandler() {}
+    ErrorPageHandler();
+    ErrorPageHandler(const ErrorPageHandler& other);
+    ErrorPageHandler &operator=(const ErrorPageHandler& other);
+    ~ErrorPageHandler();
 
     // Generates HTML string for error
     std::string generateHtml(int code, const std::string& msg) const;

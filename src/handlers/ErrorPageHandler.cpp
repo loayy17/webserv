@@ -114,13 +114,14 @@ void ErrorPageHandler::handle(HttpResponse& response, const RouteResult& resultR
     std::string msg  = resultRouter.getErrorMessage().empty() ? getHttpStatusMessage(code) : resultRouter.getErrorMessage();
 
     std::string body;
+    response.addHeader("Server", "Webserv/1.0");
     // Check for custom error page in location first, then server
     const std::string customPage = resultRouter.getLocation() ? resultRouter.getLocation()->getErrorPage(code) : "";
     if (!customPage.empty() && readFileContent(customPage, body)) {
         response.setStatus(code, msg);
         response.addHeader("Content-Type", mimeTypes.get(customPage));
         response.addHeader("Content-Length", typeToString<size_t>(body.size()));
-        if (resultRouter.getRequest().getMethod() != "HEAD") 
+        if (resultRouter.getRequest().getMethod() != "HEAD")
             response.setBody(body);
         
         return;

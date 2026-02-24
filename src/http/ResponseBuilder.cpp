@@ -19,6 +19,7 @@ HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess*
         response.setStatus(resultRouter.getStatusCode(), getHttpStatusMessage(resultRouter.getStatusCode()));
         response.addHeader("Location", resultRouter.getRedirectUrl());
         response.addHeader("Content-Length", "0");
+        response.addHeader("Server", "Webserv/1.0");
         return response;
     }
 

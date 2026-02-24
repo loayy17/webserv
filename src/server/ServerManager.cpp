@@ -274,6 +274,7 @@ void ServerManager::sendErrorResponse(Client* client, int statusCode, const Stri
         client->clearStoreReceiveData();
 
     pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+    response.addHeader("Server", "Webserv/1.0");
 }
 
 void ServerManager::processRequest(Client* client, Server* server) {
@@ -371,7 +372,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
     // 4. Parse HTTP request
     HttpRequest request;
     if (!request.parse(fullRequest)) {
-        sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, requestSize);
+        sendErrorResponse(client, request.getErrorCode(), getHttpStatusMessage(request.getErrorCode()), true, requestSize);
         return;
     }
 

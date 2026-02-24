@@ -35,5 +35,6 @@ bool UploaderHandler::handle(const String& uploadDir, const String& filename, co
     response.setStatus(HTTP_CREATED, "Created");
     response.setResponseHeaders("text/plain", successMsg.size());
     response.setBody(successMsg);
+    response.addHeader("Server", "Webserv/1.0");
     return true;
 }

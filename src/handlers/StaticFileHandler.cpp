@@ -22,6 +22,7 @@ bool StaticFileHandler::handle(const RouteResult& resultRouter, HttpResponse& re
     if (!readFileContent(path, content))
         return false;
     response.setStatus(HTTP_OK, "OK");
+    response.addHeader("Server", "Webserv/1.0");
     response.setResponseHeaders(mimeTypes.get(path), content.size());
     if (method != "HEAD") {
         response.setBody(content);

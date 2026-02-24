@@ -84,6 +84,8 @@ RouteResult Router::processRequest() {
 
     // 4. Method check
     String methodToCheck = _request.getMethod();
+    // if (methodToCheck == "HEAD")
+    //     methodToCheck = "GET";
     if (!isKeyInVector(methodToCheck, loc->getAllowedMethods()))
         return result.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED, getHttpStatusMessage(HTTP_METHOD_NOT_ALLOWED));
 

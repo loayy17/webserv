@@ -13,7 +13,6 @@
 class Router {
    public:
     Router();
-    Router(int statusCode, String errorMessage);
     Router(const Router& other);
     Router& operator=(const Router& other);
     Router(const VectorServerConfig& servers, const HttpRequest& request);

@@ -54,7 +54,8 @@ bool DirectoryListingHandler::handle(const RouteResult& resultRouter, HttpRespon
     String                   uri  = resultRouter.getRequest().getUri();
     if (path.empty() || !readDirectoryEntries(path, uri, entries))
         return false;
-    uri = uri == "/" ? uri : uri.substr(0, uri.length() - 1);
+    if (uri.size() > 1 && uri[uri.size() - 1] == '/')
+        uri = uri.substr(0, uri.size() - 1);
     uri = htmlEntities(uri);
     String html =
         "<!DOCTYPE html>\n"
@@ -101,7 +102,8 @@ bool DirectoryListingHandler::handle(const RouteResult& resultRouter, HttpRespon
 
     response.setStatus(HTTP_OK, "OK");
     response.setResponseHeaders("text/html", html.size());
-    response.setBody(html);
+    if (resultRouter.getRequest().getMethod() != "HEAD")
+        response.setBody(html);
 
     return true;
 }

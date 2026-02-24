@@ -2,6 +2,7 @@
 #define ROUTE_RESULT_HPP
 #include "../config/LocationConfig.hpp"
 #include "../config/ServerConfig.hpp"
+#include "../utils/Enums.hpp"
 #include "../utils/Types.hpp"
 #include "HttpRequest.hpp"
 
@@ -25,6 +26,7 @@ class RouteResult {
     void setCgiRequest(bool isCgi);
     void setUploadRequest(bool isUpload);
     void setRequest(const HttpRequest& req);
+    void setHandlerType(HandlerType type);
 
     // Getters
     int                   getStatusCode() const;
@@ -39,6 +41,7 @@ class RouteResult {
     bool                  getIsCgiRequest() const;
     bool                  getIsUploadRequest() const;
     const HttpRequest&    getRequest() const;
+    HandlerType           getHandlerType() const;
 
    private:
     int                   statusCode;
@@ -53,5 +56,6 @@ class RouteResult {
     bool                  isCgiRequest;
     bool                  isUploadRequest;
     HttpRequest           request;
+    HandlerType           handlerType;
 };
 #endif

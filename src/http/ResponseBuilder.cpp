@@ -11,23 +11,6 @@ ResponseBuilder& ResponseBuilder::operator=(const ResponseBuilder& other) {
 }
 ResponseBuilder::~ResponseBuilder() {}
 
-HandlerType getHandlerType(const RouteResult& resultRouter) {
-    if (resultRouter.getIsUploadRequest())
-        return UPLOAD;
-    if (resultRouter.getIsCgiRequest())
-        return CGI;
-    String path        = resultRouter.getPathRootUri();
-    String method      = resultRouter.getRequest().getMethod();
-    bool   isAutoIndex = resultRouter.getLocation()->getAutoIndex();
-    if (getFileType(path) == DIRECTORY && isAutoIndex && (method == "GET" || method == "HEAD"))
-        return DIRECTORY_LISTING;
-    if (getFileType(path) == SINGLEFILE && (method == "GET" || method == "HEAD"))
-        return STATIC;
-    if (getFileType(path) == SINGLEFILE && method == "DELETE")
-        return DELETE_FILE;
-    return NOT_FOUND;
-}
-
 HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess* cgi, const VectorInt& openFds) {
     HttpResponse response;
 
@@ -44,7 +27,9 @@ HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess*
         handleError(response, resultRouter);
         return response;
     }
-    HandlerType handleType = getHandlerType(resultRouter);
+
+    // Dispatch based on handler type set by Router
+    HandlerType handleType = resultRouter.getHandlerType();
     switch (handleType) {
         case DIRECTORY_LISTING:
             if (handleDirectory(response, resultRouter))
@@ -69,12 +54,12 @@ HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess*
         default:
             break;
     }
+
+    // Fallback: handler failed or type was NOT_FOUND
     RouteResult errResult = resultRouter;
     if (resultRouter.getStatusCode() == HTTP_OK) {
-        String path   = resultRouter.getPathRootUri();
         String method = resultRouter.getRequest().getMethod();
-        if (getFileType(path) == SINGLEFILE &&
-            method != "GET" && method != "DELETE" && method != "HEAD") {
+        if (handleType == NOT_FOUND && method != "GET" && method != "DELETE" && method != "HEAD") {
             errResult.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED,
                                         getHttpStatusMessage(HTTP_METHOD_NOT_ALLOWED));
         } else {
@@ -146,23 +131,6 @@ bool ResponseBuilder::handleUpload(HttpResponse& response, const RouteResult& re
 void ResponseBuilder::handleError(HttpResponse& response, const RouteResult& resultRouter) {
     ErrorPageHandler handler;
     handler.handle(response, resultRouter, mimeTypes);
-}
-
-String ResponseBuilder::getErrorPagePath(const RouteResult& resultRouter, int code) const {
-    if (!resultRouter.getLocation())
-        return "";
-
-    const LocationConfig* loc = resultRouter.getLocation();
-
-    String path = loc->getErrorPage(code);
-    if (!path.empty() && getFileType(path) == SINGLEFILE)
-        return path;
-
-    path = resultRouter.getServer()->getErrorPage(code);
-    if (!path.empty() && getFileType(path) == SINGLEFILE)
-        return path;
-
-    return "";
 }
 
 bool ResponseBuilder::handleCgi(HttpResponse& response, const RouteResult& resultRouter, CgiProcess* cgi, const VectorInt& openFds) const {

@@ -185,8 +185,7 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     // Calculate SCRIPT_NAME (URI part before PATH_INFO)
     String uri        = req.getUri();
     String pathInfo   = resultRouter.getRemainingPath();
-    String scriptName = uri;
-
+    String scriptName = uri.substr(0, uri.size() - pathInfo.size());
     env.push_back("REQUEST_URI=" + uri);
     env.push_back("QUERY_STRING=" + req.getQueryString());
     env.push_back("SCRIPT_NAME=" + scriptName);

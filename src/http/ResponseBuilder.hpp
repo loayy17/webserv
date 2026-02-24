@@ -35,9 +35,6 @@ class ResponseBuilder {
     bool handleUpload(HttpResponse& response, const RouteResult& resultRouter) const;
     bool handleCgi(HttpResponse& response, const RouteResult& resultRouter, CgiProcess* cgi, const VectorInt& openFds) const;
     void handleError(HttpResponse& response, const RouteResult& resultRouter);
-
-    // Helpers
-    String getErrorPagePath(const RouteResult& resultRouter, int code) const;
 };
 
 #endif

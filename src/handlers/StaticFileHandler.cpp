@@ -18,13 +18,13 @@ StaticFileHandler::~StaticFileHandler() {}
 bool StaticFileHandler::handle(const RouteResult& resultRouter, HttpResponse& response) const {
     String path   = resultRouter.getPathRootUri();
     String method = resultRouter.getRequest().getMethod();
-    String content = "";
-    if (method == "GET") {
-        if (!readFileContent(path, content))
-            return false;
-        response.setStatus(HTTP_OK, "OK");
+    String content;
+    if (!readFileContent(path, content))
+        return false;
+    response.setStatus(HTTP_OK, "OK");
+    response.setResponseHeaders(mimeTypes.get(path), content.size());
+    if (method != "HEAD") {
         response.setBody(content);
     }
-    response.setResponseHeaders(mimeTypes.get(path), content.size());
     return true;
 }

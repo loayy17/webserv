@@ -120,7 +120,9 @@ void ErrorPageHandler::handle(HttpResponse& response, const RouteResult& resultR
         response.setStatus(code, msg);
         response.addHeader("Content-Type", mimeTypes.get(customPage));
         response.addHeader("Content-Length", typeToString<size_t>(body.size()));
-        response.setBody(body);
+        if (resultRouter.getRequest().getMethod() != "HEAD") 
+            response.setBody(body);
+        
         return;
     }
 
@@ -129,7 +131,9 @@ void ErrorPageHandler::handle(HttpResponse& response, const RouteResult& resultR
         response.setStatus(code, msg);
         response.addHeader("Content-Type", mimeTypes.get(serverPage));
         response.addHeader("Content-Length", typeToString<size_t>(body.size()));
-        response.setBody(body);
+        if (resultRouter.getRequest().getMethod() != "HEAD") 
+            response.setBody(body);
+        
         return;
     }
 
@@ -138,5 +142,7 @@ void ErrorPageHandler::handle(HttpResponse& response, const RouteResult& resultR
     response.setStatus(code, msg);
     response.addHeader("Content-Type", "text/html");
     response.addHeader("Content-Length", typeToString<size_t>(body.size()));
-    response.setBody(body);
+    if (resultRouter.getRequest().getMethod() != "HEAD") 
+        response.setBody(body);
+    
 }

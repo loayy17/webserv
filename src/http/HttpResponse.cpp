@@ -13,9 +13,7 @@ HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
     }
     return *this;
 }
-HttpResponse::~HttpResponse() {
-    headers.clear();
-}
+HttpResponse::~HttpResponse() {}
 
 void HttpResponse::setStatus(int code, const String& msg) {
     statusCode    = code;
@@ -29,7 +27,7 @@ void HttpResponse::addSetCookie(const String& cookie) {
     setCookies.push_back(cookie);
 }
 
-void HttpResponse::setResponseHeaders(const String& contentType, size_t contentLength = 0) {
+void HttpResponse::setResponseHeaders(const String& contentType, size_t contentLength) {
     addHeader(HEADER_CONTENT_TYPE, contentType);
     addHeader(HEADER_CONTENT_LENGTH, typeToString<size_t>(contentLength));
 }
@@ -62,6 +60,5 @@ String HttpResponse::toString() const {
 
     ss += "\r\n";
     ss += body;
-
     return ss;
 }

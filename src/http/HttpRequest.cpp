@@ -49,10 +49,7 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& other) {
     return *this;
 }
 
-HttpRequest::~HttpRequest() {
-    headers.clear();
-    cookies.clear();
-}
+HttpRequest::~HttpRequest() {}
 
 bool HttpRequest::parse(const String& raw) {
     errorCode        = 0;

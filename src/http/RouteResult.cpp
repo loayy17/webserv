@@ -12,7 +12,8 @@ RouteResult::RouteResult()
       location(NULL),
       isCgiRequest(false),
       isUploadRequest(false),
-      request() {}
+      request(),
+      handlerType(NOT_FOUND) {}
 
 RouteResult::RouteResult(const RouteResult& other)
     : statusCode(other.statusCode),
@@ -26,7 +27,8 @@ RouteResult::RouteResult(const RouteResult& other)
       location(other.location),
       isCgiRequest(other.isCgiRequest),
       isUploadRequest(other.isUploadRequest),
-      request(other.request) {}
+      request(other.request),
+      handlerType(other.handlerType) {}
 
 RouteResult& RouteResult::operator=(const RouteResult& other) {
     if (this != &other) {
@@ -42,6 +44,7 @@ RouteResult& RouteResult::operator=(const RouteResult& other) {
         isCgiRequest    = other.isCgiRequest;
         isUploadRequest = other.isUploadRequest;
         request         = other.request;
+        handlerType     = other.handlerType;
     }
     return *this;
 }
@@ -106,6 +109,10 @@ void RouteResult::setRequest(const HttpRequest& req) {
     request = req;
 }
 
+void RouteResult::setHandlerType(HandlerType type) {
+    handlerType = type;
+}
+
 RouteResult& RouteResult::setCodeAndMessage(int code, const String& message) {
     statusCode   = code;
     errorMessage = message;
@@ -159,4 +166,8 @@ bool RouteResult::getIsUploadRequest() const {
 
 const HttpRequest& RouteResult::getRequest() const {
     return request;
+}
+
+HandlerType RouteResult::getHandlerType() const {
+    return handlerType;
 }

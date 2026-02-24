@@ -83,7 +83,7 @@ String trimSpacesComments(const String& s) {
 
 String htmlEntities(const String& str) {
     String result;
-    result.reserve(str.size()); // Optimization: reserve at least input size
+    result.reserve(str.size());
     for (size_t i = 0; i < str.size(); ++i) {
         char c = str[i];
         switch (c) {
@@ -101,9 +101,6 @@ String htmlEntities(const String& str) {
                 break;
             case '\'':
                 result += "&#39;";
-                break;
-            case ' ':
-                result += "&nbsp;";
                 break;
             default:
                 result += c;

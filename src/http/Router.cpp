@@ -83,14 +83,11 @@ RouteResult Router::processRequest() {
         return result.setRedirect(loc->getRedirectValue(), loc->getRedirectCode());
 
     // 4. Method check
-    if (!isKeyInVector(_request.getMethod(), loc->getAllowedMethods()))
+    String methodToCheck = _request.getMethod();
+    if (!isKeyInVector(methodToCheck, loc->getAllowedMethods()))
         return result.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED, getHttpStatusMessage(HTTP_METHOD_NOT_ALLOWED));
 
-    // 5. Body size check
-    if (_request.getContentLength() > 0 && static_cast<ssize_t>(_request.getContentLength()) > loc->getClientMaxBody())
-        return result.setCodeAndMessage(HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE));
-
-    // 6. CGI handling
+    // 5. CGI handling
     if (loc->hasCgi()) {
         String scriptPath, pathInfo;
         resolveCgiScriptAndPathInfo(loc, scriptPath, pathInfo);
@@ -99,24 +96,25 @@ RouteResult Router::processRequest() {
             result.setPathRootUri(scriptPath);
             result.setRemainingPath(pathInfo);
             result.setCgiRequest(true);
-            result.setMatchedPath(loc->getPath());
+            result.setHandlerType(CGI);
             result.setStatusCode(HTTP_OK);
             return result;
         }
     }
 
-    // 7. Upload handling (POST/PUT to a location with upload_dir)
+    // 6. Upload handling (POST/PUT to a location with upload_dir)
     if (!loc->getUploadDir().empty() && (_request.getMethod() == "POST" || _request.getMethod() == "PUT")) {
         result.setUploadRequest(true);
-        result.setMatchedPath(loc->getPath());
+        result.setHandlerType(UPLOAD);
         result.setStatusCode(HTTP_OK);
         return result;
     }
-    // 8. Resolve filesystem path for static/directory
+
+    // 7. Resolve filesystem path for static/directory
     String fsPath = resolveFilesystemPath(loc);
-    if (!fileExists(fsPath)) {
+    if (!fileExists(fsPath))
         return result.setCodeAndMessage(HTTP_NOT_FOUND, getHttpStatusMessage(HTTP_NOT_FOUND));
-    }
+
     // If path is a directory, try to resolve index file
     if (getFileType(fsPath) == DIRECTORY) {
         const VectorString& indexes    = loc->getIndexes();
@@ -133,8 +131,8 @@ RouteResult Router::processRequest() {
         if (!foundIndex) {
             if (loc->getAutoIndex()) {
                 result.setPathRootUri(fsPath);
-                result.setMatchedPath(loc->getPath());
-                result.setStatusCode(200);
+                result.setHandlerType(DIRECTORY_LISTING);
+                result.setStatusCode(HTTP_OK);
                 return result;
             }
             return result.setCodeAndMessage(HTTP_NOT_FOUND, getHttpStatusMessage(HTTP_NOT_FOUND));
@@ -145,7 +143,7 @@ RouteResult Router::processRequest() {
             result.setPathRootUri(fsPath);
             result.setRemainingPath("");
             result.setCgiRequest(true);
-            result.setMatchedPath(loc->getPath());
+            result.setHandlerType(CGI);
             result.setStatusCode(HTTP_OK);
             return result;
         }
@@ -154,7 +152,16 @@ RouteResult Router::processRequest() {
     if (!fileExists(fsPath))
         return result.setCodeAndMessage(HTTP_NOT_FOUND, getHttpStatusMessage(HTTP_NOT_FOUND));
     result.setPathRootUri(fsPath);
-    result.setMatchedPath(loc->getPath());
+
+    // 8. Determine handler type based on method and file type
+    String method = _request.getMethod();
+    if (method == "DELETE") {
+        result.setHandlerType(DELETE_FILE);
+    } else if (method == "GET" || method == "HEAD") {
+        result.setHandlerType(STATIC);
+    } else {
+        result.setHandlerType(NOT_FOUND);
+    }
 
     // 9. Compute remaining path
     String remaining;
@@ -208,8 +215,8 @@ String Router::resolveFilesystemPath(const LocationConfig* loc) const {
     String root    = loc->getRoot();                   // ./www
     String locPath = normalizePath(loc->getPath());    // path for location like /uploads
     String uri     = normalizePath(_request.getUri()); // actual request URI like /uploads/file.txt
-    String rest    = getUriRemainder(uri, locPath);    // the part of URI after location path, e.g. /file.txt
-    return joinPaths(root, rest); // join root with the remaining URI to get the filesystem path, e.g. ./www + /file.txt => ./www/file.txt
+    String rest    = getUriRemainder(uri, locPath);    // the part of URI after location path
+    return joinPaths(root, rest);
 }
 
 // Check CGI request

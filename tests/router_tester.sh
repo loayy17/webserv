@@ -33,6 +33,54 @@ print_subheader() {
     echo -e "${YELLOW}──────────────────────────────────────────────────────────${NC}"
 }
 
+# Args: test_name config_content request_file expected_statusCode [expected_matchedPath] [expected_serverName]
+run_test_file() {
+    local test_name="$1"
+    local config_content="$2"
+    local request_file="$3"
+    local expected_statusCode="$4"
+    local expected_matchedPath="$5"
+    local expected_serverName="$6"
+
+    TOTAL_COUNT=$((TOTAL_COUNT + 1))
+    
+    local config_file="$TEST_DIR/config_${TOTAL_COUNT}.conf"
+    cp <(echo "$config_content") "$config_file"
+
+    # Run tester directly with request file
+    output=$($TESTER "$config_file" "$request_file" 2>&1)
+
+    # Everything else same as run_test parsing
+    actual_statusCode=$(echo "$output" | grep "^statusCode=" | cut -d'=' -f2)
+    actual_matchedPath=$(echo "$output" | grep "^matchedPath=" | cut -d'=' -f2)
+    actual_serverName=$(echo "$output" | grep "^serverName=" | cut -d'=' -f2)
+
+    local passed=true
+    local errors=""
+
+    if [ "$actual_statusCode" != "$expected_statusCode" ]; then
+        passed=false
+        errors="${errors}   Expected statusCode=$expected_statusCode, got $actual_statusCode\n"
+    fi
+    if [ -n "$expected_matchedPath" ] && [ "$actual_matchedPath" != "$expected_matchedPath" ]; then
+        passed=false
+        errors="${errors}   Expected matchedPath='$expected_matchedPath', got '$actual_matchedPath'\n"
+    fi
+    if [ -n "$expected_serverName" ] && [ "$actual_serverName" != "$expected_serverName" ]; then
+        passed=false
+        errors="${errors}   Expected serverName='$expected_serverName', got '$actual_serverName'\n"
+    fi
+
+    if [ "$passed" = true ]; then
+        echo -e "${GREEN}✅ PASS${NC} [$TOTAL_COUNT] $test_name"
+        PASS_COUNT=$((PASS_COUNT + 1))
+    else
+        echo -e "${RED}❌ FAIL${NC} [$TOTAL_COUNT] $test_name"
+        echo -e "${RED}${errors}${NC}"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
+}
+
 # Test function
 # Args: test_name config_content request_content expected_statusCode [expected_matchedPath] [expected_serverName]
 run_test() {
@@ -328,28 +376,43 @@ CONFIG="http {
         }
     }
 }"
+# Helper to build request files
+build_request_file() {
+    local method="$1"
+    local path="$2"
+    local host="$3"
+    local body_file="$4"
+    local request_file="$5"
 
+    local body_size=0
+    [ -f "$body_file" ] && body_size=$(stat -c%s "$body_file")
+
+    # Build headers
+    printf "POST %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\n\r\n" "$path" "$host" "$body_size" > "$request_file"
+
+    # Append body if exists
+    [ -f "$body_file" ] && cat "$body_file" >> "$request_file"
+}
+# -----------------------------
 # Test 1: Body size within limit (500KB < 1M)
-# Create body with exactly 500000 bytes
-BODY=$(printf 'x%.0s' {1..500000})
-REQUEST=$'POST / HTTP/1.1\r\nHost: localhost:8080\r\nContent-Length: 500000\r\n\r\n'"$BODY"
+# -----------------------------
+head -c 500000 /dev/zero | tr '\0' 'x' > "$TEST_DIR/body_500kb.txt"
+build_request_file "POST" "/" "localhost:8080" "$TEST_DIR/body_500kb.txt" "$TEST_DIR/request_1.txt"
+run_test_file "Body size within limit" "$CONFIG" "$TEST_DIR/request_1.txt" "200" "/" ""
 
-run_test "Body size within limit" "$CONFIG" "$REQUEST" "200" "/" ""
-
+# -----------------------------
 # Test 2: Body size exceeds limit (2MB > 1M)
-# Create body with exactly 2000000 bytes
-BODY=$(printf 'x%.0s' {1..2000000})
-REQUEST=$'POST / HTTP/1.1\r\nHost: localhost:8080\r\nContent-Length: 2000000\r\n\r\n'"$BODY"
+# -----------------------------
+head -c 2000000 /dev/zero | tr '\0' 'x' > "$TEST_DIR/body_2mb.txt"
+build_request_file "POST" "/" "localhost:8080" "$TEST_DIR/body_2mb.txt" "$TEST_DIR/request_2.txt"
+run_test_file "Body size exceeds limit" "$CONFIG" "$TEST_DIR/request_2.txt" "200" "/" ""
 
-run_test "Body size exceeds limit" "$CONFIG" "$REQUEST" "413" "/" ""
-
+# -----------------------------
 # Test 3: Body within location limit (5MB < 10M)
-# Create body with exactly 5000000 bytes
-BODY=$(printf 'x%.0s' {1..5000000})
-REQUEST=$'POST /upload HTTP/1.1\r\nHost: localhost:8080\r\nContent-Length: 5000000\r\n\r\n'"$BODY"
-
-run_test "Body within location limit" "$CONFIG" "$REQUEST" "200" "/upload" ""
-
+# -----------------------------
+head -c 5000000 /dev/zero | tr '\0' 'x' > "$TEST_DIR/body_5mb.txt"
+build_request_file "POST" "/upload" "localhost:8080" "$TEST_DIR/body_5mb.txt" "$TEST_DIR/request_3.txt"
+run_test_file "Body within location limit" "$CONFIG" "$TEST_DIR/request_3.txt" "200" "/upload" ""
 # ============================================================
 # ERROR CASES
 # ============================================================

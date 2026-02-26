@@ -1,9 +1,25 @@
 #include "ServerManager.hpp"
 ServerManager::ServerManager()
-    : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {}
+    : pollManager(),
+      servers(),
+      serverConfigs(),
+      clients(),
+      clientToServer(),
+      serverToConfigs(),
+      mimeTypes(),
+      responseBuilder(mimeTypes),
+      sessionManager() {}
 
 ServerManager::ServerManager(const VectorServerConfig& _configs)
-    : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {}
+    : pollManager(),
+      servers(),
+      serverConfigs(_configs),
+      clients(),
+      clientToServer(),
+      serverToConfigs(),
+      mimeTypes(),
+      responseBuilder(mimeTypes),
+      sessionManager() {}
 
 ServerManager::~ServerManager() {
     shutdown();
@@ -148,15 +164,15 @@ void ServerManager::reapCgiProcesses() {
         Client* client = it->second;
         if (!client->getCgi().isActive())
             continue;
-        CgiProcess& cgi = client->getCgi();
-        int status = 0;
-        pid_t ret = waitpid(cgi.getPid(), &status, WNOHANG);
+        CgiProcess& cgi    = client->getCgi();
+        int         status = 0;
+        pid_t       ret    = waitpid(cgi.getPid(), &status, WNOHANG);
         if (ret > 0) {
             cgi.setExited(status);
             // if both pipes done, build and send response
             if (cgi.isReadDone() && cgi.isWriteDone()) {
-                ResponseBuilder& builder = responseBuilder;
-                HttpResponse response = builder.buildCgiResponse(cgi);
+                ResponseBuilder& builder  = responseBuilder;
+                HttpResponse     response = builder.buildCgiResponse(cgi);
                 client->setSendData(response.toString());
                 pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
             }
@@ -244,8 +260,8 @@ void ServerManager::checkTimeouts(int timeout) {
             if (getDifferentTime(it->second->getCgi().getStartTime(), getCurrentTime()) > CGI_TIMEOUT) {
                 Logger::info("CGI timeout, killing process");
                 cleanupClientCgi(it->second);
-                ResponseBuilder& builder = responseBuilder;
-                HttpResponse    response = builder.buildError(HTTP_GATEWAY_TIMEOUT, "CGI Timeout");
+                ResponseBuilder& builder  = responseBuilder;
+                HttpResponse     response = builder.buildError(HTTP_GATEWAY_TIMEOUT, "CGI Timeout");
                 it->second->setSendData(response.toString());
                 pollManager.addFd(it->first, POLLIN | POLLOUT);
             }
@@ -262,7 +278,7 @@ void ServerManager::checkTimeouts(int timeout) {
 }
 
 void ServerManager::sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove) {
-    HttpResponse    response = responseBuilder.buildError(statusCode, message);
+    HttpResponse response = responseBuilder.buildError(statusCode, message);
     if (closeConnection) {
         response.addHeader(HEADER_CONNECTION, "close");
         client->setKeepAlive(false);
@@ -282,213 +298,248 @@ void ServerManager::processRequest(Client* client, Server* server) {
         const String& buffer   = client->getStoreReceiveData();
         size_t        dataSize = buffer.size();
 
-    // 1. Detect end of headers
-    size_t headerEnd    = buffer.find(DOUBLE_CRLF);
-    size_t headerEndLen = 4;
+        // 1. Detect end of headers
+        size_t headerEnd    = buffer.find(DOUBLE_CRLF);
+        size_t headerEndLen = 4;
 
-    if (headerEnd == String::npos) {
-        headerEnd    = buffer.find("\n\n");
-        headerEndLen = 2;
-    }
-
-    if (headerEnd == String::npos) {
-        if (dataSize > MAX_HEADER_SIZE) {
-            sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, 0);
-        }
-        return;
-    }
-
-    if (headerEnd > MAX_HEADER_SIZE) {
-        sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true,
-                          headerEnd + headerEndLen);
-        return;
-    }
-
-    String headerSection = buffer.substr(0, headerEnd);
-
-    bool    isChunked        = isChunkedTransferEncoding(headerSection);
-    ssize_t contentLength    = 0;
-    bool    hasContentLength = extractContentLength(contentLength, headerSection);
-
-    if (hasContentLength && isChunked) {
-        sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
-        return;
-    }
-
-    // Early rejection: check Content-Length against server max before buffering body
-    if (hasContentLength && contentLength > 0) {
-        ssize_t serverMax = serverToConfigs[server->getFd()][0].getClientMaxBody();
-        if (serverMax != -1 && contentLength > serverMax) {
-            sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, 0);
-            return;
-        }
-    }
-
-    size_t requestSize = 0;
-    String fullRequest;
-
-    // 2. Handle body (Chunked)
-
-    if (isChunked) {
-        String bodyPart   = buffer.substr(headerEnd + headerEndLen);
-        size_t finalChunk = bodyPart.find("\r\n0\r\n");
-        if (finalChunk == String::npos) {
-            if (bodyPart.find("0\r\n\r\n") == 0)
-                finalChunk = 0;
-            else
-                return;
+        if (headerEnd == String::npos) {
+            headerEnd    = buffer.find("\n\n");
+            headerEndLen = 2;
         }
 
-        size_t endMarker = bodyPart.find("\r\n\r\n", finalChunk);
-        if (endMarker == String::npos)
+        if (headerEnd == String::npos) {
+            if (dataSize > MAX_HEADER_SIZE) {
+                sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, 0);
+            }
             return;
+        }
 
-        requestSize = headerEnd + headerEndLen + endMarker + 4;
-        if (dataSize < requestSize)
+        if (headerEnd > MAX_HEADER_SIZE) {
+            sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true,
+                              headerEnd + headerEndLen);
             return;
+        }
 
-        String chunkedBody = bodyPart.substr(0, endMarker + 4);
-        String decodedBody;
+        String headerSection = buffer.substr(0, headerEnd);
 
-        if (!decodeChunkedBody(chunkedBody, decodedBody)) {
+        bool    isChunked        = isChunkedTransferEncoding(headerSection);
+        ssize_t contentLength    = 0;
+        bool    hasContentLength = extractContentLength(contentLength, headerSection);
+
+        if (hasContentLength && isChunked) {
             sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
             return;
         }
 
-        fullRequest = headerSection + "\r\nContent-Length: " + typeToString<size_t>(decodedBody.size()) + "\r\n\r\n" + decodedBody;
-    }
-    // 3. Handle Content-Length
-    else {
-        if (hasContentLength) {
-            if (contentLength < 0) {
-                sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
-                return;
-            }
-
-            if (static_cast<size_t>(contentLength) > SIZE_MAX - headerEnd - headerEndLen) {
-                sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
+        // Early rejection: check Content-Length against server max before buffering body
+        if (hasContentLength && contentLength > 0) {
+            ssize_t serverMax = serverToConfigs[server->getFd()][0].getClientMaxBody();
+            if (serverMax != -1 && contentLength > serverMax) {
+                sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, 0);
                 return;
             }
         }
 
-        requestSize = headerEnd + headerEndLen + (hasContentLength ? static_cast<size_t>(contentLength) : 0);
+        size_t requestSize = 0;
+        String decodedBody;
 
-        if (dataSize < requestSize)
+        // 2. Handle body (Chunked)
+
+        if (isChunked) {
+            String bodyPart   = buffer.substr(headerEnd + headerEndLen);
+            size_t finalChunk = bodyPart.find("\r\n0\r\n");
+            if (finalChunk == String::npos) {
+                if (bodyPart.find("0\r\n\r\n") == 0)
+                    finalChunk = 0;
+                else
+                    return;
+            }
+
+            size_t endMarker = bodyPart.find("\r\n\r\n", finalChunk);
+            if (endMarker == String::npos)
+                return;
+
+            requestSize = headerEnd + headerEndLen + endMarker + 4;
+            if (dataSize < requestSize)
+                return;
+
+            String chunkedBody = bodyPart.substr(0, endMarker + 4);
+
+            if (!decodeChunkedBody(chunkedBody, decodedBody)) {
+                sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
+                return;
+            }
+        }
+        // 3. Handle Content-Length
+        else {
+            if (hasContentLength) {
+                if (contentLength < 0) {
+                    sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
+                    return;
+                }
+
+                if (static_cast<size_t>(contentLength) > SIZE_MAX - headerEnd - headerEndLen) {
+                    sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
+                    return;
+                }
+            }
+
+            requestSize = headerEnd + headerEndLen + (hasContentLength ? static_cast<size_t>(contentLength) : 0);
+
+            if (dataSize < requestSize)
+                return;
+        }
+
+        // 4. Parse HTTP request (Headers only initially to avoid body copy)
+        HttpRequest request;
+        if (!request.parseHeaders(headerSection)) {
+            sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, requestSize);
             return;
+        }
 
-        fullRequest = buffer.substr(0, requestSize);
-    }
+        // Populate request body ONLY if it's chunked (already de-chunked above)
+        // For Content-Length, we will stream directly from client's buffer.
+        if (isChunked) {
+            request.parseBody(decodedBody);
+        }
 
-    // 4. Parse HTTP request
-    HttpRequest request;
-    if (!request.parse(fullRequest)) {
-        sendErrorResponse(client, request.getErrorCode(), getHttpStatusMessage(request.getErrorCode()), true, requestSize);
-        return;
-    }
+        request.setPort(server->getPort());
 
-    request.setPort(server->getPort());
+        // 5. Session Handling (BEFORE routing)
+        String         sessionId = request.getCookie(SESSION_COOKIE_NAME);
+        SessionResult* session   = NULL;
 
-    // 5. Session Handling (BEFORE routing)
-    String         sessionId = request.getCookie(SESSION_COOKIE_NAME);
-    SessionResult* session   = NULL;
+        if (!sessionId.empty())
+            session = sessionManager.getSession(sessionId);
 
-    if (!sessionId.empty())
-        session = sessionManager.getSession(sessionId);
+        String newSessionId;
 
-    String newSessionId;
+        if (!session && request.getMethod() == "POST" && (isChunked || (hasContentLength && contentLength > 0))) {
+            String body;
+            if (isChunked) {
+                body = request.getBody();
+            } else if (contentLength < 1024 * 1024) { // only peek if < 1MB
+                body = buffer.substr(headerEnd + headerEndLen, contentLength);
+            }
 
-    if (!session && request.getMethod() == "POST" && !request.getBody().empty()) {
-        String       body = request.getBody();
-        String       username;
-        VectorString pairs;
+            if (!body.empty()) {
+                String       username;
+                VectorString pairs;
 
-        splitByString(body, pairs, "&");
+                splitByString(body, pairs, "&");
 
-        for (size_t i = 0; i < pairs.size(); ++i) {
-            String key, val;
-            if (splitByChar(pairs[i], key, val, '=') && trimSpaces(key) == "username") {
-                username = trimSpaces(val);
-                break;
+                for (size_t i = 0; i < pairs.size(); ++i) {
+                    String key, val;
+                    if (splitByChar(pairs[i], key, val, '=') && trimSpaces(key) == "username") {
+                        username = trimSpaces(val);
+                        break;
+                    }
+                }
+
+                if (!username.empty()) {
+                    try {
+                        newSessionId = sessionManager.createSession(username);
+                        session      = sessionManager.getSession(newSessionId);
+                    } catch (const std::exception& e) {
+                        Logger::error("Failed to create session: " + String(e.what()));
+                    }
+                }
             }
         }
 
-        if (!username.empty()) {
-            try {
-                newSessionId = sessionManager.createSession(username);
-                session      = sessionManager.getSession(newSessionId);
-            } catch (const std::exception& e) {
-                Logger::error("Failed to create session: " + String(e.what()));
+        // 6. Routing
+        Router      router(serverToConfigs[server->getFd()], request);
+        RouteResult routerResult = router.processRequest();
+        routerResult.setRemoteAddress(client->getRemoteAddress());
+
+        // Body size check against location config
+        const LocationConfig* loc    = routerResult.getLocation();
+        ssize_t               locMax = (loc ? loc->getClientMaxBody() : -1);
+
+        size_t actualBodySize = isChunked ? request.getBody().size() : (hasContentLength ? static_cast<size_t>(contentLength) : 0);
+
+        if (locMax != -1 && static_cast<ssize_t>(actualBodySize) > locMax) {
+            sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, requestSize);
+            return;
+        }
+
+        // Streaming metadata for CGI
+        if (routerResult.getHandlerType() == CGI) {
+            if (!isChunked) {
+                routerResult.setClientBuffer(&client->getStoreReceiveData());
+                routerResult.setBodyOffset(headerEnd + headerEndLen);
+                routerResult.setBodyLength(actualBodySize);
+                routerResult.setUseDechunked(false);
+            } else {
+                // For chunked, we MUST copy because we can't point into a local 'decodedBody'
+                // RouteResult will store it
+                routerResult.setDechunkedBody(decodedBody);
+                routerResult.setUseDechunked(true);
+            }
+        } else {
+            // Not CGI. Ensure request.body is populated if needed (e.g. UPLOAD)
+            if (!isChunked && actualBodySize > 0) {
+                request.parseBody(buffer.substr(headerEnd + headerEndLen, actualBodySize));
+                routerResult.setRequest(request);
             }
         }
-    }
+        routerResult.setRequestSize(requestSize);
 
-    // 6. Routing
-    Router      router(serverToConfigs[server->getFd()], request);
-    RouteResult routerResult = router.processRequest();
-    routerResult.setRemoteAddress(client->getRemoteAddress());
+        // 7. Keep-Alive logic
+        bool keepAlive = (request.getHttpVersion() == HTTP_VERSION_1_1);
 
-    // Body size check against location config
-    const LocationConfig* loc    = routerResult.getLocation();
-    ssize_t               locMax = (loc ? loc->getClientMaxBody() : -1);
-
-    if (locMax != -1 && static_cast<ssize_t>(request.getBody().size()) > locMax) {
-        sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, requestSize);
-        return;
-    }
-
-    // 7. Keep-Alive logic
-    bool keepAlive = (request.getHttpVersion() == HTTP_VERSION_1_1);
-
-    String connHeader = request.getHeader(HEADER_CONNECTION);
-    if (!connHeader.empty()) {
-        String       connLower = toLowerWords(connHeader);
-        VectorString connValues;
-        splitByString(connLower, connValues, ",");
-        for (size_t i = 0; i < connValues.size(); ++i) {
-            std::string token = trimSpaces(toLowerWords(connValues[i]));
-            if (token == "close") {
-                keepAlive = false;
-                break;
-            } else if (token == "keep-alive")
-                keepAlive = true;
+        String connHeader = request.getHeader(HEADER_CONNECTION);
+        if (!connHeader.empty()) {
+            String       connLower = toLowerWords(connHeader);
+            VectorString connValues;
+            splitByString(connLower, connValues, ",");
+            for (size_t i = 0; i < connValues.size(); ++i) {
+                std::string token = trimSpaces(toLowerWords(connValues[i]));
+                if (token == "close") {
+                    keepAlive = false;
+                    break;
+                } else if (token == "keep-alive")
+                    keepAlive = true;
+            }
         }
-    }
 
-    client->setKeepAlive(keepAlive);
-    client->incrementRequestCount();
+        client->setKeepAlive(keepAlive);
+        client->incrementRequestCount();
 
-    // Enforce keepalive request limit
-    if (keepAlive && client->getRequestCount() >= MAX_KEEPALIVE_REQUESTS) {
-        keepAlive = false;
-        client->setKeepAlive(false);
-    }
+        // Enforce keepalive request limit
+        if (keepAlive && client->getRequestCount() >= MAX_KEEPALIVE_REQUESTS) {
+            keepAlive = false;
+            client->setKeepAlive(false);
+        }
 
-    // 8. Build Response
-    HttpResponse    response = responseBuilder.build(routerResult, &client->getCgi(), pollManager.getFds());
+        // 8. Build Response
+        HttpResponse response = responseBuilder.build(routerResult, &client->getCgi(), pollManager.getFds());
 
-    // Match response HTTP version to request version
-    response.setHttpVersion(request.getHttpVersion());
+        // Match response HTTP version to request version
+        response.setHttpVersion(request.getHttpVersion());
 
-    if (keepAlive)
-        response.addHeader(HEADER_CONNECTION, "keep-alive");
-    else
-        response.addHeader(HEADER_CONNECTION, "close");
+        if (keepAlive)
+            response.addHeader(HEADER_CONNECTION, "keep-alive");
+        else
+            response.addHeader(HEADER_CONNECTION, "close");
 
-    if (!newSessionId.empty())
-        response.addSetCookie(SessionManager::buildSetCookieHeader(newSessionId));
+        if (!newSessionId.empty())
+            response.addSetCookie(SessionManager::buildSetCookieHeader(newSessionId));
 
-    // 9. CGI Handling
-    if (client->getCgi().isActive()) {
-        registerCgiPipes(client);
+        // 9. CGI Handling
+        if (client->getCgi().isActive()) {
+            registerCgiPipes(client);
+            // If it was already done (e.g. no body), we can remove now
+            if (client->getCgi().isWriteDone())
+                client->removeReceivedData(requestSize);
+            return;
+        }
+
+        // 10. Send Response
+        client->setSendData(response.toString());
         client->removeReceivedData(requestSize);
-        return;
-    }
 
-    // 10. Send Response
-    client->setSendData(response.toString());
-    client->removeReceivedData(requestSize);
-
-    pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+        pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
     } catch (const std::bad_alloc&) {
         Logger::error("Memory allocation failed in processRequest - request too large");
         sendErrorResponse(client, HTTP_INTERNAL_SERVER_ERROR, "Internal Server Error", true, 0);
@@ -548,6 +599,10 @@ void ServerManager::handleCgiWrite(int pipeFd) {
     if (client->getCgi().writeBody(pipeFd)) {
         removeCgiPipe(pipeFd);
         client->getCgi().setWriteDone();
+
+        // Remove data from client buffer now that CGI has consumed it
+        client->removeReceivedData(client->getCgi().getRequestSize());
+
         // If child already exited and read is done, build response
         if (client->getCgi().hasExited() && client->getCgi().isReadDone()) {
             ResponseBuilder& builder = responseBuilder;
@@ -569,7 +624,7 @@ void ServerManager::handleCgiRead(int pipeFd) {
     if (!client->getCgi().handleRead()) {
         removeCgiPipe(pipeFd);
         client->getCgi().setReadDone();
-       if (client->getCgi().hasExited() && client->getCgi().isWriteDone()) {
+        if (client->getCgi().hasExited() && client->getCgi().isWriteDone()) {
             ResponseBuilder& builder = responseBuilder;
             client->setSendData(builder.buildCgiResponse(client->getCgi()).toString());
             pollManager.addFd(client->getFd(), POLLIN | POLLOUT);

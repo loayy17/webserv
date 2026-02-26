@@ -26,7 +26,7 @@ FileHandler::FileHandler(struct dirent* entry, const String& basePath, String pa
         link += "/";
         icon = "https://cdn-icons-png.flaticon.com/512/10536/10536917.png";
     } else if (type == SINGLEFILE) {
-        lastModified = formatTime(st.st_mtime);
+        lastModified = formatDateTime(st.st_mtime);
         size         = formatSize(st.st_size);
         icon         = "https://cdn-icons-png.flaticon.com/512/1091/1091007.png";
     }

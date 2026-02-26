@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <cstdlib>
+#include <unistd.h>
 #include <ctime>
 #include <fstream>
 #include <iostream>
@@ -17,8 +18,7 @@
 time_t getCurrentTime();
 void   updateTime(time_t& t);
 time_t getDifferentTime(const time_t& start, const time_t& end);
-String formatTime(time_t t);
-
+String formatDateTime(time_t t = getCurrentTime());
 // --- String Methods ---
 String toUpperWords(const String& str);
 String toLowerWords(const String& str);
@@ -70,9 +70,6 @@ bool   decodeChunkedBody(const String& chunkedBody, String& decodedBody);
 bool   getHeaderValue(const String& headers, const String& headerName, String& outValue);
 bool   extractContentLength(ssize_t& contentLength, const String& headers);
 bool   requireSingleValue(const VectorString& v, const String& directive);
-
-
-
 
 //! --- Templates ---
 template <typename MapType, typename KeyType>

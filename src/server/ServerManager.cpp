@@ -2,29 +2,6 @@
 ServerManager::ServerManager()
     : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
 
-ServerManager::ServerManager(const ServerManager& other)
-    : pollManager(other.pollManager),
-      servers(other.servers),
-      serverConfigs(other.serverConfigs),
-      clients(other.clients),
-      clientToServer(other.clientToServer),
-      serverToConfigs(other.serverToConfigs),
-      mimeTypes(other.mimeTypes),
-      sessionManager(other.sessionManager) {}
-
-ServerManager& ServerManager::operator=(const ServerManager& other) {
-    if (this != &other) {
-        pollManager     = other.pollManager;
-        servers         = other.servers;
-        clients         = other.clients;
-        clientToServer  = other.clientToServer;
-        serverToConfigs = other.serverToConfigs;
-        mimeTypes       = other.mimeTypes;
-        sessionManager  = other.sessionManager;
-    }
-    return *this;
-}
-
 ServerManager::ServerManager(const VectorServerConfig& _configs)
     : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
 
@@ -115,6 +92,8 @@ bool ServerManager::run() {
     while (g_running) {
         int eventCount = pollManager.pollConnections(100);
         checkTimeouts(CLIENT_TIMEOUT);
+        // Reap any finished CGI children without blocking
+        reapCgiProcesses();
         if (getDifferentTime(lastSessionCleanup, getCurrentTime()) > SESSION_CLEANUP_INTERVAL) {
             sessionManager.cleanupExpiredSessions(SESSION_TIMEOUT);
             lastSessionCleanup = getCurrentTime();
@@ -164,11 +143,38 @@ bool ServerManager::run() {
     return true;
 }
 
+void ServerManager::reapCgiProcesses() {
+    for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
+        Client* client = it->second;
+        if (!client->getCgi().isActive())
+            continue;
+        CgiProcess& cgi = client->getCgi();
+        int status = 0;
+        pid_t ret = waitpid(cgi.getPid(), &status, WNOHANG);
+        if (ret > 0) {
+            cgi.setExited(status);
+            // if both pipes done, build and send response
+            if (cgi.isReadDone() && cgi.isWriteDone()) {
+                ResponseBuilder builder(mimeTypes);
+                HttpResponse response = builder.buildCgiResponse(cgi);
+                client->setSendData(response.toString());
+                pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+            }
+        }
+    }
+}
+
 bool ServerManager::acceptNewConnection(Server* server) {
     String remoteAddress;
     int    clientFd = server->acceptConnection(remoteAddress);
     if (clientFd < 0)
         return Logger::error("Failed to accept new connection");
+
+    if (clients.size() >= MAX_CONNECTIONS) {
+        Logger::error("Connection limit reached (" + typeToString<size_t>(MAX_CONNECTIONS) + "), rejecting new connection");
+        close(clientFd);
+        return false;
+    }
 
     Client* client = NULL;
     try {
@@ -259,7 +265,7 @@ void ServerManager::sendErrorResponse(Client* client, int statusCode, const Stri
     ResponseBuilder builder(mimeTypes);
     HttpResponse    response = builder.buildError(statusCode, message);
     if (closeConnection) {
-        response.addHeader("Connection", "close");
+        response.addHeader(HEADER_CONNECTION, "close");
         client->setKeepAlive(false);
     }
     client->setSendData(response.toString());
@@ -270,7 +276,6 @@ void ServerManager::sendErrorResponse(Client* client, int statusCode, const Stri
         client->clearStoreReceiveData();
 
     pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-    response.addHeader("Server", "Webserv/1.0");
 }
 
 void ServerManager::processRequest(Client* client, Server* server) {
@@ -425,30 +430,41 @@ void ServerManager::processRequest(Client* client, Server* server) {
     // 7. Keep-Alive logic
     bool keepAlive = (request.getHttpVersion() == HTTP_VERSION_1_1);
 
-    String connHeader = request.getHeader("connection");
+    String connHeader = request.getHeader(HEADER_CONNECTION);
     if (!connHeader.empty()) {
         String       connLower = toLowerWords(connHeader);
         VectorString connValues;
         splitByString(connLower, connValues, ",");
         for (size_t i = 0; i < connValues.size(); ++i) {
             std::string token = trimSpaces(toLowerWords(connValues[i]));
-            if (token == "close")
+            if (token == "close") {
                 keepAlive = false;
-            else if (token == "keep-alive")
+                break;
+            } else if (token == "keep-alive")
                 keepAlive = true;
         }
     }
 
     client->setKeepAlive(keepAlive);
+    client->incrementRequestCount();
+
+    // Enforce keepalive request limit
+    if (keepAlive && client->getRequestCount() >= MAX_KEEPALIVE_REQUESTS) {
+        keepAlive = false;
+        client->setKeepAlive(false);
+    }
 
     // 8. Build Response
     ResponseBuilder builder(mimeTypes);
     HttpResponse    response = builder.build(routerResult, &client->getCgi(), pollManager.getFds());
 
+    // Match response HTTP version to request version
+    response.setHttpVersion(request.getHttpVersion());
+
     if (keepAlive)
-        response.addHeader("Connection", "keep-alive");
+        response.addHeader(HEADER_CONNECTION, "keep-alive");
     else
-        response.addHeader("Connection", "close");
+        response.addHeader(HEADER_CONNECTION, "close");
 
     if (!newSessionId.empty())
         response.addSetCookie(SessionManager::buildSetCookieHeader(newSessionId));
@@ -528,6 +544,13 @@ void ServerManager::handleCgiWrite(int pipeFd) {
         removeCgiPipe(pipeFd);
         close(pipeFd);
         client->getCgi().setWriteFd(-1);
+        client->getCgi().setWriteDone();
+        // If child already exited and read is done, build response
+        if (client->getCgi().hasExited() && client->getCgi().isReadDone()) {
+            ResponseBuilder builder(mimeTypes);
+            client->setSendData(builder.buildCgiResponse(client->getCgi()).toString());
+            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+        }
     }
 }
 
@@ -542,11 +565,13 @@ void ServerManager::handleCgiRead(int pipeFd) {
     }
     if (!client->getCgi().handleRead()) {
         removeCgiPipe(pipeFd);
-        if (client->getCgi().getWriteFd() != -1)
-            removeCgiPipe(client->getCgi().getWriteFd());
-        ResponseBuilder builder(mimeTypes);
-        client->setSendData(builder.buildCgiResponse(client->getCgi()).toString());
-        pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+        close(pipeFd);
+        client->getCgi().setReadDone();
+       if (client->getCgi().hasExited() && client->getCgi().isWriteDone()) {
+            ResponseBuilder builder(mimeTypes);
+            client->setSendData(builder.buildCgiResponse(client->getCgi()).toString());
+            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+        }
     }
 }
 

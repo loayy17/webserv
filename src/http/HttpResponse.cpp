@@ -1,12 +1,19 @@
 #include "HttpResponse.hpp"
 
-HttpResponse::HttpResponse() : statusCode(), statusMessage(), headers(), setCookies(), body() {}
+HttpResponse::HttpResponse() : statusCode(), statusMessage(), httpVersion(HTTP_VERSION_1_1), headers(), setCookies(), body() {}
 HttpResponse::HttpResponse(const HttpResponse& other)
-    : statusCode(other.statusCode), statusMessage(other.statusMessage), headers(other.headers), setCookies(other.setCookies), body(other.body) {}
+    : statusCode(other.statusCode),
+      statusMessage(other.statusMessage),
+      httpVersion(other.httpVersion),
+      headers(other.headers),
+      setCookies(other.setCookies),
+      body(other.body) {}
+
 HttpResponse& HttpResponse::operator=(const HttpResponse& other) {
     if (this != &other) {
         statusCode    = other.statusCode;
         statusMessage = other.statusMessage;
+        httpVersion   = other.httpVersion;
         headers       = other.headers;
         setCookies    = other.setCookies;
         body          = other.body;
@@ -44,19 +51,23 @@ void HttpResponse::setBody(const String& _body) {
     body = _body;
 }
 
+void HttpResponse::setHttpVersion(const String& version) {
+    httpVersion = version;
+}
+
 String HttpResponse::getBody() const {
     return body;
 }
 
-String HttpResponse::toString() const {
+String HttpResponse::toString() {
     String ss;
-    ss += "HTTP/1.1 " + typeToString<int>(statusCode) + " " + statusMessage + "\r\n";
-
+    ss += httpVersion + " " + typeToString<int>(statusCode) + " " + statusMessage + "\r\n";
+    addHeader(HEADER_DATE, formatDateTime());
+    addHeader(HEADER_SERVER, "Webserv/1.0");
     for (MapString::const_iterator it = headers.begin(); it != headers.end(); ++it)
         ss += it->first + ": " + it->second + "\r\n";
-
     for (size_t i = 0; i < setCookies.size(); ++i)
-        ss += "Set-Cookie: " + setCookies[i] + "\r\n";
+        ss += String(HEADER_SET_COOKIE) + ": " + setCookies[i] + "\r\n";
 
     ss += "\r\n";
     ss += body;

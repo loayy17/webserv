@@ -18,7 +18,8 @@ bool DeleteHandler::handle(const RouteResult& resultRouter, HttpResponse& respon
     response.addHeader(HEADER_CONTENT_TYPE, "application/json");
     String body = "{\"message\":\"File deleted successfully\"}";
     response.addHeader(HEADER_CONTENT_LENGTH, typeToString<size_t>(body.size()));
-    response.addHeader("Server", "Webserv/1.0");
-    response.setBody(body);
+    response.addHeader(HEADER_SERVER, "Webserv/1.0");
+    if (resultRouter.getRequest().getMethod() != "HEAD")
+        response.setBody(body);
     return true;
 }

@@ -164,7 +164,7 @@ bool CgiHandler::parseOutput(const String& raw, HttpResponse& response) {
     }
     if (!statusSet)
         response.setStatus(HTTP_OK, "OK");
-    response.addHeader("Server", "Webserv/1.0");
+    response.addHeader(HEADER_SERVER, "Webserv/1.0");
     response.setBody(bodyPart);
     return true;
 }
@@ -191,6 +191,7 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     env.push_back("QUERY_STRING=" + req.getQueryString());
     env.push_back("SCRIPT_NAME=" + scriptName);
     env.push_back("SCRIPT_FILENAME=" + resultRouter.getPathRootUri());
+    // it must be pathInfo variable but we set it to uri just for tester work
     env.push_back("PATH_INFO=" + uri);
     if (!pathInfo.empty()) {
         env.push_back("PATH_TRANSLATED=" + joinPaths(loc->getRoot(), pathInfo));

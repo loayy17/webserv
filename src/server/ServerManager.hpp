@@ -26,8 +26,6 @@ class ServerManager {
    public:
     ServerManager();
     ServerManager(const VectorServerConfig& configs);
-    ServerManager(const ServerManager&);
-    ServerManager& operator=(const ServerManager&);
     ~ServerManager();
 
     bool   initialize();
@@ -37,6 +35,8 @@ class ServerManager {
     size_t getClientCount() const;
 
    private:
+    ServerManager(const ServerManager&);
+    ServerManager&           operator=(const ServerManager&);
     PollManager              pollManager;
     std::vector<Server*>     servers;
     const VectorServerConfig serverConfigs;
@@ -53,13 +53,14 @@ class ServerManager {
     void    handleClientRead(int clientFd);
     void    handleClientWrite(int clientFd);
     void    checkTimeouts(int timeout);
+    void    reapCgiProcesses();
     void    closeClientConnection(int clientFd);
     Server* findServerByFd(int serverFd) const;
     bool    isServerSocket(int fd) const;
     bool    isCgiPipe(int fd) const;
     void    processRequest(Client* client, Server* server);
-    Server *initializeServer(const ServerConfig& serverConfig, size_t listenIndex);
-    void sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove);
+    Server* initializeServer(const ServerConfig& serverConfig, size_t listenIndex);
+    void    sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove);
     // CGI pipe helpers
     void registerCgiPipes(Client* client);
     void handleCgiRead(int pipeFd);

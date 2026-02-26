@@ -16,15 +16,67 @@ time_t getDifferentTime(const time_t& start, const time_t& end) {
     return end - start;
 }
 
-String formatTime(time_t t) {
-    char* raw = ctime(&t);
-    if (!raw)
-        return "-";
-    String result(raw);
-    // Remove the trailing newline added by ctime
-    if (!result.empty() && result[result.size() - 1] == '\n')
-        result.erase(result.size() - 1);
-    return result;
+bool isLeapYear(int year) {
+    return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+}
+
+String formatDateTime(time_t t) {
+    static const int   MONTH_DAYS[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    static const char* WEEKDAYS[]   = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    static const char* MONTHS[]     = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+    long daysSinceEpoch = t / SECONDS_PER_DAY;
+    long secsToday      = t % SECONDS_PER_DAY;
+    int  weekday        = (4 + daysSinceEpoch) % 7;
+    if (weekday < 0)
+        weekday += 7;
+
+    // Year calculation
+    int  year          = 1970;
+    long remainingDays = daysSinceEpoch;
+    while (true) {
+        int daysInYear = isLeapYear(year) ? 366 : 365;
+        if (remainingDays >= daysInYear) {
+            remainingDays -= daysInYear;
+            ++year;
+        } else {
+            break;
+        }
+    }
+
+    // Month and day calculation
+
+    int month = 0;
+    while (month < 12) {
+        int daysInMonth = MONTH_DAYS[month];
+        // Adjust February for leap year
+        if (month == 1 && isLeapYear(year))
+            daysInMonth = 29;
+        if (remainingDays >= daysInMonth) {
+            remainingDays -= daysInMonth;
+            ++month;
+        } else
+            break;
+    }
+    int day = static_cast<int>(remainingDays) + 1;
+
+    // Time of day
+    int hour   = static_cast<int>(secsToday / SECONDS_PER_HOUR);
+    int minute = static_cast<int>((secsToday % SECONDS_PER_HOUR) / SECONDS_PER_MIN);
+    int second = static_cast<int>(secsToday % SECONDS_PER_MIN);
+
+    String hourStr = hour < 10 ? "0" + typeToString(hour) : typeToString(hour);
+    String minStr  = minute < 10 ? "0" + typeToString(minute) : typeToString(minute);
+    String secStr  = second < 10 ? "0" + typeToString(second) : typeToString(second);
+    String dayStr  = day < 10 ? "0" + typeToString(day) : typeToString(day);
+    // Build the HTTP date string
+    String date = WEEKDAYS[weekday];
+    date += ", " + dayStr;
+    date += " " + String(MONTHS[month]);
+    date += " " + typeToString(year);
+    date += " " + hourStr + ":" + minStr + ":" + secStr;
+    date += " GMT";
+    return date;
 }
 
 // ============================================================================
@@ -114,24 +166,25 @@ String generateGUID() {
     String            id;
     id.reserve(SESSION_ID_LENGTH);
 
-    std::ifstream urandom("/dev/urandom", std::ios::binary);
-    if (!urandom.is_open()) {
+    const int     numBytes = SESSION_ID_LENGTH / 2;
+    unsigned char bytes[SESSION_ID_LENGTH / 2];
+
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd < 0) {
         Logger::error("CRITICAL: /dev/urandom unavailable");
-        Logger::error("Cannot generate secure session IDs");
         throw std::runtime_error("Secure random source unavailable");
     }
 
-    for (int i = 0; i < SESSION_ID_LENGTH / 2; ++i) {
-        unsigned char byte;
-        urandom.read(reinterpret_cast<char*>(&byte), 1);
-        if (!urandom.good()) {
-            urandom.close();
-            throw std::runtime_error("Failed to read from /dev/urandom");
-        }
-        id += hex[(byte >> 4) & 0x0f];
-        id += hex[byte & 0x0f];
+    ssize_t n = read(fd, bytes, numBytes);
+    close(fd);
+    if (n != numBytes) {
+        throw std::runtime_error("Failed to read from /dev/urandom");
     }
-    urandom.close();
+
+    for (int i = 0; i < numBytes; ++i) {
+        id += hex[(bytes[i] >> 4) & 0x0f];
+        id += hex[bytes[i] & 0x0f];
+    }
     return id;
 }
 
@@ -427,10 +480,7 @@ bool checkAllowedMethods(const String& m) {
 }
 
 bool setNonBlocking(int fd) {
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1)
-        return Logger::error("Failed to get fd flags");
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1)
         return Logger::error("Failed to set non-blocking mode");
     return true;
 }
@@ -439,10 +489,9 @@ size_t convertMaxBodySize(const String& clientMaxBodySize) {
     if (clientMaxBodySize.empty())
         return 0;
 
-    size_t size       = 0;
-    char   unit       = clientMaxBodySize[clientMaxBodySize.size() - 1];
-    String numberPart = std::isdigit(unit) ? clientMaxBodySize : clientMaxBodySize.substr(0, clientMaxBodySize.size() - 1);
-
+    size_t            size       = 0;
+    char              unit       = clientMaxBodySize[clientMaxBodySize.size() - 1];
+    String            numberPart = (unit >= '9' || unit <= '0') ? clientMaxBodySize : clientMaxBodySize.substr(0, clientMaxBodySize.size() - 1);
     std::stringstream ss(numberPart);
     ss >> size;
     if (ss.fail())
@@ -464,8 +513,8 @@ size_t convertMaxBodySize(const String& clientMaxBodySize) {
 }
 
 String formatSize(double size) {
-    const char* units[] = {"B", "KB", "MB", "GB", "TB"};
-    int         unit    = 0;
+    static const char* units[] = {"B", "KB", "MB", "GB", "TB"};
+    int                unit    = 0;
 
     while (size >= 1024.0 && unit < 4) {
         size /= 1024.0;
@@ -474,12 +523,10 @@ String formatSize(double size) {
 
     size_t num    = static_cast<size_t>(size);
     String result = typeToString<size_t>(num);
-
-    // Add up to 2 decimal places if needed and not B
     if (unit > 0) {
         size_t decimal = static_cast<size_t>((size - num) * 100);
         if (decimal > 0) {
-            result += "."; // changed from ' to . for standard notation
+            result += ".";
             if (decimal < 10)
                 result += "0";
             result += typeToString<size_t>(decimal);

@@ -19,7 +19,7 @@ HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess*
         response.setStatus(resultRouter.getStatusCode(), getHttpStatusMessage(resultRouter.getStatusCode()));
         response.addHeader("Location", resultRouter.getRedirectUrl());
         response.addHeader("Content-Length", "0");
-        response.addHeader("Server", "Webserv/1.0");
+        response.addHeader(HEADER_SERVER, "Webserv/1.0");
         return response;
     }
 
@@ -143,7 +143,6 @@ void ResponseBuilder::handleError(HttpResponse& response, const RouteResult& res
     }
 }
 
-
 bool ResponseBuilder::handleCgi(HttpResponse& response, const RouteResult& resultRouter, CgiProcess* cgi, const VectorInt& openFds) const {
     if (!cgi)
         return false;
@@ -153,7 +152,7 @@ bool ResponseBuilder::handleCgi(HttpResponse& response, const RouteResult& resul
 
 HttpResponse ResponseBuilder::buildCgiResponse(CgiProcess& cgi) {
     HttpResponse response;
-    if (cgi.finish() && CgiHandler::parseOutput(cgi.getOutput(), response))
+    if (CgiHandler::parseOutput(cgi.getOutput(), response))
         response.addHeader(HEADER_CONTENT_LENGTH, typeToString<size_t>(response.getBody().size()));
     else
         response = buildError(HTTP_INTERNAL_SERVER_ERROR, "CGI Error");

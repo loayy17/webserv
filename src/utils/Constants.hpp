@@ -30,6 +30,10 @@
 #define HEADER_CONTENT_DISPOSITION "Content-Disposition"
 #define HEADER_HOST "host"
 #define HEADER_COOKIE "cookie"
+#define HEADER_SET_COOKIE "set-cookie"
+#define HEADER_CONNECTION "Connection"
+#define HEADER_DATE "date"
+#define HEADER_SERVER "Server"
 
 // ! HTTP METHODS
 #define METHOD_GET "GET"
@@ -59,11 +63,20 @@
 #define MAX_URI_LENGTH 8192
 #define MAX_HEADER_SIZE 8192
 #define BUFFER_SIZE 4096
+#ifndef SIZE_MAX
 #define SIZE_MAX (18446744073709551615UL)
+#endif
+
+// ! CONNECTION LIMITS
+#define MAX_CONNECTIONS 1024
+#define MAX_KEEPALIVE_REQUESTS 100
 
 // ! TIMEOUTS
-#define CLIENT_TIMEOUT 60
-#define CGI_TIMEOUT 60
+#define CLIENT_TIMEOUT 160
+#define CGI_TIMEOUT 160
+#define SECONDS_PER_DAY 86400
+#define SECONDS_PER_HOUR 3600
+#define SECONDS_PER_MIN 60
 
 // ! DEFAULTS
 #define DEFAULT_PORT 80

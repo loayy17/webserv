@@ -18,6 +18,10 @@ class CgiProcess {
     String _output;
     time_t _startTime;
     bool   _active;
+    bool   _readDone;
+    bool   _writeDone;
+    bool   _exited;
+    int    _exitStatus;
 
    public:
     CgiProcess();
@@ -40,7 +44,12 @@ class CgiProcess {
     bool writeBody(int fd);
     void appendOutput(const char* data, size_t len);
     bool handleRead();
-    bool finish();
+    bool isReadDone() const;
+    bool hasExited() const;
+    int  getExitStatus() const;
+    void setExited(int status);
+    void setReadDone();
+    void setWriteDone();
     void cleanup();
 };
 

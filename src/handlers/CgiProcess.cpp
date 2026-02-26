@@ -1,7 +1,17 @@
 #include "CgiProcess.hpp"
 #include "../utils/Utils.hpp"
 
-CgiProcess::CgiProcess() : _pid(-1), _writeFd(-1), _readFd(-1), _writeOffset(0), _startTime(0), _active(false) {}
+CgiProcess::CgiProcess()
+    : _pid(-1),
+      _writeFd(-1),
+      _readFd(-1),
+      _writeOffset(0),
+      _startTime(0),
+      _active(false),
+      _readDone(false),
+      _writeDone(false),
+      _exited(false),
+      _exitStatus(0) {}
 
 CgiProcess::CgiProcess(const CgiProcess& other)
     : _pid(other._pid),
@@ -36,8 +46,12 @@ void CgiProcess::init(pid_t pid, int writeFd, int readFd, const String& body) {
     _writeBuffer = body;
     _writeOffset = 0;
     _output.clear();
-    _startTime = getCurrentTime();
-    _active    = true;
+    _startTime  = getCurrentTime();
+    _active     = true;
+    _readDone   = false;
+    _writeDone  = false;
+    _exited     = false;
+    _exitStatus = 0;
 }
 
 void CgiProcess::reset() {
@@ -47,8 +61,12 @@ void CgiProcess::reset() {
     _writeBuffer.clear();
     _writeOffset = 0;
     _output.clear();
-    _startTime = 0;
-    _active    = false;
+    _startTime  = 0;
+    _active     = false;
+    _readDone   = false;
+    _writeDone  = false;
+    _exited     = false;
+    _exitStatus = 0;
 }
 
 bool CgiProcess::isActive() const {
@@ -76,22 +94,37 @@ void CgiProcess::setWriteFd(int fd) {
 void CgiProcess::setReadFd(int fd) {
     _readFd = fd;
 }
-
 bool CgiProcess::isWriteDone() const {
-    return _writeBuffer.empty() || _writeOffset >= _writeBuffer.size();
+    return _writeDone || _writeBuffer.empty() || _writeOffset >= _writeBuffer.size();
 }
 
 bool CgiProcess::writeBody(int fd) {
-    if (isWriteDone())
+    if (isWriteDone()) {
+        if (fd != INVALID_FD) {
+            close(fd);
+            _writeFd = INVALID_FD;
+        }
+        _writeDone = true;
         return true;
+    }
     const char* data      = _writeBuffer.c_str() + _writeOffset;
     size_t      remaining = _writeBuffer.size() - _writeOffset;
     ssize_t     w         = write(fd, data, remaining);
     if (w > 0)
         _writeOffset += w;
-    else if (w < 0)
-        return false;
-    return isWriteDone();
+    else if (w < 0) {
+        close(fd);
+        _writeFd   = INVALID_FD;
+        _writeDone = true;
+        return true;
+    }
+    if (isWriteDone()) {
+        close(fd);
+        _writeFd   = INVALID_FD;
+        _writeDone = true;
+        return true;
+    }
+    return false;
 }
 
 void CgiProcess::appendOutput(const char* data, size_t len) {
@@ -105,30 +138,32 @@ bool CgiProcess::handleRead() {
         _output.append(buf, n);
         return true;
     }
-    return false;
-}
 
-bool CgiProcess::finish() {
-    if (_writeFd != INVALID_FD) {
-        close(_writeFd);
-        _writeFd = INVALID_FD;
-    }
     if (_readFd != INVALID_FD) {
         close(_readFd);
         _readFd = INVALID_FD;
     }
-    int   status = 0;
-    pid_t ret    = waitpid(_pid, &status, WNOHANG);
-    if (ret == 0) {
-        kill(_pid, SIGTERM);
-        ret = waitpid(_pid, &status, WNOHANG);
-        if (ret == 0) {
-            kill(_pid, SIGKILL);
-            waitpid(_pid, &status, 0);
-        }
-    }
-    _active = false;
-    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+    _readDone = true;
+    return false;
+}
+bool CgiProcess::isReadDone() const {
+    return _readDone;
+}
+bool CgiProcess::hasExited() const {
+    return _exited;
+}
+int CgiProcess::getExitStatus() const {
+    return _exitStatus;
+}
+void CgiProcess::setExited(int status) {
+    _exited     = true;
+    _exitStatus = status;
+}
+void CgiProcess::setReadDone() {
+    _readDone = true;
+}
+void CgiProcess::setWriteDone() {
+    _writeDone = true;
 }
 
 void CgiProcess::cleanup() {
@@ -136,7 +171,7 @@ void CgiProcess::cleanup() {
         return;
     if (_pid > 0) {
         kill(_pid, SIGKILL);
-        waitpid(_pid, NULL, 0);
+        waitpid(_pid, NULL, WNOHANG);
     }
     if (_writeFd != INVALID_FD)
         close(_writeFd);

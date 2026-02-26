@@ -17,8 +17,9 @@ class HttpResponse {
     void   addSetCookie(const String& cookie);
     void   setResponseHeaders(const String& contentType, size_t contentLength);
     void   setBody(const String&);
+    void   setHttpVersion(const String& version);
     String getBody() const;
-    String toString() const;
+    String toString();
     int    getStatusCode() const;
 
     String getStatusMessage() const;
@@ -26,6 +27,7 @@ class HttpResponse {
    private:
     int          statusCode;
     String       statusMessage;
+    String       httpVersion;
     MapString    headers;
     VectorString setCookies;
     String       body;

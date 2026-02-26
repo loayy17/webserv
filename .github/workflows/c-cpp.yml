@@ -2,9 +2,10 @@ name: C/C++ CI
 
 on:
   push:
-    branches: [ "main" ]
+    # for two branches: main and develop, use: branches: [ "main", "develop" ]
+    branches: [ "main", "tester" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "tester" ]
 
 jobs:
   build:

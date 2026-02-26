@@ -1,5 +1,7 @@
 #include "Client.hpp"
 
+#define MAX_RECEIVE_PER_CALL (1024 * 1024) // 1MB max per poll iteration
+
 Client::Client() : client_fd(-1), _sendOffset(0), lastActivity(0), _keepAlive(false), _requestCount(0) {}
 
 Client::Client(const Client& other)
@@ -48,6 +50,8 @@ ssize_t Client::receiveData() {
     while ((n = read(client_fd, tmp, BUFFER_SIZE)) > 0) {
         storeReceiveData.append(tmp, n);
         total += n;
+        if (total >= MAX_RECEIVE_PER_CALL)
+            break;
     }
     if (total > 0)
         updateTime(lastActivity);

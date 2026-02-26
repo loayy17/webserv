@@ -278,8 +278,9 @@ void ServerManager::sendErrorResponse(Client* client, int statusCode, const Stri
 }
 
 void ServerManager::processRequest(Client* client, Server* server) {
-    const String& buffer   = client->getStoreReceiveData();
-    size_t        dataSize = buffer.size();
+    try {
+        const String& buffer   = client->getStoreReceiveData();
+        size_t        dataSize = buffer.size();
 
     // 1. Detect end of headers
     size_t headerEnd    = buffer.find(DOUBLE_CRLF);
@@ -312,6 +313,15 @@ void ServerManager::processRequest(Client* client, Server* server) {
     if (hasContentLength && isChunked) {
         sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
         return;
+    }
+
+    // Early rejection: check Content-Length against server max before buffering body
+    if (hasContentLength && contentLength > 0) {
+        ssize_t serverMax = serverToConfigs[server->getFd()][0].getClientMaxBody();
+        if (serverMax != -1 && contentLength > serverMax) {
+            sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, 0);
+            return;
+        }
     }
 
     size_t requestSize = 0;
@@ -479,6 +489,13 @@ void ServerManager::processRequest(Client* client, Server* server) {
     client->removeReceivedData(requestSize);
 
     pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+    } catch (const std::bad_alloc&) {
+        Logger::error("Memory allocation failed in processRequest - request too large");
+        sendErrorResponse(client, HTTP_INTERNAL_SERVER_ERROR, "Internal Server Error", true, 0);
+    } catch (const std::exception& e) {
+        Logger::error("Exception in processRequest: " + String(e.what()));
+        sendErrorResponse(client, HTTP_INTERNAL_SERVER_ERROR, "Internal Server Error", true, 0);
+    }
 }
 
 void ServerManager::closeClientConnection(int clientFd) {
@@ -530,8 +547,6 @@ void ServerManager::handleCgiWrite(int pipeFd) {
     }
     if (client->getCgi().writeBody(pipeFd)) {
         removeCgiPipe(pipeFd);
-        close(pipeFd);
-        client->getCgi().setWriteFd(-1);
         client->getCgi().setWriteDone();
         // If child already exited and read is done, build response
         if (client->getCgi().hasExited() && client->getCgi().isReadDone()) {
@@ -553,7 +568,6 @@ void ServerManager::handleCgiRead(int pipeFd) {
     }
     if (!client->getCgi().handleRead()) {
         removeCgiPipe(pipeFd);
-        close(pipeFd);
         client->getCgi().setReadDone();
        if (client->getCgi().hasExited() && client->getCgi().isWriteDone()) {
             ResponseBuilder& builder = responseBuilder;

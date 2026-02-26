@@ -119,7 +119,14 @@ bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response,
     close(childToParent[1]);
     setNonBlocking(parentToChild[1]);
     setNonBlocking(childToParent[0]);
-    _cgi->init(pid, parentToChild[1], childToParent[0], resultRouter.getRequest().getBody());
+
+    // Streaming optimization:
+    if (resultRouter.getUseDechunked()) {
+        _cgi->initInternal(pid, parentToChild[1], childToParent[0], resultRouter.getDechunkedBody(), resultRouter.getRequestSize());
+    } else {
+        _cgi->init(pid, parentToChild[1], childToParent[0], resultRouter.getClientBuffer(), resultRouter.getBodyOffset(),
+                   resultRouter.getBodyLength(), resultRouter.getRequestSize());
+    }
     return true;
 }
 // ─── Static helpers ──────────────────────────────────────────────────────────

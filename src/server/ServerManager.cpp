@@ -325,7 +325,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
     }
 
     size_t requestSize = 0;
-    String fullRequest;
+    String decodedBody;
 
     // 2. Handle body (Chunked)
 
@@ -348,14 +348,11 @@ void ServerManager::processRequest(Client* client, Server* server) {
             return;
 
         String chunkedBody = bodyPart.substr(0, endMarker + 4);
-        String decodedBody;
 
         if (!decodeChunkedBody(chunkedBody, decodedBody)) {
             sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
             return;
         }
-
-        fullRequest = headerSection + "\r\nContent-Length: " + typeToString<size_t>(decodedBody.size()) + "\r\n\r\n" + decodedBody;
     }
     // 3. Handle Content-Length
     else {
@@ -375,15 +372,19 @@ void ServerManager::processRequest(Client* client, Server* server) {
 
         if (dataSize < requestSize)
             return;
-
-        fullRequest = buffer.substr(0, requestSize);
     }
 
-    // 4. Parse HTTP request
+    // 4. Parse HTTP request (Headers only initially to avoid body copy)
     HttpRequest request;
-    if (!request.parse(fullRequest)) {
-        sendErrorResponse(client, request.getErrorCode(), getHttpStatusMessage(request.getErrorCode()), true, requestSize);
+    if (!request.parseHeaders(headerSection)) {
+        sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, requestSize);
         return;
+    }
+
+    // Populate request body ONLY if it's chunked (already de-chunked above)
+    // For Content-Length, we will stream directly from client's buffer.
+    if (isChunked) {
+        request.parseBody(decodedBody);
     }
 
     request.setPort(server->getPort());
@@ -397,27 +398,35 @@ void ServerManager::processRequest(Client* client, Server* server) {
 
     String newSessionId;
 
-    if (!session && request.getMethod() == "POST" && !request.getBody().empty()) {
-        String       body = request.getBody();
-        String       username;
-        VectorString pairs;
-
-        splitByString(body, pairs, "&");
-
-        for (size_t i = 0; i < pairs.size(); ++i) {
-            String key, val;
-            if (splitByChar(pairs[i], key, val, '=') && trimSpaces(key) == "username") {
-                username = trimSpaces(val);
-                break;
-            }
+    if (!session && request.getMethod() == "POST" && (isChunked || (hasContentLength && contentLength > 0))) {
+        String body;
+        if (isChunked) {
+             body = request.getBody();
+        } else if (contentLength < 1024 * 1024) { // only peek if < 1MB
+             body = buffer.substr(headerEnd + headerEndLen, contentLength);
         }
 
-        if (!username.empty()) {
-            try {
-                newSessionId = sessionManager.createSession(username);
-                session      = sessionManager.getSession(newSessionId);
-            } catch (const std::exception& e) {
-                Logger::error("Failed to create session: " + String(e.what()));
+        if (!body.empty()) {
+            String       username;
+            VectorString pairs;
+
+            splitByString(body, pairs, "&");
+
+            for (size_t i = 0; i < pairs.size(); ++i) {
+                String key, val;
+                if (splitByChar(pairs[i], key, val, '=') && trimSpaces(key) == "username") {
+                    username = trimSpaces(val);
+                    break;
+                }
+            }
+
+            if (!username.empty()) {
+                try {
+                    newSessionId = sessionManager.createSession(username);
+                    session      = sessionManager.getSession(newSessionId);
+                } catch (const std::exception& e) {
+                    Logger::error("Failed to create session: " + String(e.what()));
+                }
             }
         }
     }
@@ -431,10 +440,34 @@ void ServerManager::processRequest(Client* client, Server* server) {
     const LocationConfig* loc    = routerResult.getLocation();
     ssize_t               locMax = (loc ? loc->getClientMaxBody() : -1);
 
-    if (locMax != -1 && static_cast<ssize_t>(request.getBody().size()) > locMax) {
+    size_t actualBodySize = isChunked ? request.getBody().size() : (hasContentLength ? static_cast<size_t>(contentLength) : 0);
+
+    if (locMax != -1 && static_cast<ssize_t>(actualBodySize) > locMax) {
         sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, requestSize);
         return;
     }
+
+    // Streaming metadata for CGI
+    if (routerResult.getHandlerType() == CGI) {
+        if (!isChunked) {
+            routerResult.setClientBuffer(&client->getStoreReceiveData());
+            routerResult.setBodyOffset(headerEnd + headerEndLen);
+            routerResult.setBodyLength(actualBodySize);
+            routerResult.setUseDechunked(false);
+        } else {
+            // For chunked, we MUST copy because we can't point into a local 'decodedBody'
+            // RouteResult will store it
+            routerResult.setDechunkedBody(decodedBody);
+            routerResult.setUseDechunked(true);
+        }
+    } else {
+        // Not CGI. Ensure request.body is populated if needed (e.g. UPLOAD)
+        if (!isChunked && actualBodySize > 0) {
+             request.parseBody(buffer.substr(headerEnd + headerEndLen, actualBodySize));
+             routerResult.setRequest(request);
+        }
+    }
+    routerResult.setRequestSize(requestSize);
 
     // 7. Keep-Alive logic
     bool keepAlive = (request.getHttpVersion() == HTTP_VERSION_1_1);
@@ -480,7 +513,9 @@ void ServerManager::processRequest(Client* client, Server* server) {
     // 9. CGI Handling
     if (client->getCgi().isActive()) {
         registerCgiPipes(client);
-        client->removeReceivedData(requestSize);
+        // If it was already done (e.g. no body), we can remove now
+        if (client->getCgi().isWriteDone())
+             client->removeReceivedData(requestSize);
         return;
     }
 
@@ -548,6 +583,10 @@ void ServerManager::handleCgiWrite(int pipeFd) {
     if (client->getCgi().writeBody(pipeFd)) {
         removeCgiPipe(pipeFd);
         client->getCgi().setWriteDone();
+
+        // Remove data from client buffer now that CGI has consumed it
+        client->removeReceivedData(client->getCgi().getRequestSize());
+
         // If child already exited and read is done, build response
         if (client->getCgi().hasExited() && client->getCgi().isReadDone()) {
             ResponseBuilder& builder = responseBuilder;

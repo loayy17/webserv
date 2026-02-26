@@ -19,7 +19,6 @@ class CgiProcess {
     void init(pid_t pid, int writeFd, int readFd, const String* clientBuffer, size_t bodyOffset, size_t bodyLength,
               size_t requestSize);
 
-    // New init for internal buffer (used for chunked)
     void initInternal(pid_t pid, int writeFd, int readFd, const String& internalBody, size_t requestSize);
 
     void  reset();
@@ -53,17 +52,15 @@ class CgiProcess {
     int           _writeFd;
     int           _readFd;
 
-    // Streaming from client buffer
     const String* _clientBuffer;
     size_t        _bodyOffset;
     size_t        _bodyLength;
     size_t        _writeOffset;
 
-    // Internal buffer for cases where we can't point to client buffer (e.g. chunked)
     String        _internalBuffer;
     bool          _useInternal;
 
-    size_t        _requestSize; // size of the HTTP request to remove from client buffer when done
+    size_t        _requestSize;
     String        _output;
     time_t        _startTime;
     bool          _active;

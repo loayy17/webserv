@@ -29,7 +29,6 @@ class RouteResult {
     void setHandlerType(HandlerType type);
     void setRemoteAddress(const String& address);
 
-    // Streaming metadata
     void setBodyOffset(size_t offset);
     void setBodyLength(size_t length);
     void setRequestSize(size_t size);

@@ -21,7 +21,11 @@ CgiProcess::CgiProcess(const CgiProcess& other)
       _writeOffset(other._writeOffset),
       _output(other._output),
       _startTime(other._startTime),
-      _active(other._active) {}
+      _active(other._active),
+      _readDone(other._readDone),
+      _writeDone(other._writeDone),
+      _exited(other._exited),
+      _exitStatus(other._exitStatus) {}
 
 CgiProcess& CgiProcess::operator=(const CgiProcess& other) {
     if (this != &other) {
@@ -33,6 +37,10 @@ CgiProcess& CgiProcess::operator=(const CgiProcess& other) {
         _output      = other._output;
         _startTime   = other._startTime;
         _active      = other._active;
+        _readDone    = other._readDone;
+        _writeDone   = other._writeDone;
+        _exited      = other._exited;
+        _exitStatus  = other._exitStatus;
     }
     return *this;
 }

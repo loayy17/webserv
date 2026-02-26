@@ -12,6 +12,7 @@ class Client {
     int        client_fd;
     String     storeReceiveData;
     String     storeSendData;
+    size_t     _sendOffset;
     time_t     lastActivity;
     CgiProcess _cgi;
     bool       _keepAlive;
@@ -36,7 +37,7 @@ class Client {
     const String& getStoreReceiveData() const;
     const String& getStoreSendData() const;
     int           getFd() const;
-    String        getRemoteAddress() const;
+    const String& getRemoteAddress() const;
 
     CgiProcess&       getCgi();
     const CgiProcess& getCgi() const;

@@ -32,18 +32,18 @@ class RouteResult {
     // Getters
     int                   getStatusCode() const;
     bool                  getIsRedirect() const;
-    String                getRedirectUrl() const;
-    String                getPathRootUri() const;
-    String                getMatchedPath() const;
-    String                getRemainingPath() const;
-    String                getErrorMessage() const;
+    const String&         getRedirectUrl() const;
+    const String&         getPathRootUri() const;
+    const String&         getMatchedPath() const;
+    const String&         getRemainingPath() const;
+    const String&         getErrorMessage() const;
     const ServerConfig*   getServer() const;
     const LocationConfig* getLocation() const;
     bool                  getIsCgiRequest() const;
     bool                  getIsUploadRequest() const;
     const HttpRequest&    getRequest() const;
     HandlerType           getHandlerType() const;
-    String                getRemoteAddress() const;
+    const String&         getRemoteAddress() const;
 
    private:
     int                   statusCode;

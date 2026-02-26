@@ -18,9 +18,11 @@ void setupSignals() {
 }
 
 int main(int ac, char** av) {
+    setupSignals();
+
     String configFile = (ac > 1) ? av[1] : "webserv.conf";
-    if (!fileExists(configFile) || !fileExists("src/config/mime.types")) {
-        Logger::error("Error: Configuration file '" + configFile + "' not found or 'mime.types' file is missing.");
+    if (!fileExists(configFile)) {
+        Logger::error("Error: Configuration file '" + configFile + "' not found.");
         return 1;
     }
     Logger::info("========================================");
@@ -37,8 +39,6 @@ int main(int ac, char** av) {
     }
 
     ServerManager serverManager(configs);
-
-    setupSignals();
 
     if (!serverManager.initialize()) {
         Logger::error("Failed to initialize server manager");

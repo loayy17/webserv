@@ -61,6 +61,7 @@ String HttpResponse::getBody() const {
 
 String HttpResponse::toString() {
     String ss;
+    ss.reserve(256 + headers.size() * 50 + setCookies.size() * 80 + body.size());
     ss += httpVersion + " " + typeToString<int>(statusCode) + " " + statusMessage + "\r\n";
     addHeader(HEADER_DATE, formatDateTime());
     addHeader(HEADER_SERVER, "Webserv/1.0");

@@ -258,13 +258,13 @@ void HttpRequest::parseCookies(const String& cookieHeader) {
     }
 }
 // Getters
-String HttpRequest::getMethod() const {
+const String& HttpRequest::getMethod() const {
     return method;
 }
-String HttpRequest::getUri() const {
+const String& HttpRequest::getUri() const {
     return uri;
 }
-String HttpRequest::getHttpVersion() const {
+const String& HttpRequest::getHttpVersion() const {
     return httpVersion;
 }
 String HttpRequest::getHeader(const String& key) const {
@@ -278,17 +278,17 @@ String HttpRequest::getHeader(const String& key) const {
 const MapString& HttpRequest::getHeaders() const {
     return headers;
 }
-String HttpRequest::getBody() const {
+const String& HttpRequest::getBody() const {
     return body;
 }
 size_t HttpRequest::getContentLength() const {
     return contentLength;
 }
-String HttpRequest::getContentType() const {
+const String& HttpRequest::getContentType() const {
     return contentType;
 }
 
-String HttpRequest::getHost() const {
+const String& HttpRequest::getHost() const {
     return host;
 }
 int HttpRequest::getPort() const {
@@ -320,6 +320,6 @@ int HttpRequest::getErrorCode() const {
     return errorCode;
 }
 
-String HttpRequest::getQueryString() const {
+const String& HttpRequest::getQueryString() const {
     return queryString;
 }

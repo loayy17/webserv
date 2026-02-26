@@ -44,6 +44,7 @@ class ServerManager {
     MapIntServerPtr          clientToServer;
     MapIntVectorServerConfig serverToConfigs;
     MimeTypes                mimeTypes;
+    ResponseBuilder          responseBuilder;
     SessionManager           sessionManager;
     MapInt                   cgiPipeToClient;
 

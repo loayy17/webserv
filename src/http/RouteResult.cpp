@@ -132,23 +132,23 @@ bool RouteResult::getIsRedirect() const {
     return isRedirect;
 }
 
-String RouteResult::getRedirectUrl() const {
+const String& RouteResult::getRedirectUrl() const {
     return redirectUrl;
 }
 
-String RouteResult::getPathRootUri() const {
+const String& RouteResult::getPathRootUri() const {
     return pathRootUri;
 }
 
-String RouteResult::getMatchedPath() const {
+const String& RouteResult::getMatchedPath() const {
     return matchedPath;
 }
 
-String RouteResult::getRemainingPath() const {
+const String& RouteResult::getRemainingPath() const {
     return remainingPath;
 }
 
-String RouteResult::getErrorMessage() const {
+const String& RouteResult::getErrorMessage() const {
     return errorMessage;
 }
 
@@ -176,6 +176,6 @@ HandlerType RouteResult::getHandlerType() const {
     return handlerType;
 }
 
-String RouteResult::getRemoteAddress() const {
+const String& RouteResult::getRemoteAddress() const {
     return remoteAddress;
 }

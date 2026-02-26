@@ -34,20 +34,20 @@ class HttpRequest {
     void parseCookies(const String& cookieHeader);
 
     // Getters
-    String           getMethod() const;
-    String           getUri() const;
-    String           getHttpVersion() const;
+    const String&    getMethod() const;
+    const String&    getUri() const;
+    const String&    getHttpVersion() const;
     String           getHeader(const String& key) const;
     const MapString& getHeaders() const;
-    String           getBody() const;
+    const String&    getBody() const;
     size_t           getContentLength() const;
-    String           getContentType() const;
-    String           getHost() const;
+    const String&    getContentType() const;
+    const String&    getHost() const;
     int              getPort() const;
     String           getCookie(const String& key) const;
     const MapString& getCookies() const;
     int              getErrorCode() const;
-    String           getQueryString() const;
+    const String&    getQueryString() const;
 
     // Setters
     void setPort(int serverPort);

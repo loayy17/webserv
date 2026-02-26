@@ -45,11 +45,9 @@ String formatDateTime(time_t t) {
     }
 
     // Month and day calculation
-
     int month = 0;
     while (month < 12) {
         int daysInMonth = MONTH_DAYS[month];
-        // Adjust February for leap year
         if (month == 1 && isLeapYear(year))
             daysInMonth = 29;
         if (remainingDays >= daysInMonth) {
@@ -491,7 +489,7 @@ size_t convertMaxBodySize(const String& clientMaxBodySize) {
 
     size_t            size       = 0;
     char              unit       = clientMaxBodySize[clientMaxBodySize.size() - 1];
-    String            numberPart = (unit >= '9' || unit <= '0') ? clientMaxBodySize : clientMaxBodySize.substr(0, clientMaxBodySize.size() - 1);
+    String            numberPart = std::isdigit(static_cast<unsigned char>(unit)) ? clientMaxBodySize : clientMaxBodySize.substr(0, clientMaxBodySize.size() - 1);
     std::stringstream ss(numberPart);
     ss >> size;
     if (ss.fail())

@@ -1,14 +1,16 @@
 #include "Client.hpp"
 
-Client::Client() : client_fd(-1), lastActivity(0), _keepAlive(false), _requestCount(0) {}
+Client::Client() : client_fd(-1), _sendOffset(0), lastActivity(0), _keepAlive(false), _requestCount(0) {}
 
 Client::Client(const Client& other)
     : client_fd(other.client_fd),
       storeReceiveData(other.storeReceiveData),
       storeSendData(other.storeSendData),
+      _sendOffset(other._sendOffset),
       lastActivity(other.lastActivity),
       _cgi(other._cgi),
       _keepAlive(other._keepAlive),
+      remoteAddress(other.remoteAddress),
       _requestCount(other._requestCount) {}
 
 Client& Client::operator=(const Client& other) {
@@ -16,15 +18,17 @@ Client& Client::operator=(const Client& other) {
         client_fd        = other.client_fd;
         storeReceiveData = other.storeReceiveData;
         storeSendData    = other.storeSendData;
+        _sendOffset      = other._sendOffset;
         lastActivity     = other.lastActivity;
         _cgi             = other._cgi;
         _keepAlive       = other._keepAlive;
+        remoteAddress    = other.remoteAddress;
         _requestCount    = other._requestCount;
     }
     return *this;
 }
 
-Client::Client(int fd) : client_fd(fd), _keepAlive(false), _requestCount(0) {
+Client::Client(int fd) : client_fd(fd), _sendOffset(0), _keepAlive(false), _requestCount(0) {
     lastActivity = getCurrentTime();
 }
 
@@ -51,18 +55,23 @@ ssize_t Client::receiveData() {
 }
 
 ssize_t Client::sendData() {
-    if (storeSendData.empty())
+    if (_sendOffset >= storeSendData.size())
         return 0;
-    ssize_t sent = write(client_fd, storeSendData.c_str(), storeSendData.size());
+    ssize_t sent = write(client_fd, storeSendData.c_str() + _sendOffset, storeSendData.size() - _sendOffset);
     if (sent > 0) {
-        storeSendData.erase(0, sent);
+        _sendOffset += sent;
         updateTime(lastActivity);
+        if (_sendOffset >= storeSendData.size()) {
+            storeSendData.clear();
+            _sendOffset = 0;
+        }
     }
     return sent;
 }
 
 void Client::setSendData(const String& data) {
     storeSendData = data;
+    _sendOffset   = 0;
 }
 
 void Client::setRemoteAddress(const String& address) {
@@ -108,13 +117,9 @@ const CgiProcess& Client::getCgi() const {
     return _cgi;
 }
 
-String Client::getRemoteAddress() const {
+const String& Client::getRemoteAddress() const {
     return remoteAddress;
 }
-// "http://localhost:8080/cgi-bin/env.py/loay?omar=my_bitch
-// scriptNmae: /cgi-bin/env.py
-//query omar=my_bitch
-//path_info /loay
 
 void Client::setKeepAlive(bool keepAlive) {
     _keepAlive = keepAlive;

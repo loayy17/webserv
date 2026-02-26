@@ -1,9 +1,9 @@
 #include "ServerManager.hpp"
 ServerManager::ServerManager()
-    : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
+    : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {}
 
 ServerManager::ServerManager(const VectorServerConfig& _configs)
-    : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
+    : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {}
 
 ServerManager::~ServerManager() {
     shutdown();
@@ -155,7 +155,7 @@ void ServerManager::reapCgiProcesses() {
             cgi.setExited(status);
             // if both pipes done, build and send response
             if (cgi.isReadDone() && cgi.isWriteDone()) {
-                ResponseBuilder builder(mimeTypes);
+                ResponseBuilder& builder = responseBuilder;
                 HttpResponse response = builder.buildCgiResponse(cgi);
                 client->setSendData(response.toString());
                 pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
@@ -244,7 +244,7 @@ void ServerManager::checkTimeouts(int timeout) {
             if (getDifferentTime(it->second->getCgi().getStartTime(), getCurrentTime()) > CGI_TIMEOUT) {
                 Logger::info("CGI timeout, killing process");
                 cleanupClientCgi(it->second);
-                ResponseBuilder builder(mimeTypes);
+                ResponseBuilder& builder = responseBuilder;
                 HttpResponse    response = builder.buildError(HTTP_GATEWAY_TIMEOUT, "CGI Timeout");
                 it->second->setSendData(response.toString());
                 pollManager.addFd(it->first, POLLIN | POLLOUT);
@@ -262,8 +262,7 @@ void ServerManager::checkTimeouts(int timeout) {
 }
 
 void ServerManager::sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove) {
-    ResponseBuilder builder(mimeTypes);
-    HttpResponse    response = builder.buildError(statusCode, message);
+    HttpResponse    response = responseBuilder.buildError(statusCode, message);
     if (closeConnection) {
         response.addHeader(HEADER_CONNECTION, "close");
         client->setKeepAlive(false);
@@ -455,8 +454,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
     }
 
     // 8. Build Response
-    ResponseBuilder builder(mimeTypes);
-    HttpResponse    response = builder.build(routerResult, &client->getCgi(), pollManager.getFds());
+    HttpResponse    response = responseBuilder.build(routerResult, &client->getCgi(), pollManager.getFds());
 
     // Match response HTTP version to request version
     response.setHttpVersion(request.getHttpVersion());
@@ -488,12 +486,7 @@ void ServerManager::closeClientConnection(int clientFd) {
     if (c && c->getCgi().isActive())
         cleanupClientCgi(c);
 
-    for (size_t i = 0; i < pollManager.size(); i++) {
-        if (pollManager.getFd(i) == clientFd) {
-            pollManager.removeFd(i);
-            break;
-        }
-    }
+    pollManager.removeFdByValue(clientFd);
     if (c) {
         c->closeConnection();
         delete c;
@@ -507,12 +500,7 @@ bool ServerManager::isCgiPipe(int fd) const {
 }
 
 void ServerManager::removeCgiPipe(int pipeFd) {
-    for (size_t i = 0; i < pollManager.size(); i++) {
-        if (pollManager.getFd(i) == pipeFd) {
-            pollManager.removeFd(i);
-            break;
-        }
-    }
+    pollManager.removeFdByValue(pipeFd);
     cgiPipeToClient.erase(pipeFd);
 }
 
@@ -547,7 +535,7 @@ void ServerManager::handleCgiWrite(int pipeFd) {
         client->getCgi().setWriteDone();
         // If child already exited and read is done, build response
         if (client->getCgi().hasExited() && client->getCgi().isReadDone()) {
-            ResponseBuilder builder(mimeTypes);
+            ResponseBuilder& builder = responseBuilder;
             client->setSendData(builder.buildCgiResponse(client->getCgi()).toString());
             pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
         }
@@ -568,7 +556,7 @@ void ServerManager::handleCgiRead(int pipeFd) {
         close(pipeFd);
         client->getCgi().setReadDone();
        if (client->getCgi().hasExited() && client->getCgi().isWriteDone()) {
-            ResponseBuilder builder(mimeTypes);
+            ResponseBuilder& builder = responseBuilder;
             client->setSendData(builder.buildCgiResponse(client->getCgi()).toString());
             pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
         }

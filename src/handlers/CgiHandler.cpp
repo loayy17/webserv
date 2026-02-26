@@ -191,14 +191,11 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     env.push_back("QUERY_STRING=" + req.getQueryString());
     env.push_back("SCRIPT_NAME=" + scriptName);
     env.push_back("SCRIPT_FILENAME=" + resultRouter.getPathRootUri());
-    // it must be pathInfo variable but we set it to uri just for tester work
     env.push_back("PATH_INFO=" + uri);
-    if (!pathInfo.empty()) {
+    if (!pathInfo.empty())
         env.push_back("PATH_TRANSLATED=" + joinPaths(loc->getRoot(), pathInfo));
-    } else {
-        // Fallback for cgi_tester: if pathInfo is empty, some versions expect URI in PATH_INFO
-        env.push_back("PATH_TRANSLATED=" + resultRouter.getPathRootUri());
-    }
+    else
+        env.push_back("PATH_TRANSLATED=" + loc->getRoot());
     env.push_back("REDIRECT_STATUS=200");
     env.push_back("REMOTE_ADDR=" + resultRouter.getRemoteAddress());
     // --- POST info ---

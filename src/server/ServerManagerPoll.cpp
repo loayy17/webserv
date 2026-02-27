@@ -177,6 +177,8 @@ void ServerManagerPoll::checkTimeouts(int timeout) {
             if (getDifferentTime(it->second->getCgi().getStartTime(), getCurrentTime()) > CGI_TIMEOUT) {
                 cleanupClientCgi(it->second);
                 it->second->setSendData(ResponseBuilder(mimeTypes).buildError(HTTP_GATEWAY_TIMEOUT, "CGI Timeout").toString());
+                it->second->setHeadersParsed(false);
+                it->second->getRequest().clear();
                 pollManager.addFd(it->first, POLLIN | POLLOUT);
             }
         } else if (it->second->isTimedOut(timeout)) {
@@ -195,53 +197,155 @@ void ServerManagerPoll::sendErrorResponse(Client* client, int statusCode, const 
     client->setSendData(response.toString());
     if (bytesToRemove > 0) client->removeReceivedData(bytesToRemove);
     else client->clearStoreReceiveData();
+    client->setHeadersParsed(false);
+    client->getRequest().clear();
     pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
 }
 
 void ServerManagerPoll::processRequest(Client* client, Server* server) {
-    if (!client->isHeadersParsed()) {
-        const String& buffer = client->getStoreReceiveData();
+    while (true) {
+        if (!client->isHeadersParsed()) {
+            const String& buffer = client->getStoreReceiveData();
+            if (buffer.empty()) break;
 
-        if (buffer.size() > MAX_HEADER_SIZE) {
-            sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, 0);
-            return;
-        }
-
-        size_t headerEnd = buffer.find(DOUBLE_CRLF);
-        if (headerEnd == String::npos) return;
-        if (!client->getRequest().parseHeaders(buffer.substr(0, headerEnd))) {
-            sendErrorResponse(client, client->getRequest().getErrorCode(), "Bad Request", true, headerEnd + 4);
-            return;
-        }
-        client->getRequest().setPort(server->getPort());
-        client->setHeadersParsed(true);
-        client->removeReceivedData(headerEnd + 4);
-
-        Router router(serverToConfigs[server->getFd()], client->getRequest());
-        RouteResult res = router.processRequest();
-        if (res.getHandlerType() == CGI) {
-            ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
-            if (client->getCgi().isActive()) registerCgiPipes(client);
-        }
-    }
-    if (client->isHeadersParsed()) {
-        if (client->getCgi().isActive()) {
-            if (!client->getStoreReceiveData().empty()) {
-                client->getCgi().appendBuffer(client->getStoreReceiveData());
-                client->clearStoreReceiveData();
+            if (buffer.size() > MAX_HEADER_SIZE) {
+                sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, 0);
+                return;
             }
-        } else {
-            ssize_t cl = client->getRequest().getContentLength();
-            if (client->getStoreReceiveData().size() >= (size_t)cl) {
-                client->getRequest().parseBody(client->getStoreReceiveData().substr(0, cl));
-                Router router(serverToConfigs[server->getFd()], client->getRequest());
-                HttpResponse response = ResponseBuilder(mimeTypes).build(router.processRequest(), &client->getCgi(), VectorInt());
-                client->setSendData(response.toString());
-                client->removeReceivedData(cl);
-                client->setHeadersParsed(false);
-                pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+
+            if (buffer[0] == '\r' || buffer[0] == '\n') {
+                size_t start = 0;
+                while (start < buffer.size() && (buffer[start] == '\r' || buffer[start] == '\n')) start++;
+                client->removeReceivedData(start);
+                continue;
+            }
+
+            size_t headerEnd = buffer.find(DOUBLE_CRLF);
+            size_t headerEndLen = 4;
+            if (headerEnd == String::npos) {
+                headerEnd = buffer.find("\n\n");
+                headerEndLen = 2;
+            }
+            if (headerEnd == String::npos) break;
+
+            if (!client->getRequest().parseHeaders(buffer.substr(0, headerEnd))) {
+                sendErrorResponse(client, client->getRequest().getErrorCode(), "Bad Request", true, headerEnd + headerEndLen);
+                return;
+            }
+            client->getRequest().setPort(server->getPort());
+
+            bool keepAlive = (client->getRequest().getHttpVersion() == HTTP_VERSION_1_1);
+            String conn = toLowerWords(client->getRequest().getHeader("connection"));
+            if (conn == "close") keepAlive = false;
+            else if (conn == "keep-alive") keepAlive = true;
+            client->setKeepAlive(keepAlive);
+
+            client->setHeadersParsed(true);
+            client->removeReceivedData(headerEnd + headerEndLen);
+
+            Router router(serverToConfigs[server->getFd()], client->getRequest());
+            RouteResult res = router.processRequest();
+            res.setRemoteAddress(client->getRemoteAddress());
+
+            if (res.getHandlerType() == CGI) {
+                ssize_t cl = client->getRequest().getContentLength();
+                bool isChunked = (toLowerWords(client->getRequest().getHeader("transfer-encoding")).find("chunked") != String::npos);
+                if (cl <= 0 && !isChunked) client->getCgi().setWriteDone(true);
+
+                ResponseBuilder builder(mimeTypes);
+                builder.build(res, &client->getCgi(), VectorInt());
+                if (client->getCgi().isActive()) {
+                    registerCgiPipes(client);
+                    break;
+                }
             }
         }
+
+        if (client->isHeadersParsed()) {
+            bool isChunked = (toLowerWords(client->getRequest().getHeader("transfer-encoding")).find("chunked") != String::npos);
+            if (client->getCgi().isActive()) {
+                if (isChunked) {
+                    String decoded;
+                    if (decodeChunkedBody(client->getStoreReceiveData(), decoded)) {
+                        client->getCgi().appendBuffer(decoded);
+                        client->getCgi().setWriteDone(true);
+                        client->clearStoreReceiveData();
+                        pollManager.addFd(client->getCgi().getWriteFd(), POLLOUT);
+                    }
+                } else {
+                    ssize_t cl = client->getRequest().getContentLength();
+                    size_t currentBodySize = client->getRequest().getBody().size();
+                    size_t toWrite = std::min(client->getStoreReceiveData().size(), (size_t)(cl - currentBodySize));
+                    if (toWrite > 0) {
+                        String part = client->getStoreReceiveData().substr(0, toWrite);
+                        client->getCgi().appendBuffer(part);
+                        client->getRequest().parseBody(client->getRequest().getBody() + part);
+                        client->removeReceivedData(toWrite);
+                        pollManager.addFd(client->getCgi().getWriteFd(), POLLOUT);
+                    }
+                    if (client->getRequest().getBody().size() >= (size_t)cl) client->getCgi().setWriteDone(true);
+                }
+                break;
+            } else {
+                ssize_t cl = client->getRequest().getContentLength();
+                if (!isChunked && client->getStoreReceiveData().size() >= (size_t)cl) {
+                    if (cl > 0) client->getRequest().parseBody(client->getStoreReceiveData().substr(0, cl));
+                    Router router(serverToConfigs[server->getFd()], client->getRequest());
+                    RouteResult res = router.processRequest();
+                    res.setRemoteAddress(client->getRemoteAddress());
+
+                    if (res.getHandlerType() == CGI) {
+                        bool isChunked2 = (toLowerWords(client->getRequest().getHeader("transfer-encoding")).find("chunked") != String::npos);
+                        if (cl <= 0 && !isChunked2) client->getCgi().setWriteDone(true);
+                        ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
+                        if (client->getCgi().isActive()) {
+                            registerCgiPipes(client);
+                            break;
+                        }
+                    } else {
+                        HttpResponse response = ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
+                        if (!client->isKeepAlive()) response.addHeader("Connection", "close");
+                        else response.addHeader("Connection", "keep-alive");
+                        client->setSendData(response.toString());
+                        if (cl > 0) client->removeReceivedData(cl);
+                        client->setHeadersParsed(false);
+                        client->getRequest().clear();
+                        pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+                        continue;
+                    }
+                } else if (isChunked) {
+                    String decoded;
+                    if (decodeChunkedBody(client->getStoreReceiveData(), decoded)) {
+                        client->getRequest().parseBody(decoded);
+                        Router router(serverToConfigs[server->getFd()], client->getRequest());
+                        RouteResult res = router.processRequest();
+                        res.setRemoteAddress(client->getRemoteAddress());
+
+                        if (res.getHandlerType() == CGI) {
+                            client->getCgi().appendBuffer(decoded);
+                            client->getCgi().setWriteDone(true);
+                            ResponseBuilder builder(mimeTypes);
+                            builder.build(res, &client->getCgi(), VectorInt());
+                            if (client->getCgi().isActive()) {
+                                registerCgiPipes(client);
+                                break;
+                            }
+                        } else {
+                            HttpResponse response = ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
+                            if (!client->isKeepAlive()) response.addHeader("Connection", "close");
+                            else response.addHeader("Connection", "keep-alive");
+                            client->setSendData(response.toString());
+                            client->clearStoreReceiveData();
+                            client->setHeadersParsed(false);
+                            client->getRequest().clear();
+                            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+        break;
     }
 }
 
@@ -269,6 +373,11 @@ void ServerManagerPoll::registerCgiPipes(Client* client) {
     if (!cgi.isWriteDone()) {
         pollManager.addFd(cgi.getWriteFd(), POLLOUT);
         cgiPipeToClient[cgi.getWriteFd()] = client->getFd();
+    } else {
+        if (cgi.getWriteFd() != -1) {
+            close(cgi.getWriteFd());
+            cgi.setWriteFd(-1);
+        }
     }
     pollManager.addFd(cgi.getReadFd(), POLLIN);
     cgiPipeToClient[cgi.getReadFd()] = client->getFd();
@@ -276,7 +385,13 @@ void ServerManagerPoll::registerCgiPipes(Client* client) {
 
 void ServerManagerPoll::handleCgiWrite(int pipeFd) {
     Client* client = getValue(clients, getValue(cgiPipeToClient, pipeFd, -1), (Client*)NULL);
-    if (!client || client->getCgi().writeBody(pipeFd)) removeCgiPipe(pipeFd);
+    if (!client || client->getCgi().writeBody(pipeFd)) {
+        removeCgiPipe(pipeFd);
+        if (client && client->getCgi().getWriteFd() != -1) {
+            close(client->getCgi().getWriteFd());
+            client->getCgi().setWriteFd(-1);
+        }
+    }
 }
 
 void ServerManagerPoll::handleCgiRead(int pipeFd) {
@@ -284,7 +399,14 @@ void ServerManagerPoll::handleCgiRead(int pipeFd) {
     if (!client || !client->getCgi().handleRead()) {
         removeCgiPipe(pipeFd);
         if (client) {
+            if (client->getCgi().getWriteFd() != -1) {
+                removeCgiPipe(client->getCgi().getWriteFd());
+                close(client->getCgi().getWriteFd());
+                client->getCgi().setWriteFd(-1);
+            }
             client->setSendData(ResponseBuilder(mimeTypes).buildCgiResponse(client->getCgi()).toString());
+            client->setHeadersParsed(false);
+            client->getRequest().clear();
             pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
         }
     }

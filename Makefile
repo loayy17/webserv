@@ -43,9 +43,11 @@ SRC_HTTP = $(SRC_DIR)/http/HttpRequest.cpp \
 
 # server sources
 SRC_SERVER = $(SRC_DIR)/server/Client.cpp \
+				$(SRC_DIR)/server/EpollManager.cpp \
 				$(SRC_DIR)/server/PollManager.cpp \
 				$(SRC_DIR)/server/Server.cpp \
-				$(SRC_DIR)/server/ServerManager.cpp
+				$(SRC_DIR)/server/ServerManager.cpp \
+				$(SRC_DIR)/server/ServerManagerPoll.cpp
 
 # utils sources
 SRC_UTILS = $(SRC_DIR)/utils/Logger.cpp \

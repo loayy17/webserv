@@ -6,6 +6,7 @@
 #include <ctime>
 #include <iostream>
 #include "../handlers/CgiProcess.hpp"
+#include "../http/HttpRequest.hpp"
 #include "../utils/Utils.hpp"
 class Client {
    private:
@@ -16,6 +17,8 @@ class Client {
     CgiProcess _cgi;
     bool       _keepAlive;
     String     remoteAddress;
+    bool       _headersParsed;
+    HttpRequest _request;
 
    public:
     Client(const Client&);
@@ -36,6 +39,9 @@ class Client {
     const String& getStoreSendData() const;
     int           getFd() const;
     String        getRemoteAddress() const;
+    bool          isHeadersParsed() const;
+    void          setHeadersParsed(bool parsed);
+    HttpRequest&  getRequest();
 
     CgiProcess&       getCgi();
     const CgiProcess& getCgi() const;

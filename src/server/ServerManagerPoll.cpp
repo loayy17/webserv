@@ -1,27 +1,25 @@
-#include "ServerManager.hpp"
+#include "ServerManagerPoll.hpp"
 
-ServerManager::ServerManager()
-    : epollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
+ServerManagerPoll::ServerManagerPoll()
+    : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
 
-ServerManager::ServerManager(const VectorServerConfig& _configs)
-    : epollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
+ServerManagerPoll::ServerManagerPoll(const VectorServerConfig& _configs)
+    : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
 
-ServerManager::~ServerManager() {
+ServerManagerPoll::~ServerManagerPoll() {
     shutdown();
 }
 
-bool ServerManager::initialize() {
+bool ServerManagerPoll::initialize() {
     if (serverConfigs.empty())
         return Logger::error("No server configurations provided");
-    if (!epollManager.init())
-        return Logger::error("Failed to initialize epoll");
     if (!initializeServers(serverConfigs) || servers.empty())
         return Logger::error("Failed to initialize servers");
     g_running = 1;
-    return Logger::info("[INFO]: ServerManagerEpoll initialized");
+    return Logger::info("[INFO]: ServerManagerPoll initialized");
 }
 
-ListenerToConfigsMap ServerManager::mapListenersToConfigs(const VectorServerConfig& serversConfigs) {
+ListenerToConfigsMap ServerManagerPoll::mapListenersToConfigs(const VectorServerConfig& serversConfigs) {
     ListenerToConfigsMap result;
     for (size_t i = 0; i < serversConfigs.size(); i++) {
         const VectorListenAddress& addresses = serversConfigs[i].getListenAddresses();
@@ -33,7 +31,7 @@ ListenerToConfigsMap ServerManager::mapListenersToConfigs(const VectorServerConf
     return result;
 }
 
-Server* ServerManager::initializeServer(const ServerConfig& serverConfig, size_t listenIndex) {
+Server* ServerManagerPoll::initializeServer(const ServerConfig& serverConfig, size_t listenIndex) {
     Server* server = NULL;
     try {
         server = new Server(serverConfig, listenIndex);
@@ -50,8 +48,8 @@ Server* ServerManager::initializeServer(const ServerConfig& serverConfig, size_t
     return server;
 }
 
-Server* ServerManager::createServerForListener(const String& listenerKey, const VectorServerConfig& serversConfigsForListener,
-                                               EpollManager& epollMgr) {
+Server* ServerManagerPoll::createServerForListener(const String& listenerKey, const VectorServerConfig& serversConfigsForListener,
+                                               PollManager& pollMgr) {
     if (serversConfigsForListener.empty())
         return NULL;
     const ServerConfig& firstConfig = serversConfigsForListener[0];
@@ -66,14 +64,14 @@ Server* ServerManager::createServerForListener(const String& listenerKey, const 
     Server* server = initializeServer(firstConfig, listenIndex);
     if (!server)
         return NULL;
-    epollMgr.addFd(server->getFd(), EPOLLIN);
+    pollMgr.addFd(server->getFd(), POLLIN);
     return server;
 }
 
-bool ServerManager::initializeServers(const VectorServerConfig& serversConfigs) {
+bool ServerManagerPoll::initializeServers(const VectorServerConfig& serversConfigs) {
     ListenerToConfigsMap      listenerToConfigs = mapListenersToConfigs(serversConfigs);
     for (ListenerToConfigsMap::iterator it = listenerToConfigs.begin(); it != listenerToConfigs.end(); ++it) {
-        Server* server = createServerForListener(it->first, it->second, epollManager);
+        Server* server = createServerForListener(it->first, it->second, pollManager);
         if (!server) continue;
         servers.push_back(server);
         serverToConfigs[server->getFd()] = it->second;
@@ -81,11 +79,11 @@ bool ServerManager::initializeServers(const VectorServerConfig& serversConfigs) 
     return !servers.empty();
 }
 
-bool ServerManager::run() {
+bool ServerManagerPoll::run() {
     if (!g_running) return false;
     time_t lastSessionCleanup = getCurrentTime();
     while (g_running) {
-        int eventCount = epollManager.wait(10);
+        int eventCount = pollManager.pollConnections(10);
         checkTimeouts(CLIENT_TIMEOUT);
         if (getDifferentTime(lastSessionCleanup, getCurrentTime()) > SESSION_CLEANUP_INTERVAL) {
             sessionManager.cleanupExpiredSessions(SESSION_TIMEOUT);
@@ -93,41 +91,52 @@ bool ServerManager::run() {
         }
         if (eventCount <= 0) continue;
 
-        for (int i = 0; i < eventCount; i++) {
-            int fd = epollManager.getFd(i);
-            uint32_t events = epollManager.getEvents(i);
+        for (size_t i = 0; i < pollManager.size() && eventCount > 0; i++) {
+            int fd = pollManager.getFd(i);
             if (fd < 0) continue;
+            bool hasIn  = pollManager.hasEvent(i, POLLIN);
+            bool hasOut = pollManager.hasEvent(i, POLLOUT);
+            bool hasHup = pollManager.hasEvent(i, POLLHUP);
+            bool hasErr = pollManager.hasEvent(i, POLLERR);
+
+            if (!hasIn && !hasOut && !hasHup && !hasErr) continue;
 
             try {
                 if (isCgiPipe(fd)) {
-                    if (events & EPOLLOUT) handleCgiWrite(fd);
-                    if (events & (EPOLLIN | EPOLLHUP | EPOLLERR)) handleCgiRead(fd);
+                    if (hasOut) handleCgiWrite(fd);
+                    if (hasIn || hasHup || hasErr) handleCgiRead(fd);
+                    eventCount--;
+                    if (i < pollManager.size() && pollManager.getFd(i) != fd) --i;
                     continue;
                 }
-                if (events & (EPOLLIN | EPOLLPRI)) {
+                if (hasIn) {
                     if (isServerSocket(fd)) {
                         Server* server = findServerByFd(fd);
                         if (server) acceptNewConnection(server);
                     } else if (clients.count(fd)) {
                         handleClientRead(fd);
                     }
+                    eventCount--;
                 }
-                if (events & EPOLLOUT) {
+                if (hasOut) {
                     if (clients.count(fd)) handleClientWrite(fd);
+                    eventCount--;
                 }
-                if ((events & (EPOLLERR | EPOLLHUP)) && !(events & (EPOLLIN | EPOLLOUT))) {
+                if ((hasErr || hasHup) && !hasIn && !hasOut) {
                     if (clients.count(fd)) closeClientConnection(fd);
+                    eventCount--;
                 }
             } catch (const std::exception& e) {
                 Logger::error("Exception on fd " + typeToString(fd) + ": " + e.what());
                 if (!isServerSocket(fd) && !isCgiPipe(fd) && clients.count(fd)) closeClientConnection(fd);
             }
+            if (i < pollManager.size() && pollManager.getFd(i) != fd) --i;
         }
     }
     return true;
 }
 
-bool ServerManager::acceptNewConnection(Server* server) {
+bool ServerManagerPoll::acceptNewConnection(Server* server) {
     String remoteAddress;
     int clientFd = server->acceptConnection(remoteAddress);
     if (clientFd < 0) return false;
@@ -135,11 +144,11 @@ bool ServerManager::acceptNewConnection(Server* server) {
     client->setRemoteAddress(remoteAddress);
     clients[clientFd] = client;
     clientToServer[clientFd] = server;
-    epollManager.addFd(clientFd, EPOLLIN);
+    pollManager.addFd(clientFd, POLLIN);
     return true;
 }
 
-void ServerManager::handleClientRead(int clientFd) {
+void ServerManagerPoll::handleClientRead(int clientFd) {
     Client* client = getValue(clients, clientFd, (Client*)NULL);
     if (!client || client->receiveData() <= 0) {
         closeClientConnection(clientFd);
@@ -149,26 +158,26 @@ void ServerManager::handleClientRead(int clientFd) {
     if (server) processRequest(client, server);
 }
 
-void ServerManager::handleClientWrite(int clientFd) {
+void ServerManagerPoll::handleClientWrite(int clientFd) {
     Client* client = getValue(clients, clientFd, (Client*)NULL);
     if (!client || client->sendData() < 0) {
         closeClientConnection(clientFd);
         return;
     }
     if (client->getStoreSendData().empty()) {
-        if (client->isKeepAlive()) epollManager.addFd(clientFd, EPOLLIN);
+        if (client->isKeepAlive()) pollManager.addFd(clientFd, POLLIN);
         else closeClientConnection(clientFd);
     }
 }
 
-void ServerManager::checkTimeouts(int timeout) {
+void ServerManagerPoll::checkTimeouts(int timeout) {
     std::vector<int> toClose;
     for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
         if (it->second->getCgi().isActive()) {
             if (getDifferentTime(it->second->getCgi().getStartTime(), getCurrentTime()) > CGI_TIMEOUT) {
                 cleanupClientCgi(it->second);
                 it->second->setSendData(ResponseBuilder(mimeTypes).buildError(HTTP_GATEWAY_TIMEOUT, "CGI Timeout").toString());
-                epollManager.addFd(it->first, EPOLLIN | EPOLLOUT);
+                pollManager.addFd(it->first, POLLIN | POLLOUT);
             }
         } else if (it->second->isTimedOut(timeout)) {
             toClose.push_back(it->first);
@@ -177,7 +186,7 @@ void ServerManager::checkTimeouts(int timeout) {
     for (size_t i = 0; i < toClose.size(); i++) closeClientConnection(toClose[i]);
 }
 
-void ServerManager::sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove) {
+void ServerManagerPoll::sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove) {
     HttpResponse response = ResponseBuilder(mimeTypes).buildError(statusCode, message);
     if (closeConnection) {
         response.addHeader("Connection", "close");
@@ -186,10 +195,10 @@ void ServerManager::sendErrorResponse(Client* client, int statusCode, const Stri
     client->setSendData(response.toString());
     if (bytesToRemove > 0) client->removeReceivedData(bytesToRemove);
     else client->clearStoreReceiveData();
-    epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
+    pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
 }
 
-void ServerManager::processRequest(Client* client, Server* server) {
+void ServerManagerPoll::processRequest(Client* client, Server* server) {
     if (!client->isHeadersParsed()) {
         const String& buffer = client->getStoreReceiveData();
         size_t headerEnd = buffer.find(DOUBLE_CRLF);
@@ -214,7 +223,6 @@ void ServerManager::processRequest(Client* client, Server* server) {
             if (!client->getStoreReceiveData().empty()) {
                 client->getCgi().appendBuffer(client->getStoreReceiveData());
                 client->clearStoreReceiveData();
-                epollManager.addFd(client->getCgi().getWriteFd(), EPOLLOUT);
             }
         } else {
             ssize_t cl = client->getRequest().getContentLength();
@@ -225,71 +233,71 @@ void ServerManager::processRequest(Client* client, Server* server) {
                 client->setSendData(response.toString());
                 client->removeReceivedData(cl);
                 client->setHeadersParsed(false);
-                epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
+                pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
             }
         }
     }
 }
 
-void ServerManager::closeClientConnection(int clientFd) {
+void ServerManagerPoll::closeClientConnection(int clientFd) {
     Client* c = getValue(clients, clientFd, (Client*)NULL);
     if (c) {
         if (c->getCgi().isActive()) cleanupClientCgi(c);
         c->closeConnection();
         delete c;
     }
-    epollManager.removeFd(clientFd);
+    pollManager.removeFdByValue(clientFd);
     clients.erase(clientFd);
     clientToServer.erase(clientFd);
 }
 
-bool ServerManager::isCgiPipe(int fd) const { return cgiPipeToClient.count(fd); }
+bool ServerManagerPoll::isCgiPipe(int fd) const { return cgiPipeToClient.count(fd); }
 
-void ServerManager::removeCgiPipe(int pipeFd) {
-    epollManager.removeFd(pipeFd);
+void ServerManagerPoll::removeCgiPipe(int pipeFd) {
+    pollManager.removeFdByValue(pipeFd);
     cgiPipeToClient.erase(pipeFd);
 }
 
-void ServerManager::registerCgiPipes(Client* client) {
+void ServerManagerPoll::registerCgiPipes(Client* client) {
     CgiProcess& cgi = client->getCgi();
     if (!cgi.isWriteDone()) {
-        epollManager.addFd(cgi.getWriteFd(), EPOLLOUT);
+        pollManager.addFd(cgi.getWriteFd(), POLLOUT);
         cgiPipeToClient[cgi.getWriteFd()] = client->getFd();
     }
-    epollManager.addFd(cgi.getReadFd(), EPOLLIN);
+    pollManager.addFd(cgi.getReadFd(), POLLIN);
     cgiPipeToClient[cgi.getReadFd()] = client->getFd();
 }
 
-void ServerManager::handleCgiWrite(int pipeFd) {
+void ServerManagerPoll::handleCgiWrite(int pipeFd) {
     Client* client = getValue(clients, getValue(cgiPipeToClient, pipeFd, -1), (Client*)NULL);
     if (!client || client->getCgi().writeBody(pipeFd)) removeCgiPipe(pipeFd);
 }
 
-void ServerManager::handleCgiRead(int pipeFd) {
+void ServerManagerPoll::handleCgiRead(int pipeFd) {
     Client* client = getValue(clients, getValue(cgiPipeToClient, pipeFd, -1), (Client*)NULL);
     if (!client || !client->getCgi().handleRead()) {
         removeCgiPipe(pipeFd);
         if (client) {
             client->setSendData(ResponseBuilder(mimeTypes).buildCgiResponse(client->getCgi()).toString());
-            epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
+            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
         }
     }
 }
 
-void ServerManager::cleanupClientCgi(Client* client) {
+void ServerManagerPoll::cleanupClientCgi(Client* client) {
     if (client->getCgi().getWriteFd() != -1) removeCgiPipe(client->getCgi().getWriteFd());
     if (client->getCgi().getReadFd() != -1) removeCgiPipe(client->getCgi().getReadFd());
     client->getCgi().cleanup();
 }
 
-Server* ServerManager::findServerByFd(int serverFd) const {
+Server* ServerManagerPoll::findServerByFd(int serverFd) const {
     for (size_t i = 0; i < servers.size(); i++) if (servers[i]->getFd() == serverFd) return servers[i];
     return NULL;
 }
 
-bool ServerManager::isServerSocket(int fd) const { return findServerByFd(fd) != NULL; }
+bool ServerManagerPoll::isServerSocket(int fd) const { return findServerByFd(fd) != NULL; }
 
-void ServerManager::shutdown() {
+void ServerManagerPoll::shutdown() {
     for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
         if (it->second->getCgi().isActive()) cleanupClientCgi(it->second);
         delete it->second;
@@ -299,5 +307,5 @@ void ServerManager::shutdown() {
     servers.clear();
 }
 
-size_t ServerManager::getServerCount() const { return servers.size(); }
-size_t ServerManager::getClientCount() const { return clients.size(); }
+size_t ServerManagerPoll::getServerCount() const { return servers.size(); }
+size_t ServerManagerPoll::getClientCount() const { return clients.size(); }

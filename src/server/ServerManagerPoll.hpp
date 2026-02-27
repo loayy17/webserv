@@ -1,5 +1,5 @@
-#ifndef SERVER_MANAGER_EPOLL_HPP
-#define SERVER_MANAGER_EPOLL_HPP
+#ifndef SERVER_MANAGER_POLL_HPP
+#define SERVER_MANAGER_POLL_HPP
 
 #include <signal.h>
 #include <sys/wait.h>
@@ -17,16 +17,16 @@
 #include "../utils/SessionManager.hpp"
 #include "../utils/Utils.hpp"
 #include "Client.hpp"
-#include "EpollManager.hpp"
+#include "PollManager.hpp"
 #include "Server.hpp"
 
 extern volatile sig_atomic_t g_running;
 
-class ServerManager {
+class ServerManagerPoll {
    public:
-    ServerManager();
-    ServerManager(const VectorServerConfig& configs);
-    ~ServerManager();
+    ServerManagerPoll();
+    ServerManagerPoll(const VectorServerConfig& configs);
+    ~ServerManagerPoll();
 
     bool   initialize();
     bool   run();
@@ -35,9 +35,9 @@ class ServerManager {
     size_t getClientCount() const;
 
    private:
-    ServerManager(const ServerManager&);
-    ServerManager&           operator=(const ServerManager&);
-    EpollManager             epollManager;
+    ServerManagerPoll(const ServerManagerPoll&);
+    ServerManagerPoll&           operator=(const ServerManagerPoll&);
+    PollManager              pollManager;
     std::vector<Server*>     servers;
     const VectorServerConfig serverConfigs;
     MapIntClientPtr          clients;
@@ -69,7 +69,7 @@ class ServerManager {
     void cleanupClientCgi(Client* client);
     void removeCgiPipe(int pipeFd);
 
-    Server*              createServerForListener(const String& listenerKey, const VectorServerConfig& configs, EpollManager& pollMgr);
+    Server*              createServerForListener(const String& listenerKey, const VectorServerConfig& configs, PollManager& pollMgr);
     ListenerToConfigsMap getListerToConfigs();
     ListenerToConfigsMap mapListenersToConfigs(const VectorServerConfig& serversConfigs);
 };

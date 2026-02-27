@@ -29,15 +29,20 @@ CgiProcess& CgiProcess::operator=(const CgiProcess& other) {
 
 CgiProcess::~CgiProcess() {}
 
-void CgiProcess::init(pid_t pid, int writeFd, int readFd, const String& body) {
+void CgiProcess::init(pid_t pid, int writeFd, int readFd) {
     _pid         = pid;
     _writeFd     = writeFd;
     _readFd      = readFd;
-    _writeBuffer = body;
+    _writeBuffer.clear();
     _writeOffset = 0;
+    _writeDone   = false;
     _output.clear();
     _startTime = getCurrentTime();
     _active    = true;
+}
+
+void CgiProcess::appendBuffer(const String& data) {
+    _writeBuffer.append(data);
 }
 
 void CgiProcess::reset() {
@@ -46,6 +51,7 @@ void CgiProcess::reset() {
     _readFd  = INVALID_FD;
     _writeBuffer.clear();
     _writeOffset = 0;
+    _writeDone   = false;
     _output.clear();
     _startTime = 0;
     _active    = false;
@@ -78,14 +84,18 @@ void CgiProcess::setReadFd(int fd) {
 }
 
 bool CgiProcess::isWriteDone() const {
-    return _writeBuffer.empty() || _writeOffset >= _writeBuffer.size();
+    return _writeDone && (_writeBuffer.empty() || _writeOffset >= _writeBuffer.size());
+}
+
+void CgiProcess::setWriteDone(bool done) {
+    _writeDone = done;
 }
 
 bool CgiProcess::writeBody(int fd) {
     if (isWriteDone())
         return true;
     bool madeProgress = false;
-    while (!isWriteDone()) {
+    while (_writeOffset < _writeBuffer.size()) {
         const char* data      = _writeBuffer.c_str() + _writeOffset;
         size_t      remaining = _writeBuffer.size() - _writeOffset;
         ssize_t     w         = write(fd, data, remaining);
@@ -98,8 +108,12 @@ bool CgiProcess::writeBody(int fd) {
     }
     if (madeProgress)
         _startTime = getCurrentTime();
-    if (isWriteDone())
-        String().swap(_writeBuffer);
+
+    if (_writeOffset >= _writeBuffer.size() && !_writeBuffer.empty()) {
+        _writeBuffer.clear();
+        _writeOffset = 0;
+    }
+
     return isWriteDone();
 }
 

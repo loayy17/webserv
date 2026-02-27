@@ -1,0 +1,2 @@
+GET /very/long/path/to/resource/file.html HTTP/1.1
+Host: localhost:8080

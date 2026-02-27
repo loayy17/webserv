@@ -108,15 +108,20 @@ bool ServerManager::run() {
                     if (isServerSocket(fd)) {
                         Server* server = findServerByFd(fd);
                         if (server) acceptNewConnection(server);
-                    } else if (clients.count(fd)) {
-                        handleClientRead(fd);
+                    } else {
+                        MapIntClientPtr::iterator it = clients.find(fd);
+                        if (it != clients.end()) {
+                            handleClientRead(fd);
+                        }
                     }
                 }
                 if (events & EPOLLOUT) {
-                    if (clients.count(fd)) handleClientWrite(fd);
+                    MapIntClientPtr::iterator it = clients.find(fd);
+                    if (it != clients.end()) handleClientWrite(fd);
                 }
                 if ((events & (EPOLLERR | EPOLLHUP)) && !(events & (EPOLLIN | EPOLLOUT))) {
-                    if (clients.count(fd)) closeClientConnection(fd);
+                    MapIntClientPtr::iterator it = clients.find(fd);
+                    if (it != clients.end()) closeClientConnection(fd);
                 }
             } catch (const std::exception& e) {
                 Logger::error("Exception on fd " + typeToString(fd) + ": " + e.what());
@@ -192,40 +197,101 @@ void ServerManager::sendErrorResponse(Client* client, int statusCode, const Stri
 void ServerManager::processRequest(Client* client, Server* server) {
     if (!client->isHeadersParsed()) {
         const String& buffer = client->getStoreReceiveData();
+
+        if (buffer.size() > MAX_HEADER_SIZE) {
+            sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, 0);
+            return;
+        }
+
+        // RFC 7230: Skip leading empty lines
+        size_t start = 0;
+        while (start < buffer.size() && (buffer[start] == '\r' || buffer[start] == '\n')) {
+            start++;
+        }
+        if (start > 0) {
+            client->removeReceivedData(start);
+            return;
+        }
+
         size_t headerEnd = buffer.find(DOUBLE_CRLF);
+        size_t headerEndLen = 4;
+        if (headerEnd == String::npos) {
+            headerEnd = buffer.find("\n\n");
+            headerEndLen = 2;
+        }
         if (headerEnd == String::npos) return;
+
         if (!client->getRequest().parseHeaders(buffer.substr(0, headerEnd))) {
-            sendErrorResponse(client, client->getRequest().getErrorCode(), "Bad Request", true, headerEnd + 4);
+            sendErrorResponse(client, client->getRequest().getErrorCode(), "Bad Request", true, headerEnd + headerEndLen);
             return;
         }
         client->getRequest().setPort(server->getPort());
         client->setHeadersParsed(true);
-        client->removeReceivedData(headerEnd + 4);
+        client->removeReceivedData(headerEnd + headerEndLen);
 
         Router router(serverToConfigs[server->getFd()], client->getRequest());
         RouteResult res = router.processRequest();
+        res.setRemoteAddress(client->getRemoteAddress());
+
         if (res.getHandlerType() == CGI) {
-            ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
+            ResponseBuilder builder(mimeTypes);
+            builder.build(res, &client->getCgi(), VectorInt());
             if (client->getCgi().isActive()) registerCgiPipes(client);
         }
     }
     if (client->isHeadersParsed()) {
+        bool isChunked = (toLowerWords(client->getRequest().getHeader("transfer-encoding")).find("chunked") != String::npos);
         if (client->getCgi().isActive()) {
-            if (!client->getStoreReceiveData().empty()) {
-                client->getCgi().appendBuffer(client->getStoreReceiveData());
-                client->clearStoreReceiveData();
-                epollManager.addFd(client->getCgi().getWriteFd(), EPOLLOUT);
+            if (isChunked) {
+                String decoded;
+                if (decodeChunkedBody(client->getStoreReceiveData(), decoded)) {
+                    client->getCgi().appendBuffer(decoded);
+                    client->getRequest().parseBody(client->getRequest().getBody() + decoded);
+                    client->getCgi().setWriteDone(true);
+                    client->clearStoreReceiveData();
+                    epollManager.addFd(client->getCgi().getWriteFd(), EPOLLOUT);
+                }
+            } else {
+                ssize_t cl = client->getRequest().getContentLength();
+                if (!client->getStoreReceiveData().empty()) {
+                    size_t toWrite = std::min(client->getStoreReceiveData().size(), (size_t)(cl - client->getRequest().getBody().size()));
+                    if (toWrite > 0) {
+                        String part = client->getStoreReceiveData().substr(0, toWrite);
+                        client->getCgi().appendBuffer(part);
+                        client->getRequest().parseBody(client->getRequest().getBody() + part);
+                        client->removeReceivedData(toWrite);
+                        epollManager.addFd(client->getCgi().getWriteFd(), EPOLLOUT);
+                    }
+                }
+                if (client->getRequest().getBody().size() >= (size_t)cl) client->getCgi().setWriteDone(true);
             }
         } else {
             ssize_t cl = client->getRequest().getContentLength();
-            if (client->getStoreReceiveData().size() >= (size_t)cl) {
-                client->getRequest().parseBody(client->getStoreReceiveData().substr(0, cl));
+            if (!isChunked && client->getStoreReceiveData().size() >= (size_t)cl) {
+                if (cl > 0) client->getRequest().parseBody(client->getStoreReceiveData().substr(0, cl));
                 Router router(serverToConfigs[server->getFd()], client->getRequest());
-                HttpResponse response = ResponseBuilder(mimeTypes).build(router.processRequest(), &client->getCgi(), VectorInt());
+                RouteResult res = router.processRequest();
+                res.setRemoteAddress(client->getRemoteAddress());
+                HttpResponse response = ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
                 client->setSendData(response.toString());
-                client->removeReceivedData(cl);
+                if (cl > 0) client->removeReceivedData(cl);
                 client->setHeadersParsed(false);
+                client->getRequest().clear();
                 epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
+            } else if (isChunked) {
+                String decoded;
+                if (decodeChunkedBody(client->getStoreReceiveData(), decoded)) {
+                    client->getRequest().parseBody(decoded);
+                    Router router(serverToConfigs[server->getFd()], client->getRequest());
+                    RouteResult res = router.processRequest();
+                    res.setRemoteAddress(client->getRemoteAddress());
+                    HttpResponse response = ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
+                    client->setSendData(response.toString());
+                    client->clearStoreReceiveData();
+                    client->setHeadersParsed(false);
+                    client->getRequest().clear();
+                    epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
+                }
             }
         }
     }
@@ -271,6 +337,8 @@ void ServerManager::handleCgiRead(int pipeFd) {
         removeCgiPipe(pipeFd);
         if (client) {
             client->setSendData(ResponseBuilder(mimeTypes).buildCgiResponse(client->getCgi()).toString());
+            client->setHeadersParsed(false);
+            client->getRequest().clear();
             epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
         }
     }

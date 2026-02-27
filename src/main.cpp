@@ -1,7 +1,12 @@
 #include <csignal>
 #include <iostream>
 #include "config/ConfigParser.hpp"
+#ifdef USE_POLL
+#include "server/ServerManagerPoll.hpp"
+typedef ServerManagerPoll ServerManager;
+#else
 #include "server/ServerManager.hpp"
+#endif
 #include "utils/Logger.hpp"
 
 volatile sig_atomic_t g_running = 0;

@@ -201,6 +201,12 @@ void ServerManagerPoll::sendErrorResponse(Client* client, int statusCode, const 
 void ServerManagerPoll::processRequest(Client* client, Server* server) {
     if (!client->isHeadersParsed()) {
         const String& buffer = client->getStoreReceiveData();
+
+        if (buffer.size() > MAX_HEADER_SIZE) {
+            sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, 0);
+            return;
+        }
+
         size_t headerEnd = buffer.find(DOUBLE_CRLF);
         if (headerEnd == String::npos) return;
         if (!client->getRequest().parseHeaders(buffer.substr(0, headerEnd))) {

@@ -43,7 +43,7 @@ int HttpResponse::getStatusCode() const {
     return statusCode;
 }
 
-String HttpResponse::getStatusMessage() const {
+const String& HttpResponse::getStatusMessage() const {
     return statusMessage;
 }
 
@@ -55,7 +55,7 @@ void HttpResponse::setHttpVersion(const String& version) {
     httpVersion = version;
 }
 
-String HttpResponse::getBody() const {
+const String& HttpResponse::getBody() const {
     return body;
 }
 

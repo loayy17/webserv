@@ -3,8 +3,8 @@
 
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <cstdlib>
 #include <unistd.h>
+#include <cstdlib>
 #include <ctime>
 #include <fstream>
 #include <iostream>
@@ -48,17 +48,17 @@ String      extractFileExtension(const String& path);
 String      extractDirectoryFromPath(const String& path);
 
 // --- Path Methods ---
-String normalizePath(const String& path);
-String joinPaths(const String& firstPath, const String& secondPath);
-bool   pathStartsWith(const String& path, const String& prefix);
+String        normalizePath(const String& path);
+String        joinPaths(const String& firstPath, const String& secondPath);
+bool          pathStartsWith(const String& path, const String& prefix);
 String getUriRemainder(const String& uri, const String& locPath);
 
 // --- HTTP/Network Helpers ---
-bool   checkAllowedMethods(const String& m);
-bool   parseKeyValue(const String& line, String& key, VectorString& values);
-size_t convertMaxBodySize(const String& maxBody);
+bool          checkAllowedMethods(const String& m);
+bool          parseKeyValue(const String& line, String& key, VectorString& values);
+size_t        convertMaxBodySize(const String& maxBody);
 String formatSize(double size);
-bool   setNonBlocking(int fd);
+bool          setNonBlocking(int fd);
 String getHttpStatusMessage(int code);
 
 // --- Header/Body Parsing ---

@@ -233,12 +233,16 @@ bool parseKeyValue(const String& line, String& key, VectorString& values) {
 
 String findValueStrInMap(const MapString& map, const String& key) {
     MapString::const_iterator it = map.find(key);
-    return (it != map.end()) ? it->second : "";
+    if (it != map.end())
+        return it->second;
+    return String(EMPTY_STRING);
 }
 
 String findValueIntInMap(const MapIntString& map, int key) {
     MapIntString::const_iterator it = map.find(key);
-    return (it != map.end()) ? it->second : "";
+    if (it != map.end())
+        return it->second;
+    return String(EMPTY_STRING);
 }
 
 // ============================================================================
@@ -456,7 +460,7 @@ String getUriRemainder(const String& uri, const String& locPath) {
     if (pathStartsWith(normalUri, normalLoc)) {
         String rest = normalUri.substr(normalLoc.length());
         if (rest.empty() || rest[0] != '/')
-            return "/" + rest;
+            return String("/") + rest;
         return rest;
     }
 
@@ -537,90 +541,132 @@ String formatSize(double size) {
 }
 
 String getHttpStatusMessage(int code) {
+    String result = "Unknown Error";
     switch (code) {
         case 100:
-            return "Continue";
+            result = "Continue";
+            break;
         case 101:
-            return "Switching Protocols";
+            result = "Switching Protocols";
+            break;
         case 200:
-            return "OK";
+            result = "OK";
+            break;
         case 201:
-            return "Created";
+            result = "Created";
+            break;
         case 202:
-            return "Accepted";
+            result = "Accepted";
+            break;
         case 203:
-            return "Non-Authoritative Information";
+            result = "Non-Authoritative Information";
+            break;
         case 204:
-            return "No Content";
+            result = "No Content";
+            break;
         case 205:
-            return "Reset Content";
+            result = "Reset Content";
+            break;
         case 206:
-            return "Partial Content";
+            result = "Partial Content";
+            break;
         case 300:
-            return "Multiple Choices";
+            result = "Multiple Choices";
+            break;
         case 301:
-            return "Moved Permanently";
+            result = "Moved Permanently";
+            break;
         case 302:
-            return "Found";
+            result = "Found";
+            break;
         case 303:
-            return "See Other";
+            result = "See Other";
+            break;
         case 304:
-            return "Not Modified";
+            result = "Not Modified";
+            break;
         case 305:
-            return "Use Proxy";
+            result = "Use Proxy";
+            break;
         case 307:
-            return "Temporary Redirect";
+            result = "Temporary Redirect";
+            break;
         case 400:
-            return "Bad Request";
+            result = "Bad Request";
+            break;
         case 401:
-            return "Unauthorized";
+            result = "Unauthorized";
+            break;
         case 402:
-            return "Payment Required";
+            result = "Payment Required";
+            break;
         case 403:
-            return "Forbidden";
+            result = "Forbidden";
+            break;
         case 404:
-            return "Not Found";
+            result = "Not Found";
+            break;
         case 405:
-            return "Method Not Allowed";
+            result = "Method Not Allowed";
+            break;
         case 406:
-            return "Not Acceptable";
+            result = "Not Acceptable";
+            break;
         case 407:
-            return "Proxy Authentication Required";
+            result = "Proxy Authentication Required";
+            break;
         case 408:
-            return "Request Timeout";
+            result = "Request Timeout";
+            break;
         case 409:
-            return "Conflict";
+            result = "Conflict";
+            break;
         case 410:
-            return "Gone";
+            result = "Gone";
+            break;
         case 411:
-            return "Length Required";
+            result = "Length Required";
+            break;
         case 412:
-            return "Precondition Failed";
+            result = "Precondition Failed";
+            break;
         case 413:
-            return "Payload Too Large";
+            result = "Payload Too Large";
+            break;
         case 414:
-            return "URI Too Long";
+            result = "URI Too Long";
+            break;
         case 415:
-            return "Unsupported Media Type";
+            result = "Unsupported Media Type";
+            break;
         case 416:
-            return "Range Not Satisfiable";
+            result = "Range Not Satisfiable";
+            break;
         case 417:
-            return "Expectation Failed";
+            result = "Expectation Failed";
+            break;
         case 500:
-            return "Internal Server Error";
+            result = "Internal Server Error";
+            break;
         case 501:
-            return "Not Implemented";
+            result = "Not Implemented";
+            break;
         case 502:
-            return "Bad Gateway";
+            result = "Bad Gateway";
+            break;
         case 503:
-            return "Service Unavailable";
+            result = "Service Unavailable";
+            break;
         case 504:
-            return "Gateway Timeout";
+            result = "Gateway Timeout";
+            break;
         case 505:
-            return "HTTP Version Not Supported";
+            result = "HTTP Version Not Supported";
+            break;
         default:
-            return "Unknown Error";
+            result = "Unknown Error";
     }
+    return result;
 }
 
 // ============================================================================

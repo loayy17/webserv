@@ -12,5 +12,6 @@ class MimeTypes {
 
    private:
     MapString mimeTypesMap;
+    String    default_mime_type;
 };
 #endif

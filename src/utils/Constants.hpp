@@ -97,4 +97,6 @@
 #define SESSION_TIMEOUT 1800
 #define SESSION_CLEANUP_INTERVAL 60
 
+#define EMPTY_STRING ""
+#define DEFAULT_MIME_TYPE "application/octet-stream"
 #endif

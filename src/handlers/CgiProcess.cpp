@@ -66,7 +66,7 @@ int CgiProcess::getReadFd() const {
 time_t CgiProcess::getStartTime() const {
     return _startTime;
 }
-String CgiProcess::getOutput() const {
+const String& CgiProcess::getOutput() const {
     return _output;
 }
 
@@ -129,8 +129,8 @@ bool CgiProcess::finish() {
         close(_readFd);
         _readFd = INVALID_FD;
     }
-    int status = 0;
-    pid_t ret = waitpid(_pid, &status, WNOHANG);
+    int   status = 0;
+    pid_t ret    = waitpid(_pid, &status, WNOHANG);
     if (ret == 0) {
         kill(_pid, SIGTERM);
         ret = waitpid(_pid, &status, WNOHANG);

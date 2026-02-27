@@ -36,7 +36,7 @@ SessionResult* SessionManager::getSession(const String& sessionId) {
         sessions.erase(it);
         return NULL;
     }
-    it->second.touch();
+    it->second.updateTime();
     return &it->second;
 }
 
@@ -78,7 +78,7 @@ String SessionManager::regenerateId(const String& oldSessionId) {
     String        newId = generateGUID();
     SessionResult copy  = it->second;
     copy.sessionId      = newId;
-    copy.touch();
+    copy.updateTime();
     sessions.erase(it);
     sessions[newId] = copy;
 

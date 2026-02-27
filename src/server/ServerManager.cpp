@@ -133,6 +133,7 @@ bool ServerManager::run() {
 
             if (!hasIn && !hasOut && !hasHup && !hasErr)
                 continue;
+            try {
             if (isCgiPipe(fd)) {
                 if (hasOut)
                     handleCgiWrite(fd);
@@ -160,6 +161,22 @@ bool ServerManager::run() {
                     handleClientWrite(fd);
                 }
                 eventCount--;
+            }
+            // Handle error/hangup events on client sockets
+            if ((hasErr || hasHup) && !hasIn && !hasOut) {
+                if (clients.find(fd) != clients.end()) {
+                    closeClientConnection(fd);
+                }
+                eventCount--;
+            }
+            } catch (const std::bad_alloc&) {
+                Logger::error("Out of memory handling fd " + typeToString(fd));
+                if (!isServerSocket(fd) && !isCgiPipe(fd) && clients.find(fd) != clients.end())
+                    closeClientConnection(fd);
+            } catch (const std::exception& e) {
+                Logger::error("Exception handling fd " + typeToString(fd) + ": " + e.what());
+                if (!isServerSocket(fd) && !isCgiPipe(fd) && clients.find(fd) != clients.end())
+                    closeClientConnection(fd);
             }
             if (i < pollManager.size() && pollManager.getFd(i) != fd)
                 --i;
@@ -245,6 +262,7 @@ void ServerManager::checkTimeouts(int timeout) {
                 ResponseBuilder builder(mimeTypes);
                 HttpResponse    response = builder.buildError(HTTP_GATEWAY_TIMEOUT, "CGI Timeout");
                 it->second->setSendData(response.toString());
+                it->second->refreshActivity();
                 pollManager.addFd(it->first, POLLIN | POLLOUT);
             }
             // timeout for client connections
@@ -550,6 +568,7 @@ void ServerManager::handleCgiRead(int pipeFd) {
             removeCgiPipe(client->getCgi().getWriteFd());
         ResponseBuilder builder(mimeTypes);
         client->setSendData(builder.buildCgiResponse(client->getCgi()).toString());
+        client->refreshActivity();
         pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
         Logger::info("[INFO]: CGI process finished");
     }

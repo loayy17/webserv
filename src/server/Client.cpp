@@ -120,3 +120,7 @@ void Client::setKeepAlive(bool keepAlive) {
 bool Client::isKeepAlive() const {
     return _keepAlive;
 }
+
+void Client::refreshActivity() {
+    updateTime(lastActivity);
+}

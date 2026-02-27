@@ -41,6 +41,7 @@ class Client {
     const CgiProcess& getCgi() const;
     void              setKeepAlive(bool keepAlive);
     bool              isKeepAlive() const;
+    void              refreshActivity();
 };
 
 #endif

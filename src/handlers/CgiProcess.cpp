@@ -84,13 +84,22 @@ bool CgiProcess::isWriteDone() const {
 bool CgiProcess::writeBody(int fd) {
     if (isWriteDone())
         return true;
-    const char* data      = _writeBuffer.c_str() + _writeOffset;
-    size_t      remaining = _writeBuffer.size() - _writeOffset;
-    ssize_t     w         = write(fd, data, remaining);
-    if (w > 0)
-        _writeOffset += w;
-    else if (w < 0)
-        return false;
+    bool madeProgress = false;
+    while (!isWriteDone()) {
+        const char* data      = _writeBuffer.c_str() + _writeOffset;
+        size_t      remaining = _writeBuffer.size() - _writeOffset;
+        ssize_t     w         = write(fd, data, remaining);
+        if (w > 0) {
+            _writeOffset += w;
+            madeProgress = true;
+        } else {
+            break;
+        }
+    }
+    if (madeProgress)
+        _startTime = getCurrentTime();
+    if (isWriteDone())
+        String().swap(_writeBuffer);
     return isWriteDone();
 }
 
@@ -100,12 +109,15 @@ void CgiProcess::appendOutput(const char* data, size_t len) {
 
 bool CgiProcess::handleRead() {
     char    buf[BUFFER_SIZE];
-    ssize_t n = read(_readFd, buf, sizeof(buf));
-    if (n > 0) {
+    bool    gotData = false;
+    ssize_t n;
+    while ((n = read(_readFd, buf, sizeof(buf))) > 0) {
         _output.append(buf, n);
-        return true;
+        gotData = true;
     }
-    return false;
+    if (gotData)
+        _startTime = getCurrentTime();
+    return gotData || (n < 0);
 }
 
 bool CgiProcess::finish() {
@@ -121,11 +133,10 @@ bool CgiProcess::finish() {
     pid_t ret = waitpid(_pid, &status, WNOHANG);
     if (ret == 0) {
         kill(_pid, SIGTERM);
-        usleep(100000);
         ret = waitpid(_pid, &status, WNOHANG);
         if (ret == 0) {
             kill(_pid, SIGKILL);
-            waitpid(_pid, &status, 0);
+            waitpid(_pid, &status, WNOHANG);
         }
     }
     _active = false;
@@ -137,11 +148,15 @@ void CgiProcess::cleanup() {
         return;
     if (_pid > 0) {
         kill(_pid, SIGKILL);
-        waitpid(_pid, NULL, 0);
+        waitpid(_pid, NULL, WNOHANG);
     }
     if (_writeFd != INVALID_FD)
         close(_writeFd);
     if (_readFd != INVALID_FD)
         close(_readFd);
     reset();
+}
+
+void CgiProcess::resetStartTime() {
+    _startTime = getCurrentTime();
 }

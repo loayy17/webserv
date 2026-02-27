@@ -42,6 +42,7 @@ class CgiProcess {
     bool handleRead();
     bool finish();
     void cleanup();
+    void resetStartTime();
 };
 
 #endif

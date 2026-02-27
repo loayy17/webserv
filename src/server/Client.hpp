@@ -16,7 +16,6 @@ class Client {
     CgiProcess _cgi;
     bool       _keepAlive;
     String     remoteAddress;
-    int        _requestCount;
 
    public:
     Client(const Client&);
@@ -42,8 +41,7 @@ class Client {
     const CgiProcess& getCgi() const;
     void              setKeepAlive(bool keepAlive);
     bool              isKeepAlive() const;
-    void              incrementRequestCount();
-    int               getRequestCount() const;
+    void              refreshActivity();
 };
 
 #endif

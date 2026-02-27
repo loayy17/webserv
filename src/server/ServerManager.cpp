@@ -1,9 +1,32 @@
 #include "ServerManager.hpp"
 ServerManager::ServerManager()
-    : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {}
+    : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
+
+ServerManager::ServerManager(const ServerManager& other)
+    : pollManager(other.pollManager),
+      servers(other.servers),
+      serverConfigs(other.serverConfigs),
+      clients(other.clients),
+      clientToServer(other.clientToServer),
+      serverToConfigs(other.serverToConfigs),
+      mimeTypes(other.mimeTypes),
+      sessionManager(other.sessionManager) {}
+
+ServerManager& ServerManager::operator=(const ServerManager& other) {
+    if (this != &other) {
+        pollManager     = other.pollManager;
+        servers         = other.servers;
+        clients         = other.clients;
+        clientToServer  = other.clientToServer;
+        serverToConfigs = other.serverToConfigs;
+        mimeTypes       = other.mimeTypes;
+        sessionManager  = other.sessionManager;
+    }
+    return *this;
+}
 
 ServerManager::ServerManager(const VectorServerConfig& _configs)
-    : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {}
+    : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
 
 ServerManager::~ServerManager() {
     shutdown();
@@ -15,7 +38,7 @@ bool ServerManager::initialize() {
     if (!initializeServers(serverConfigs) || servers.empty())
         return Logger::error("Failed to initialize servers");
     g_running = 1;
-    return Logger::info("ServerManager initialized");
+    return Logger::info("[INFO]: ServerManager initialized");
 }
 
 ListenerToConfigsMap ServerManager::mapListenersToConfigs(const VectorServerConfig& serversConfigs) {
@@ -90,10 +113,8 @@ bool ServerManager::run() {
         return Logger::error("Cannot run server manager");
     time_t lastSessionCleanup = getCurrentTime();
     while (g_running) {
-        int eventCount = pollManager.pollConnections(100);
+        int eventCount = pollManager.pollConnections(10);
         checkTimeouts(CLIENT_TIMEOUT);
-        // Reap any finished CGI children without blocking
-        reapCgiProcesses();
         if (getDifferentTime(lastSessionCleanup, getCurrentTime()) > SESSION_CLEANUP_INTERVAL) {
             sessionManager.cleanupExpiredSessions(SESSION_TIMEOUT);
             lastSessionCleanup = getCurrentTime();
@@ -112,6 +133,7 @@ bool ServerManager::run() {
 
             if (!hasIn && !hasOut && !hasHup && !hasErr)
                 continue;
+            try {
             if (isCgiPipe(fd)) {
                 if (hasOut)
                     handleCgiWrite(fd);
@@ -128,40 +150,39 @@ bool ServerManager::run() {
                     Server* server = findServerByFd(fd);
                     if (server)
                         acceptNewConnection(server);
-                } else if (clients.find(fd) != clients.end())
+                } else if (clients.find(fd) != clients.end()) {
                     handleClientRead(fd);
+                }
+                eventCount--;
             }
             // client socket ready to send data
-            if (hasOut && clients.find(fd) != clients.end())
-                handleClientWrite(fd);
-
+            if (hasOut) {
+                if (clients.find(fd) != clients.end()) {
+                    handleClientWrite(fd);
+                }
+                eventCount--;
+            }
+            // Handle error/hangup events on client sockets
+            if ((hasErr || hasHup) && !hasIn && !hasOut) {
+                if (clients.find(fd) != clients.end()) {
+                    closeClientConnection(fd);
+                }
+                eventCount--;
+            }
+            } catch (const std::bad_alloc&) {
+                Logger::error("Out of memory handling fd " + typeToString(fd));
+                if (!isServerSocket(fd) && !isCgiPipe(fd) && clients.find(fd) != clients.end())
+                    closeClientConnection(fd);
+            } catch (const std::exception& e) {
+                Logger::error("Exception handling fd " + typeToString(fd) + ": " + e.what());
+                if (!isServerSocket(fd) && !isCgiPipe(fd) && clients.find(fd) != clients.end())
+                    closeClientConnection(fd);
+            }
             if (i < pollManager.size() && pollManager.getFd(i) != fd)
                 --i;
-            eventCount--;
         }
     }
     return true;
-}
-
-void ServerManager::reapCgiProcesses() {
-    for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
-        Client* client = it->second;
-        if (!client->getCgi().isActive())
-            continue;
-        CgiProcess& cgi = client->getCgi();
-        int status = 0;
-        pid_t ret = waitpid(cgi.getPid(), &status, WNOHANG);
-        if (ret > 0) {
-            cgi.setExited(status);
-            // if both pipes done, build and send response
-            if (cgi.isReadDone() && cgi.isWriteDone()) {
-                ResponseBuilder& builder = responseBuilder;
-                HttpResponse response = builder.buildCgiResponse(cgi);
-                client->setSendData(response.toString());
-                pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-            }
-        }
-    }
 }
 
 bool ServerManager::acceptNewConnection(Server* server) {
@@ -169,12 +190,6 @@ bool ServerManager::acceptNewConnection(Server* server) {
     int    clientFd = server->acceptConnection(remoteAddress);
     if (clientFd < 0)
         return Logger::error("Failed to accept new connection");
-
-    if (clients.size() >= MAX_CONNECTIONS) {
-        Logger::error("Connection limit reached (" + typeToString<size_t>(MAX_CONNECTIONS) + "), rejecting new connection");
-        close(clientFd);
-        return false;
-    }
 
     Client* client = NULL;
     try {
@@ -188,7 +203,7 @@ bool ServerManager::acceptNewConnection(Server* server) {
     clients[clientFd]        = client;
     clientToServer[clientFd] = server;
     pollManager.addFd(clientFd, POLLIN);
-    return Logger::info("Connection accepted on port " + typeToString(server->getPort()));
+    return Logger::info("[INFO]: Connection accepted on port " + typeToString(server->getPort()));
 }
 
 void ServerManager::handleClientRead(int clientFd) {
@@ -242,11 +257,12 @@ void ServerManager::checkTimeouts(int timeout) {
     for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
         if (it->second->getCgi().isActive()) {
             if (getDifferentTime(it->second->getCgi().getStartTime(), getCurrentTime()) > CGI_TIMEOUT) {
-                Logger::info("CGI timeout, killing process");
+                Logger::info("[INFO]: CGI timeout, killing process");
                 cleanupClientCgi(it->second);
-                ResponseBuilder& builder = responseBuilder;
+                ResponseBuilder builder(mimeTypes);
                 HttpResponse    response = builder.buildError(HTTP_GATEWAY_TIMEOUT, "CGI Timeout");
                 it->second->setSendData(response.toString());
+                it->second->refreshActivity();
                 pollManager.addFd(it->first, POLLIN | POLLOUT);
             }
             // timeout for client connections
@@ -256,15 +272,16 @@ void ServerManager::checkTimeouts(int timeout) {
     }
 
     for (size_t i = 0; i < toClose.size(); i++) {
-        Logger::info("Client timeout, closing connection");
+        Logger::info("[INFO]: Client timeout, closing connection");
         closeClientConnection(toClose[i]);
     }
 }
 
 void ServerManager::sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove) {
-    HttpResponse    response = responseBuilder.buildError(statusCode, message);
+    ResponseBuilder builder(mimeTypes);
+    HttpResponse    response = builder.buildError(statusCode, message);
     if (closeConnection) {
-        response.addHeader(HEADER_CONNECTION, "close");
+        response.addHeader("Connection", "close");
         client->setKeepAlive(false);
     }
     client->setSendData(response.toString());
@@ -275,6 +292,7 @@ void ServerManager::sendErrorResponse(Client* client, int statusCode, const Stri
         client->clearStoreReceiveData();
 
     pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+    response.addHeader("Server", "Webserv/1.0");
 }
 
 void ServerManager::processRequest(Client* client, Server* server) {
@@ -429,40 +447,30 @@ void ServerManager::processRequest(Client* client, Server* server) {
     // 7. Keep-Alive logic
     bool keepAlive = (request.getHttpVersion() == HTTP_VERSION_1_1);
 
-    String connHeader = request.getHeader(HEADER_CONNECTION);
+    String connHeader = request.getHeader("connection");
     if (!connHeader.empty()) {
-        String       connLower = toLowerWords(connHeader);
-        VectorString connValues;
-        splitByString(connLower, connValues, ",");
-        for (size_t i = 0; i < connValues.size(); ++i) {
-            std::string token = trimSpaces(toLowerWords(connValues[i]));
-            if (token == "close") {
-                keepAlive = false;
-                break;
-            } else if (token == "keep-alive")
-                keepAlive = true;
+        String connLower = toLowerWords(connHeader);
+
+        if (connLower == "close")
+            keepAlive = false;
+        else if (connLower == "keep-alive")
+            keepAlive = true;
+        else {
+            sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, requestSize);
+            return;
         }
     }
 
     client->setKeepAlive(keepAlive);
-    client->incrementRequestCount();
-
-    // Enforce keepalive request limit
-    if (keepAlive && client->getRequestCount() >= MAX_KEEPALIVE_REQUESTS) {
-        keepAlive = false;
-        client->setKeepAlive(false);
-    }
 
     // 8. Build Response
-    HttpResponse    response = responseBuilder.build(routerResult, &client->getCgi(), pollManager.getFds());
-
-    // Match response HTTP version to request version
-    response.setHttpVersion(request.getHttpVersion());
+    ResponseBuilder builder(mimeTypes);
+    HttpResponse    response = builder.build(routerResult, &client->getCgi(), pollManager.getFds());
 
     if (keepAlive)
-        response.addHeader(HEADER_CONNECTION, "keep-alive");
+        response.addHeader("Connection", "keep-alive");
     else
-        response.addHeader(HEADER_CONNECTION, "close");
+        response.addHeader("Connection", "close");
 
     if (!newSessionId.empty())
         response.addSetCookie(SessionManager::buildSetCookieHeader(newSessionId));
@@ -486,7 +494,12 @@ void ServerManager::closeClientConnection(int clientFd) {
     if (c && c->getCgi().isActive())
         cleanupClientCgi(c);
 
-    pollManager.removeFdByValue(clientFd);
+    for (size_t i = 0; i < pollManager.size(); i++) {
+        if (pollManager.getFd(i) == clientFd) {
+            pollManager.removeFd(i);
+            break;
+        }
+    }
     if (c) {
         c->closeConnection();
         delete c;
@@ -500,7 +513,12 @@ bool ServerManager::isCgiPipe(int fd) const {
 }
 
 void ServerManager::removeCgiPipe(int pipeFd) {
-    pollManager.removeFdByValue(pipeFd);
+    for (size_t i = 0; i < pollManager.size(); i++) {
+        if (pollManager.getFd(i) == pipeFd) {
+            pollManager.removeFd(i);
+            break;
+        }
+    }
     cgiPipeToClient.erase(pipeFd);
 }
 
@@ -516,7 +534,7 @@ void ServerManager::registerCgiPipes(Client* client) {
     }
     pollManager.addFd(cgi.getReadFd(), POLLIN);
     cgiPipeToClient[cgi.getReadFd()] = clientFd;
-    Logger::info("CGI process started (pid " + typeToString<int>(cgi.getPid()) + ")");
+    Logger::info("[INFO]: CGI process started (pid " + typeToString<int>(cgi.getPid()) + ")");
 }
 
 void ServerManager::handleCgiWrite(int pipeFd) {
@@ -532,13 +550,6 @@ void ServerManager::handleCgiWrite(int pipeFd) {
         removeCgiPipe(pipeFd);
         close(pipeFd);
         client->getCgi().setWriteFd(-1);
-        client->getCgi().setWriteDone();
-        // If child already exited and read is done, build response
-        if (client->getCgi().hasExited() && client->getCgi().isReadDone()) {
-            ResponseBuilder& builder = responseBuilder;
-            client->setSendData(builder.buildCgiResponse(client->getCgi()).toString());
-            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-        }
     }
 }
 
@@ -553,13 +564,13 @@ void ServerManager::handleCgiRead(int pipeFd) {
     }
     if (!client->getCgi().handleRead()) {
         removeCgiPipe(pipeFd);
-        close(pipeFd);
-        client->getCgi().setReadDone();
-       if (client->getCgi().hasExited() && client->getCgi().isWriteDone()) {
-            ResponseBuilder& builder = responseBuilder;
-            client->setSendData(builder.buildCgiResponse(client->getCgi()).toString());
-            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-        }
+        if (client->getCgi().getWriteFd() != -1)
+            removeCgiPipe(client->getCgi().getWriteFd());
+        ResponseBuilder builder(mimeTypes);
+        client->setSendData(builder.buildCgiResponse(client->getCgi()).toString());
+        client->refreshActivity();
+        pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+        Logger::info("[INFO]: CGI process finished");
     }
 }
 

@@ -1,6 +1,6 @@
 #include "Client.hpp"
 
-Client::Client() : client_fd(-1), lastActivity(0), _keepAlive(false), _requestCount(0) {}
+Client::Client() : client_fd(-1), lastActivity(0), _keepAlive(false) {}
 
 Client::Client(const Client& other)
     : client_fd(other.client_fd),
@@ -8,8 +8,7 @@ Client::Client(const Client& other)
       storeSendData(other.storeSendData),
       lastActivity(other.lastActivity),
       _cgi(other._cgi),
-      _keepAlive(other._keepAlive),
-      _requestCount(other._requestCount) {}
+      _keepAlive(other._keepAlive) {}
 
 Client& Client::operator=(const Client& other) {
     if (this != &other) {
@@ -19,12 +18,11 @@ Client& Client::operator=(const Client& other) {
         lastActivity     = other.lastActivity;
         _cgi             = other._cgi;
         _keepAlive       = other._keepAlive;
-        _requestCount    = other._requestCount;
     }
     return *this;
 }
 
-Client::Client(int fd) : client_fd(fd), _keepAlive(false), _requestCount(0) {
+Client::Client(int fd) : client_fd(fd), _keepAlive(false) {
     lastActivity = getCurrentTime();
 }
 
@@ -123,10 +121,6 @@ bool Client::isKeepAlive() const {
     return _keepAlive;
 }
 
-void Client::incrementRequestCount() {
-    _requestCount++;
-}
-
-int Client::getRequestCount() const {
-    return _requestCount;
+void Client::refreshActivity() {
+    updateTime(lastActivity);
 }

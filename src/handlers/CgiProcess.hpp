@@ -51,6 +51,7 @@ class CgiProcess {
     void setReadDone();
     void setWriteDone();
     void cleanup();
+    void resetStartTime();
 };
 
 #endif

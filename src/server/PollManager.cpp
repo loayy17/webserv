@@ -17,6 +17,10 @@ PollManager::~PollManager() {
     _fdIndex.clear();
 }
 
+void PollManager::reserve(size_t n) {
+    fds.reserve(n);
+}
+
 void PollManager::addFd(int fd, int events) {
     if (fd < 0)
         return;

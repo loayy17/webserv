@@ -17,6 +17,7 @@ class PollManager {
     PollManager& operator=(const PollManager&);
     PollManager();
     ~PollManager();
+    void      reserve(size_t n);
     void      addFd(int fd, int events);
     void      removeFd(size_t index);
     void      removeFdByValue(int fd);

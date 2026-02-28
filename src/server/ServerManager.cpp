@@ -3,10 +3,14 @@
 #include <netinet/tcp.h>
 
 ServerManager::ServerManager()
-    : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {}
+    : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {
+    pollManager.reserve(MAX_CONNECTIONS + 10);
+}
 
 ServerManager::ServerManager(const VectorServerConfig& _configs)
-    : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {}
+    : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {
+    pollManager.reserve(MAX_CONNECTIONS + 10);
+}
 
 ServerManager::~ServerManager() {
     shutdown();
@@ -18,7 +22,7 @@ bool ServerManager::initialize() {
     if (!initializeServers(serverConfigs) || servers.empty())
         return Logger::error("Failed to initialize servers");
     g_running = 1;
-    return Logger::info("ServerManager initialized with Epoll");
+    return Logger::info("ServerManager initialized with Optimized Poll");
 }
 
 ListenerToConfigsMap ServerManager::mapListenersToConfigs(const VectorServerConfig& serversConfigs) {
@@ -45,9 +49,7 @@ Server* ServerManager::initializeServer(const ServerConfig& serverConfig, size_t
         fcntl(fd, F_SETFL, O_NONBLOCK);
     } catch (...) {
         Logger::error("Server init failed for listen " + serverConfig.getListenAddresses()[listenIndex].getListenAddress());
-        if (server) {
-            delete server;
-        }
+        if (server) delete server;
         return NULL;
     }
     return server;
@@ -67,11 +69,7 @@ Server* ServerManager::createServerForListener(const String& listenerKey, const 
     }
     Server* server = initializeServer(firstConfig, listenIndex);
     if (!server) return NULL;
-#ifdef __linux__
-    epollManager.addFd(server->getFd(), EPOLLIN);
-#else
     pollManager.addFd(server->getFd(), POLLIN);
-#endif
     return server;
 }
 
@@ -100,24 +98,11 @@ String ServerManager::getCachedDate() {
 bool ServerManager::run() {
     if (!g_running) return false;
     while (g_running) {
-#ifdef __linux__
-        int eventCount = epollManager.wait(100);
-#else
         int eventCount = pollManager.pollConnections(100);
-#endif
         checkTimeouts(CLIENT_TIMEOUT);
         reapCgiProcesses();
 
-        if (eventCount < 0) continue;
-
-#ifdef __linux__
-        for (int i = 0; i < eventCount; i++) {
-            int fd = epollManager.getEventFd(i);
-            uint32_t events = epollManager.getEvents(i);
-            bool hasIn = events & EPOLLIN;
-            bool hasOut = events & EPOLLOUT;
-            bool hasErr = events & (EPOLLERR | EPOLLHUP);
-#else
+        if (eventCount <= 0) continue;
         for (size_t i = 0; i < pollManager.size() && eventCount > 0; i++) {
             int fd = pollManager.getFd(i);
             bool hasIn = pollManager.hasEvent(i, POLLIN);
@@ -125,13 +110,11 @@ bool ServerManager::run() {
             bool hasErr = pollManager.hasEvent(i, POLLERR | POLLHUP);
             if (!hasIn && !hasOut && !hasErr) continue;
             eventCount--;
-#endif
+
             if (isCgiPipe(fd)) {
                 if (hasOut) handleCgiWrite(fd);
                 if (hasIn || hasErr) handleCgiRead(fd);
-#ifndef __linux__
                 if (i < pollManager.size() && pollManager.getFd(i) != fd) --i;
-#endif
                 continue;
             }
             if (hasIn) {
@@ -142,9 +125,7 @@ bool ServerManager::run() {
             }
             if (hasOut && clients.count(fd)) handleClientWrite(fd);
             if (hasErr && clients.count(fd)) closeClientConnection(fd);
-#ifndef __linux__
             if (i < pollManager.size() && pollManager.getFd(i) != fd) --i;
-#endif
         }
     }
     return true;
@@ -165,11 +146,7 @@ bool ServerManager::acceptNewConnection(Server* server) {
     c->setRemoteAddress(addr);
     clients[fd] = c;
     clientToServer[fd] = server;
-#ifdef __linux__
-    epollManager.addFd(fd, EPOLLIN);
-#else
     pollManager.addFd(fd, POLLIN);
-#endif
     return true;
 }
 
@@ -190,13 +167,7 @@ void ServerManager::handleClientWrite(int fd) {
     }
     if (c->getStoreSendData().empty()) {
         if (!c->isKeepAlive()) closeClientConnection(fd);
-        else {
-#ifdef __linux__
-            epollManager.addFd(fd, EPOLLIN);
-#else
-            pollManager.addFd(fd, POLLIN);
-#endif
-        }
+        else pollManager.addFd(fd, POLLIN);
     }
 }
 
@@ -219,7 +190,6 @@ void ServerManager::processRequest(Client* client, Server* server) {
             client->getRequest().setPort(server->getPort());
             client->setHeadersParsed(true);
 
-            // Check keep-alive
             String conn = toLowerWords(client->getRequest().getHeader("Connection"));
             client->setKeepAlive(client->getRequest().getHttpVersion() == "HTTP/1.1" && conn.find("close") == String::npos);
         }
@@ -231,25 +201,17 @@ void ServerManager::processRequest(Client* client, Server* server) {
 
             if (res.getHandlerType() == CGI) {
                 if (client->getCgi().isActive()) {
-                    // Already active, stream body
                     String& buf = client->getStoreReceiveData();
                     if (!buf.empty()) {
                         client->getCgi().appendBuffer(buf);
                         buf.clear();
-#ifdef __linux__
-                        epollManager.addFd(client->getCgi().getWriteFd(), EPOLLOUT);
-#else
                         pollManager.addFd(client->getCgi().getWriteFd(), POLLOUT);
-#endif
                     }
-                    // Handle completion check (simplified for now)
                     ssize_t cl = client->getRequest().getContentLength();
                     if (cl >= 0 && client->getRequest().getBody().size() >= (size_t)cl) client->getCgi().setWriteDone();
                 } else {
-                    // Initial CGI start
                     ssize_t cl = client->getRequest().getContentLength();
                     bool isChunked = toLowerWords(client->getRequest().getHeader("Transfer-Encoding")).find("chunked") != String::npos;
-
                     responseBuilder.build(res, &client->getCgi(), VectorInt());
                     if (client->getCgi().isActive()) {
                         registerCgiPipes(client);
@@ -258,9 +220,8 @@ void ServerManager::processRequest(Client* client, Server* server) {
                     }
                 }
             } else {
-                // Regular file handler
                 ssize_t cl = client->getRequest().getContentLength();
-                if (cl > 0 && client->getStoreReceiveData().size() < (size_t)cl) return; // Wait for full body
+                if (cl > 0 && client->getStoreReceiveData().size() < (size_t)cl) return;
                 if (cl > 0) {
                     client->getRequest().parseBody(client->getStoreReceiveData().substr(0, cl));
                     client->removeReceivedData(cl);
@@ -271,11 +232,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
                 client->setSendData(response.toString());
                 client->setHeadersParsed(false);
                 client->getRequest().clear();
-#ifdef __linux__
-                epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
-#else
                 pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
-#endif
             }
         }
         break;
@@ -284,19 +241,11 @@ void ServerManager::processRequest(Client* client, Server* server) {
 
 void ServerManager::registerCgiPipes(Client* client) {
     CgiProcess& cgi = client->getCgi();
-#ifdef __linux__
-    if (!cgi.isWriteDone()) {
-        epollManager.addFd(cgi.getWriteFd(), EPOLLOUT);
-        cgiPipeToClient[cgi.getWriteFd()] = client->getFd();
-    }
-    epollManager.addFd(cgi.getReadFd(), EPOLLIN);
-#else
     if (!cgi.isWriteDone()) {
         pollManager.addFd(cgi.getWriteFd(), POLLOUT);
         cgiPipeToClient[cgi.getWriteFd()] = client->getFd();
     }
     pollManager.addFd(cgi.getReadFd(), POLLIN);
-#endif
     cgiPipeToClient[cgi.getReadFd()] = client->getFd();
 }
 
@@ -304,11 +253,7 @@ void ServerManager::handleCgiWrite(int pipeFd) {
     int clientFd = cgiPipeToClient[pipeFd];
     Client* c = clients[clientFd];
     if (c->getCgi().writeBody(pipeFd)) {
-#ifdef __linux__
-        epollManager.removeFd(pipeFd);
-#else
         pollManager.removeFdByValue(pipeFd);
-#endif
         cgiPipeToClient.erase(pipeFd);
     }
 }
@@ -317,33 +262,21 @@ void ServerManager::handleCgiRead(int pipeFd) {
     int clientFd = cgiPipeToClient[pipeFd];
     Client* c = clients[clientFd];
     if (!c->getCgi().handleRead()) {
-#ifdef __linux__
-        epollManager.removeFd(pipeFd);
-#else
         pollManager.removeFdByValue(pipeFd);
-#endif
         cgiPipeToClient.erase(pipeFd);
         HttpResponse resp = responseBuilder.buildCgiResponse(c->getCgi());
         resp.addHeader("Date", getCachedDate());
         c->setSendData(resp.toString());
         c->setHeadersParsed(false);
         c->getRequest().clear();
-#ifdef __linux__
-        epollManager.addFd(clientFd, EPOLLIN | EPOLLOUT);
-#else
         pollManager.addFd(clientFd, POLLIN | POLLOUT);
-#endif
     }
 }
 
 void ServerManager::closeClientConnection(int fd) {
     Client* c = clients[fd];
     if (c->getCgi().isActive()) cleanupClientCgi(c);
-#ifdef __linux__
-    epollManager.removeFd(fd);
-#else
     pollManager.removeFdByValue(fd);
-#endif
     delete c;
     clients.erase(fd);
     clientToServer.erase(fd);
@@ -356,9 +289,7 @@ void ServerManager::cleanupClientCgi(Client* client) {
 }
 
 void ServerManager::removeCgiPipe(int fd) {
-#ifdef __linux__
-    epollManager.removeFd(fd);
-#endif
+    pollManager.removeFdByValue(fd);
     cgiPipeToClient.erase(fd);
 }
 
@@ -389,9 +320,7 @@ void ServerManager::sendErrorResponse(Client* client, int code, const String& ms
         client->setKeepAlive(false);
     }
     client->setSendData(res.toString());
-#ifdef __linux__
-    epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
-#endif
+    pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
 }
 
 bool ServerManager::isServerSocket(int fd) const {

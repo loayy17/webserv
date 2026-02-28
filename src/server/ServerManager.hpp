@@ -18,9 +18,6 @@
 #include "../utils/Utils.hpp"
 #include "Client.hpp"
 #include "PollManager.hpp"
-#ifdef __linux__
-#include "EpollManager.hpp"
-#endif
 #include "Server.hpp"
 
 extern volatile sig_atomic_t g_running;
@@ -40,9 +37,6 @@ class ServerManager {
    private:
     ServerManager(const ServerManager&);
     ServerManager&           operator=(const ServerManager&);
-#ifdef __linux__
-    EpollManager             epollManager;
-#endif
     PollManager              pollManager;
     std::vector<Server*>     servers;
     const VectorServerConfig serverConfigs;

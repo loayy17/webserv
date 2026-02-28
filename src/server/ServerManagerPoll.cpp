@@ -256,7 +256,6 @@ void ServerManagerPoll::processRequest(Client* client, Server* server) {
                 builder.build(res, &client->getCgi(), VectorInt());
                 if (client->getCgi().isActive()) {
                     registerCgiPipes(client);
-                    break;
                 }
             }
         }
@@ -281,7 +280,8 @@ void ServerManagerPoll::processRequest(Client* client, Server* server) {
                         client->getCgi().appendBuffer(part);
                         client->getRequest().parseBody(client->getRequest().getBody() + part);
                         client->removeReceivedData(toWrite);
-                        pollManager.addFd(client->getCgi().getWriteFd(), POLLOUT);
+                        if (client->getCgi().getWriteFd() != -1)
+                            pollManager.addFd(client->getCgi().getWriteFd(), POLLOUT);
                     }
                     if (client->getRequest().getBody().size() >= (size_t)cl) client->getCgi().setWriteDone(true);
                 }
@@ -300,7 +300,7 @@ void ServerManagerPoll::processRequest(Client* client, Server* server) {
                         ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
                         if (client->getCgi().isActive()) {
                             registerCgiPipes(client);
-                            break;
+                            continue;
                         }
                     } else {
                         HttpResponse response = ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
@@ -324,11 +324,10 @@ void ServerManagerPoll::processRequest(Client* client, Server* server) {
                         if (res.getHandlerType() == CGI) {
                             client->getCgi().appendBuffer(decoded);
                             client->getCgi().setWriteDone(true);
-                            ResponseBuilder builder(mimeTypes);
-                            builder.build(res, &client->getCgi(), VectorInt());
+                            ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
                             if (client->getCgi().isActive()) {
                                 registerCgiPipes(client);
-                                break;
+                                continue;
                             }
                         } else {
                             HttpResponse response = ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
@@ -404,9 +403,14 @@ void ServerManagerPoll::handleCgiRead(int pipeFd) {
                 close(client->getCgi().getWriteFd());
                 client->getCgi().setWriteFd(-1);
             }
+            if (client->getCgi().getReadFd() != -1) {
+                close(client->getCgi().getReadFd());
+                client->getCgi().setReadFd(-1);
+            }
             client->setSendData(ResponseBuilder(mimeTypes).buildCgiResponse(client->getCgi()).toString());
             client->setHeadersParsed(false);
             client->getRequest().clear();
+            client->getCgi().finish();
             pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
         }
     }

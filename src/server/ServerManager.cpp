@@ -252,7 +252,6 @@ void ServerManager::processRequest(Client* client, Server* server) {
                 builder.build(res, &client->getCgi(), VectorInt());
                 if (client->getCgi().isActive()) {
                     registerCgiPipes(client);
-                    break;
                 }
             }
         }
@@ -277,7 +276,8 @@ void ServerManager::processRequest(Client* client, Server* server) {
                         client->getCgi().appendBuffer(part);
                         client->getRequest().parseBody(client->getRequest().getBody() + part);
                         client->removeReceivedData(toWrite);
-                        epollManager.addFd(client->getCgi().getWriteFd(), EPOLLOUT);
+                        if (client->getCgi().getWriteFd() != -1)
+                            epollManager.addFd(client->getCgi().getWriteFd(), EPOLLOUT);
                     }
                     if (client->getRequest().getBody().size() >= (size_t)cl) client->getCgi().setWriteDone(true);
                 }
@@ -296,7 +296,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
                         ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
                         if (client->getCgi().isActive()) {
                             registerCgiPipes(client);
-                            break;
+                            continue;
                         }
                     } else {
                         HttpResponse response = ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
@@ -323,7 +323,7 @@ void ServerManager::processRequest(Client* client, Server* server) {
                             ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
                             if (client->getCgi().isActive()) {
                                 registerCgiPipes(client);
-                                break;
+                                continue;
                             }
                         } else {
                             HttpResponse response = ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
@@ -399,9 +399,14 @@ void ServerManager::handleCgiRead(int pipeFd) {
                 close(client->getCgi().getWriteFd());
                 client->getCgi().setWriteFd(-1);
             }
+            if (client->getCgi().getReadFd() != -1) {
+                close(client->getCgi().getReadFd());
+                client->getCgi().setReadFd(-1);
+            }
             client->setSendData(ResponseBuilder(mimeTypes).buildCgiResponse(client->getCgi()).toString());
             client->setHeadersParsed(false);
             client->getRequest().clear();
+            client->getCgi().finish();
             epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
         }
     }

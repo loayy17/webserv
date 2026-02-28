@@ -131,7 +131,11 @@ bool CgiProcess::handleRead() {
     }
     if (gotData)
         _startTime = getCurrentTime();
-    return gotData || (n < 0);
+
+    // Subject rule: never check errno.
+    // If read returns 0, it means EOF. Return false to indicate we are done.
+    if (n == 0) return false;
+    return true; // Keep monitoring if we got data or if read returned -1 (non-blocking)
 }
 
 bool CgiProcess::finish() {
@@ -162,12 +166,16 @@ void CgiProcess::cleanup() {
         return;
     if (_pid > 0) {
         kill(_pid, SIGKILL);
-        waitpid(_pid, NULL, WNOHANG);
+        waitpid(_pid, NULL, 0); // Wait for it to avoid zombies
     }
-    if (_writeFd != INVALID_FD)
+    if (_writeFd != INVALID_FD) {
         close(_writeFd);
-    if (_readFd != INVALID_FD)
+        _writeFd = INVALID_FD;
+    }
+    if (_readFd != INVALID_FD) {
         close(_readFd);
+        _readFd = INVALID_FD;
+    }
     reset();
 }
 

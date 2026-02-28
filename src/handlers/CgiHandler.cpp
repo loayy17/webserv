@@ -199,6 +199,7 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
         // Fallback for cgi_tester: if pathInfo is empty, some versions expect URI in PATH_INFO
         env.push_back("PATH_TRANSLATED=" + resultRouter.getPathRootUri());
     }
+    env.push_back("DOCUMENT_ROOT=" + loc->getRoot());
     env.push_back("REDIRECT_STATUS=200");
     env.push_back("REMOTE_ADDR=" + resultRouter.getRemoteAddress());
     // --- POST info ---

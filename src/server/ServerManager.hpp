@@ -55,12 +55,17 @@ class ServerManager {
     void    handleClientRead(int clientFd);
     void    handleClientWrite(int clientFd);
     void    checkTimeouts(int timeout);
-    void    reapCgiProcesses();
     void    closeClientConnection(int clientFd);
     Server* findServerByFd(int serverFd) const;
     bool    isServerSocket(int fd) const;
     bool    isCgiPipe(int fd) const;
     void    processRequest(Client* client, Server* server);
+    bool    parseAndRouteHeaders(Client* client, Server* server);
+    bool    validateRequestBody(Client* client, const RouteResult& res, bool hasContentLength, bool isChunked);
+    void    handleCgiBodyStreaming(Client* client);
+    bool    handleRegularBody(Client* client);
+    void    finalizeResponse(Client* client, const HttpResponse& response, ssize_t bodyLen);
+    ssize_t getMaxBodySize(const RouteResult& res) const;
     Server* initializeServer(const ServerConfig& serverConfig, size_t listenIndex);
     void    sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove);
     // CGI pipe helpers

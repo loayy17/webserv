@@ -495,7 +495,7 @@ size_t convertMaxBodySize(const String& clientMaxBodySize) {
 
     size_t            size       = 0;
     char              unit       = clientMaxBodySize[clientMaxBodySize.size() - 1];
-    String            numberPart = (unit >= '9' || unit <= '0') ? clientMaxBodySize : clientMaxBodySize.substr(0, clientMaxBodySize.size() - 1);
+    String            numberPart = (unit >= '0' && unit <= '9') ? clientMaxBodySize : clientMaxBodySize.substr(0, clientMaxBodySize.size() - 1);
     std::stringstream ss(numberPart);
     ss >> size;
     if (ss.fail())

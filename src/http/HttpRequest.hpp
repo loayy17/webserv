@@ -56,7 +56,6 @@ class HttpRequest {
     // Validators
     bool isComplete() const;
     bool hasBody() const;
-    bool validateHttpVersion();
     bool validateHostHeader();
     bool validateContentLength();
 };

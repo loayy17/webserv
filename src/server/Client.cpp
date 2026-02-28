@@ -9,6 +9,7 @@ Client::Client(const Client& other)
       lastActivity(other.lastActivity),
       _cgi(other._cgi),
       _keepAlive(other._keepAlive),
+      remoteAddress(other.remoteAddress),
       _headersParsed(other._headersParsed),
       _request(other._request) {}
 
@@ -20,6 +21,7 @@ Client& Client::operator=(const Client& other) {
         lastActivity     = other.lastActivity;
         _cgi             = other._cgi;
         _keepAlive       = other._keepAlive;
+        remoteAddress    = other.remoteAddress;
         _headersParsed   = other._headersParsed;
         _request         = other._request;
     }
@@ -47,9 +49,11 @@ ssize_t Client::receiveData() {
         storeReceiveData.append(tmp, n);
         total += n;
     }
-    if (total > 0)
+    if (total > 0) {
         updateTime(lastActivity);
-    return total > 0 ? total : n;
+        return total;
+    }
+    return n;
 }
 
 ssize_t Client::sendData() {

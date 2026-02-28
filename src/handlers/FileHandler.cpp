@@ -11,7 +11,7 @@ FileHandler::FileHandler(struct dirent* entry, const String& basePath, String pa
             return; // skip
         name = basePath == "." ? "Go To Parent" : "Back";
         link = basePath == "." ? "/" : "../";
-        icon = basePath == "." ? "    https://cdn-icons-png.flaticon.com/512/17578/17578298.png"
+        icon = basePath == "." ? "https://cdn-icons-png.flaticon.com/512/17578/17578298.png"
                                : "https://cdn-icons-png.flaticon.com/512/7945/7945195.png";
         return;
     }

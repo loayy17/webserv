@@ -28,7 +28,8 @@ RouteResult::RouteResult(const RouteResult& other)
       isCgiRequest(other.isCgiRequest),
       isUploadRequest(other.isUploadRequest),
       request(other.request),
-      handlerType(other.handlerType) {}
+      handlerType(other.handlerType),
+      remoteAddress(other.remoteAddress) {}
 
 RouteResult& RouteResult::operator=(const RouteResult& other) {
     if (this != &other) {
@@ -45,6 +46,7 @@ RouteResult& RouteResult::operator=(const RouteResult& other) {
         isUploadRequest = other.isUploadRequest;
         request         = other.request;
         handlerType     = other.handlerType;
+        remoteAddress   = other.remoteAddress;
     }
     return *this;
 }

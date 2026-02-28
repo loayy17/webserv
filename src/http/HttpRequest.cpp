@@ -140,6 +140,8 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
         fragment = "";
     if (!splitByChar(uri, uri, queryString, QUESTION))
         queryString = "";
+    else
+        queryString = urlDecode(queryString);
     uri = urlDecode(uri);
 
     size_t pos = lineEnd + lineEndLen;

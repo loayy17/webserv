@@ -24,10 +24,11 @@ class Server {
     bool bindSocket();
     bool startListening();
 
-   public:
-    Server();
     Server(const Server&);
     Server& operator=(const Server&);
+
+   public:
+    Server();
     Server(ServerConfig config, size_t listenIdx = 0);
     ~Server();
 
@@ -39,7 +40,7 @@ class Server {
     int          getFd() const;
     int          getPort() const;
     bool         isRunning() const;
-    ServerConfig getConfig() const;
+    const ServerConfig& getConfig() const;
 };
 
 #endif

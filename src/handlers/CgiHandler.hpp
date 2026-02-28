@@ -24,7 +24,6 @@ class CgiHandler : public IHandler {
     CgiProcess* _cgi;
 
     VectorString       buildEnv(const RouteResult& resultRouter) const;
-    std::vector<char*> convertEnv(const VectorString& env) const;
 };
 
 #endif

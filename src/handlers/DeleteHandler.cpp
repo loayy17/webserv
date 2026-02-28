@@ -8,6 +8,9 @@ DeleteHandler::~DeleteHandler() {}
 bool DeleteHandler::handle(const RouteResult& resultRouter, HttpResponse& response) const {
     String path = resultRouter.getPathRootUri();
 
+    if (path.find("..") != String::npos)
+        return false;
+
     if (getFileType(path) != SINGLEFILE)
         return false;
 

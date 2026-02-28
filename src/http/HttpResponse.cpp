@@ -62,8 +62,10 @@ const String& HttpResponse::getBody() const {
 String HttpResponse::toString() {
     String ss;
     ss += httpVersion + " " + typeToString<int>(statusCode) + " " + statusMessage + "\r\n";
-    addHeader(HEADER_DATE, formatDateTime());
-    addHeader(HEADER_SERVER, "Webserv/1.0");
+    if (headers.find(HEADER_DATE) == headers.end())
+        addHeader(HEADER_DATE, formatDateTime());
+    if (headers.find(HEADER_SERVER) == headers.end())
+        addHeader(HEADER_SERVER, "Webserv/1.0");
     for (MapString::const_iterator it = headers.begin(); it != headers.end(); ++it)
         ss += it->first + ": " + it->second + "\r\n";
     for (size_t i = 0; i < setCookies.size(); ++i)

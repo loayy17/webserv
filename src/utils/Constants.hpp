@@ -87,10 +87,6 @@
 #define CGI_INTERFACE "CGI/1.1"
 #define SERVER_PROTOCOL "HTTP/1.1"
 
-// ! GUID
-#define GUID_LENGTH 36
-#define GUID_CHARSET "0123456789AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz"
-
 // ! SESSION
 #define SESSION_COOKIE_NAME "webserv_sid"
 #define SESSION_ID_LENGTH 32

@@ -1,17 +1,5 @@
 #include "Server.hpp"
 
-Server::Server(const Server& other) : server_fd(other.server_fd), running(other.running), config(other.config), listenIndex(other.listenIndex) {}
-
-Server& Server::operator=(const Server& other) {
-    if (this != &other) {
-        server_fd   = other.server_fd;
-        running     = other.running;
-        config      = other.config;
-        listenIndex = other.listenIndex;
-    }
-    return *this;
-}
-
 Server::Server(ServerConfig cfg, size_t listenIdx) : server_fd(-1), running(false), config(cfg), listenIndex(listenIdx) {}
 
 Server::Server() : server_fd(-1), running(false), config(ServerConfig()), listenIndex(0) {}
@@ -120,6 +108,6 @@ bool Server::isRunning() const {
     return running;
 }
 
-ServerConfig Server::getConfig() const {
+const ServerConfig& Server::getConfig() const {
     return config;
 }

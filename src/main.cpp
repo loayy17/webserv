@@ -19,7 +19,7 @@ void setupSignals() {
 
 int main(int ac, char** av) {
     try {
-        String configFile = (ac > 1) ? av[1] : "qa_test.conf";
+        String configFile = (ac > 1) ? av[1] : "default.conf";
         if (!fileExists(configFile) || !fileExists("src/config/mime.types")) {
             Logger::error("Error: Configuration file '" + configFile + "' not found or 'mime.types' file is missing.");
             return 1;

@@ -1,7 +1,7 @@
 #include "CgiProcess.hpp"
 #include "../utils/Utils.hpp"
 
-CgiProcess::CgiProcess() : _pid(-1), _writeFd(-1), _readFd(-1), _writeOffset(0), _startTime(0), _active(false) {}
+CgiProcess::CgiProcess() : _pid(-1), _writeFd(-1), _readFd(-1), _writeOffset(0), _writeDone(true), _startTime(0), _active(false) {}
 
 CgiProcess::CgiProcess(const CgiProcess& other)
     : _pid(other._pid),
@@ -9,6 +9,7 @@ CgiProcess::CgiProcess(const CgiProcess& other)
       _readFd(other._readFd),
       _writeBuffer(other._writeBuffer),
       _writeOffset(other._writeOffset),
+      _writeDone(other._writeDone),
       _output(other._output),
       _startTime(other._startTime),
       _active(other._active) {}
@@ -20,6 +21,7 @@ CgiProcess& CgiProcess::operator=(const CgiProcess& other) {
         _readFd      = other._readFd;
         _writeBuffer = other._writeBuffer;
         _writeOffset = other._writeOffset;
+        _writeDone   = other._writeDone;
         _output      = other._output;
         _startTime   = other._startTime;
         _active      = other._active;

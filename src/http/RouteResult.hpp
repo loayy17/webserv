@@ -29,6 +29,13 @@ class RouteResult {
     void setHandlerType(HandlerType type);
     void setRemoteAddress(const String& address);
 
+    void setBodyOffset(size_t offset);
+    void setBodyLength(size_t length);
+    void setRequestSize(size_t size);
+    void setClientBuffer(const String* buffer);
+    void setDechunkedBody(const String& body);
+    void setUseDechunked(bool use);
+
     // Getters
     int                   getStatusCode() const;
     bool                  getIsRedirect() const;
@@ -45,6 +52,13 @@ class RouteResult {
     HandlerType           getHandlerType() const;
     const String&         getRemoteAddress() const;
 
+    size_t                getBodyOffset() const;
+    size_t                getBodyLength() const;
+    size_t                getRequestSize() const;
+    const String*         getClientBuffer() const;
+    const String&         getDechunkedBody() const;
+    bool                  getUseDechunked() const;
+
    private:
     int                   statusCode;
     bool                  isRedirect;
@@ -60,5 +74,12 @@ class RouteResult {
     HttpRequest           request;
     HandlerType           handlerType;
     String                remoteAddress;
+
+    size_t                bodyOffset;
+    size_t                bodyLength;
+    size_t                requestSize;
+    const String*         clientBuffer;
+    String                dechunkedBody;
+    bool                  useDechunked;
 };
 #endif

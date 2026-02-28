@@ -1,32 +1,40 @@
 #include "Client.hpp"
 
-Client::Client() : client_fd(-1), lastActivity(0), _keepAlive(false), _headersParsed(false) {}
+#define MAX_RECEIVE_PER_CALL (1024 * 1024)
+
+Client::Client() : client_fd(-1), _sendOffset(0), lastActivity(0), _keepAlive(false), _headersParsed(false), _requestCount(0) {}
 
 Client::Client(const Client& other)
     : client_fd(other.client_fd),
       storeReceiveData(other.storeReceiveData),
       storeSendData(other.storeSendData),
+      _sendOffset(other._sendOffset),
       lastActivity(other.lastActivity),
       _cgi(other._cgi),
+      _request(other._request),
       _keepAlive(other._keepAlive),
       _headersParsed(other._headersParsed),
-      _request(other._request) {}
+      remoteAddress(other.remoteAddress),
+      _requestCount(other._requestCount) {}
 
 Client& Client::operator=(const Client& other) {
     if (this != &other) {
         client_fd        = other.client_fd;
         storeReceiveData = other.storeReceiveData;
         storeSendData    = other.storeSendData;
+        _sendOffset      = other._sendOffset;
         lastActivity     = other.lastActivity;
         _cgi             = other._cgi;
+        _request         = other._request;
         _keepAlive       = other._keepAlive;
         _headersParsed   = other._headersParsed;
-        _request         = other._request;
+        remoteAddress    = other.remoteAddress;
+        _requestCount    = other._requestCount;
     }
     return *this;
 }
 
-Client::Client(int fd) : client_fd(fd), _keepAlive(false), _headersParsed(false) {
+Client::Client(int fd) : client_fd(fd), _sendOffset(0), _keepAlive(false), _headersParsed(false), _requestCount(0) {
     lastActivity = getCurrentTime();
 }
 
@@ -35,8 +43,6 @@ Client::~Client() {
     if (_cgi.isActive()) {
         _cgi.cleanup();
     }
-    storeReceiveData.clear();
-    storeSendData.clear();
 }
 
 ssize_t Client::receiveData() {
@@ -46,25 +52,32 @@ ssize_t Client::receiveData() {
     while ((n = read(client_fd, tmp, BUFFER_SIZE)) > 0) {
         storeReceiveData.append(tmp, n);
         total += n;
+        if (total >= MAX_RECEIVE_PER_CALL)
+            break;
     }
     if (total > 0)
-        updateTime(lastActivity);
+        updateLastActivity();
     return total > 0 ? total : n;
 }
 
 ssize_t Client::sendData() {
-    if (storeSendData.empty())
+    if (_sendOffset >= storeSendData.size())
         return 0;
-    ssize_t sent = write(client_fd, storeSendData.c_str(), storeSendData.size());
+    ssize_t sent = write(client_fd, storeSendData.c_str() + _sendOffset, storeSendData.size() - _sendOffset);
     if (sent > 0) {
-        storeSendData.erase(0, sent);
-        updateTime(lastActivity);
+        _sendOffset += sent;
+        updateLastActivity();
+        if (_sendOffset >= storeSendData.size()) {
+            storeSendData.clear();
+            _sendOffset = 0;
+        }
     }
     return sent;
 }
 
 void Client::setSendData(const String& data) {
     storeSendData = data;
+    _sendOffset   = 0;
 }
 
 void Client::setRemoteAddress(const String& address) {
@@ -96,6 +109,9 @@ void Client::closeConnection() {
 const String& Client::getStoreReceiveData() const {
     return storeReceiveData;
 }
+String& Client::getStoreReceiveData() {
+    return storeReceiveData;
+}
 const String& Client::getStoreSendData() const {
     return storeSendData;
 }
@@ -110,8 +126,27 @@ const CgiProcess& Client::getCgi() const {
     return _cgi;
 }
 
-String Client::getRemoteAddress() const {
+HttpRequest& Client::getRequest() {
+    return _request;
+}
+
+const String& Client::getRemoteAddress() const {
     return remoteAddress;
+}
+
+void Client::setKeepAlive(bool keepAlive) {
+    _keepAlive = keepAlive;
+}
+bool Client::isKeepAlive() const {
+    return _keepAlive;
+}
+
+void Client::incrementRequestCount() {
+    _requestCount++;
+}
+
+int Client::getRequestCount() const {
+    return _requestCount;
 }
 
 bool Client::isHeadersParsed() const {
@@ -122,21 +157,6 @@ void Client::setHeadersParsed(bool parsed) {
     _headersParsed = parsed;
 }
 
-HttpRequest& Client::getRequest() {
-    return _request;
-}
-// "http://localhost:8080/cgi-bin/env.py/loay?omar=my_bitch
-// scriptNmae: /cgi-bin/env.py
-//query omar=my_bitch
-//path_info /loay
-
-void Client::setKeepAlive(bool keepAlive) {
-    _keepAlive = keepAlive;
-}
-bool Client::isKeepAlive() const {
-    return _keepAlive;
-}
-
-void Client::refreshActivity() {
-    updateTime(lastActivity);
+void Client::updateLastActivity() {
+    lastActivity = getCurrentTime();
 }

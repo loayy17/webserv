@@ -1,6 +1,0 @@
-POST /submit HTTP/1.1
-Host: localhost:8080
-Content-Type: application/x-www-form-urlencoded
-Content-Length: 23
-
-username=test&pass=1234

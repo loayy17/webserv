@@ -46,18 +46,18 @@ FileHandler& FileHandler::operator=(const FileHandler& other) {
 }
 FileHandler::~FileHandler() {}
 
-const String& FileHandler::getFileName() const {
+String FileHandler::getFileName() const {
     return name;
 }
-const String& FileHandler::getFileLink() const {
+String FileHandler::getFileLink() const {
     return link;
 }
-const String& FileHandler::getIcon() const {
+String FileHandler::getIcon() const {
     return icon;
 }
-const String& FileHandler::getSize() const {
+String FileHandler::getSize() const {
     return size;
 }
-const String& FileHandler::getLastModifiedDate() const {
+String FileHandler::getLastModifiedDate() const {
     return lastModified;
 }

@@ -1,51 +1,74 @@
 #ifndef CGI_PROCESS_HPP
 #define CGI_PROCESS_HPP
 
-#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <signal.h>
 #include <unistd.h>
-#include <ctime>
+#include <string>
+#include <vector>
 #include "../utils/Types.hpp"
 
 class CgiProcess {
-   private:
-    pid_t  _pid;
-    int    _writeFd;
-    int    _readFd;
-    String _writeBuffer;
-    size_t _writeOffset;
-    bool   _writeDone;
-    String _output;
-    time_t _startTime;
-    bool   _active;
-
    public:
     CgiProcess();
     CgiProcess(const CgiProcess& other);
     CgiProcess& operator=(const CgiProcess& other);
     ~CgiProcess();
 
-    void   init(pid_t pid, int writeFd, int readFd);
-    void   appendBuffer(const String& data);
-    void   reset();
-    bool   isActive() const;
-    pid_t  getPid() const;
-    int    getWriteFd() const;
-    int    getReadFd() const;
+    void init(pid_t pid, int writeFd, int readFd, const String* clientBuffer, size_t bodyOffset, size_t bodyLength,
+              size_t requestSize);
+
+    void initInternal(pid_t pid, int writeFd, int readFd, const String& internalBody, size_t requestSize);
+
+    void  reset();
+    bool  isActive() const;
+    pid_t getPid() const;
+    int   getWriteFd() const;
+    int   getReadFd() const;
+    size_t getRequestSize() const;
     time_t getStartTime() const;
     const String& getOutput() const;
 
     void setWriteFd(int fd);
     void setReadFd(int fd);
     bool isWriteDone() const;
-    void setWriteDone(bool done);
+
     bool writeBody(int fd);
+    void appendBuffer(const String& data);
     void appendOutput(const char* data, size_t len);
     bool handleRead();
-    bool finish();
+    bool isReadDone() const;
+
+    bool hasExited() const;
+    int  getExitStatus() const;
+    void setExited(int status);
+
+    void setReadDone();
+    void setWriteDone();
     void cleanup();
-    void resetStartTime();
+
+   private:
+    pid_t         _pid;
+    int           _writeFd;
+    int           _readFd;
+
+    const String* _clientBuffer;
+    size_t        _bodyOffset;
+    size_t        _bodyLength;
+    size_t        _writeOffset;
+
+    String        _internalBuffer;
+    bool          _useInternal;
+
+    size_t        _requestSize;
+    String        _output;
+    time_t        _startTime;
+    bool          _active;
+    bool          _readDone;
+    bool          _writeDone;
+    bool          _exited;
+    int           _exitStatus;
 };
 
 #endif

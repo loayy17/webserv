@@ -43,7 +43,7 @@ int HttpResponse::getStatusCode() const {
     return statusCode;
 }
 
-const String& HttpResponse::getStatusMessage() const {
+String HttpResponse::getStatusMessage() const {
     return statusMessage;
 }
 
@@ -55,12 +55,13 @@ void HttpResponse::setHttpVersion(const String& version) {
     httpVersion = version;
 }
 
-const String& HttpResponse::getBody() const {
+String HttpResponse::getBody() const {
     return body;
 }
 
 String HttpResponse::toString() {
     String ss;
+    ss.reserve(256 + headers.size() * 50 + setCookies.size() * 80 + body.size());
     ss += httpVersion + " " + typeToString<int>(statusCode) + " " + statusMessage + "\r\n";
     addHeader(HEADER_DATE, formatDateTime());
     addHeader(HEADER_SERVER, "Webserv/1.0");

@@ -119,7 +119,14 @@ bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response,
     close(childToParent[1]);
     setNonBlocking(parentToChild[1]);
     setNonBlocking(childToParent[0]);
-    _cgi->init(pid, parentToChild[1], childToParent[0]);
+
+    // Streaming optimization:
+    if (resultRouter.getUseDechunked()) {
+        _cgi->initInternal(pid, parentToChild[1], childToParent[0], resultRouter.getDechunkedBody(), resultRouter.getRequestSize());
+    } else {
+        _cgi->init(pid, parentToChild[1], childToParent[0], resultRouter.getClientBuffer(), resultRouter.getBodyOffset(),
+                   resultRouter.getBodyLength(), resultRouter.getRequestSize());
+    }
     return true;
 }
 // ─── Static helpers ──────────────────────────────────────────────────────────
@@ -191,14 +198,11 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     env.push_back("QUERY_STRING=" + req.getQueryString());
     env.push_back("SCRIPT_NAME=" + scriptName);
     env.push_back("SCRIPT_FILENAME=" + resultRouter.getPathRootUri());
-    // it must be pathInfo variable but we set it to uri just for tester work
     env.push_back("PATH_INFO=" + uri);
-    if (!pathInfo.empty()) {
+    if (!pathInfo.empty())
         env.push_back("PATH_TRANSLATED=" + joinPaths(loc->getRoot(), pathInfo));
-    } else {
-        // Fallback for cgi_tester: if pathInfo is empty, some versions expect URI in PATH_INFO
-        env.push_back("PATH_TRANSLATED=" + resultRouter.getPathRootUri());
-    }
+    else
+        env.push_back("PATH_TRANSLATED=" + loc->getRoot());
     env.push_back("REDIRECT_STATUS=200");
     env.push_back("REMOTE_ADDR=" + resultRouter.getRemoteAddress());
     // --- POST info ---

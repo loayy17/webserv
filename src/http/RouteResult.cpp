@@ -13,7 +13,12 @@ RouteResult::RouteResult()
       isCgiRequest(false),
       isUploadRequest(false),
       request(),
-      handlerType(NOT_FOUND) {}
+      handlerType(NOT_FOUND),
+      bodyOffset(0),
+      bodyLength(0),
+      requestSize(0),
+      clientBuffer(NULL),
+      useDechunked(false) {}
 
 RouteResult::RouteResult(const RouteResult& other)
     : statusCode(other.statusCode),
@@ -28,7 +33,13 @@ RouteResult::RouteResult(const RouteResult& other)
       isCgiRequest(other.isCgiRequest),
       isUploadRequest(other.isUploadRequest),
       request(other.request),
-      handlerType(other.handlerType) {}
+      handlerType(other.handlerType),
+      bodyOffset(other.bodyOffset),
+      bodyLength(other.bodyLength),
+      requestSize(other.requestSize),
+      clientBuffer(other.clientBuffer),
+      dechunkedBody(other.dechunkedBody),
+      useDechunked(other.useDechunked) {}
 
 RouteResult& RouteResult::operator=(const RouteResult& other) {
     if (this != &other) {
@@ -45,6 +56,12 @@ RouteResult& RouteResult::operator=(const RouteResult& other) {
         isUploadRequest = other.isUploadRequest;
         request         = other.request;
         handlerType     = other.handlerType;
+        bodyOffset      = other.bodyOffset;
+        bodyLength      = other.bodyLength;
+        requestSize     = other.requestSize;
+        clientBuffer    = other.clientBuffer;
+        dechunkedBody   = other.dechunkedBody;
+        useDechunked    = other.useDechunked;
     }
     return *this;
 }
@@ -123,6 +140,25 @@ void RouteResult::setRemoteAddress(const String& address) {
     remoteAddress = address;
 }
 
+void RouteResult::setBodyOffset(size_t offset) {
+    bodyOffset = offset;
+}
+void RouteResult::setBodyLength(size_t length) {
+    bodyLength = length;
+}
+void RouteResult::setRequestSize(size_t size) {
+    requestSize = size;
+}
+void RouteResult::setClientBuffer(const String* buffer) {
+    clientBuffer = buffer;
+}
+void RouteResult::setDechunkedBody(const String& body) {
+    dechunkedBody = body;
+}
+void RouteResult::setUseDechunked(bool use) {
+    useDechunked = use;
+}
+
 // Getters
 int RouteResult::getStatusCode() const {
     return statusCode;
@@ -178,4 +214,23 @@ HandlerType RouteResult::getHandlerType() const {
 
 const String& RouteResult::getRemoteAddress() const {
     return remoteAddress;
+}
+
+size_t RouteResult::getBodyOffset() const {
+    return bodyOffset;
+}
+size_t RouteResult::getBodyLength() const {
+    return bodyLength;
+}
+size_t RouteResult::getRequestSize() const {
+    return requestSize;
+}
+const String* RouteResult::getClientBuffer() const {
+    return clientBuffer;
+}
+const String& RouteResult::getDechunkedBody() const {
+    return dechunkedBody;
+}
+bool RouteResult::getUseDechunked() const {
+    return useDechunked;
 }

@@ -1,10 +1,12 @@
 #include "ServerManager.hpp"
+#include <fcntl.h>
+#include <netinet/tcp.h>
 
 ServerManager::ServerManager()
-    : epollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
+    : pollManager(), servers(), serverConfigs(), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {}
 
 ServerManager::ServerManager(const VectorServerConfig& _configs)
-    : epollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), sessionManager() {}
+    : pollManager(), servers(), serverConfigs(_configs), clients(), clientToServer(), serverToConfigs(), mimeTypes(), responseBuilder(mimeTypes), sessionManager() {}
 
 ServerManager::~ServerManager() {
     shutdown();
@@ -13,12 +15,10 @@ ServerManager::~ServerManager() {
 bool ServerManager::initialize() {
     if (serverConfigs.empty())
         return Logger::error("No server configurations provided");
-    if (!epollManager.init())
-        return Logger::error("Failed to initialize epoll");
     if (!initializeServers(serverConfigs) || servers.empty())
         return Logger::error("Failed to initialize servers");
     g_running = 1;
-    return Logger::info("[INFO]: ServerManager initialized");
+    return Logger::info("ServerManager initialized with Epoll");
 }
 
 ListenerToConfigsMap ServerManager::mapListenersToConfigs(const VectorServerConfig& serversConfigs) {
@@ -39,10 +39,13 @@ Server* ServerManager::initializeServer(const ServerConfig& serverConfig, size_t
         server = new Server(serverConfig, listenIndex);
         if (!server->init())
             throw std::runtime_error("Server initialization failed");
+        int fd = server->getFd();
+        int opt = 1;
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+        fcntl(fd, F_SETFL, O_NONBLOCK);
     } catch (...) {
         Logger::error("Server init failed for listen " + serverConfig.getListenAddresses()[listenIndex].getListenAddress());
         if (server) {
-            if (server->getFd() >= 0) close(server->getFd());
             delete server;
         }
         return NULL;
@@ -50,13 +53,12 @@ Server* ServerManager::initializeServer(const ServerConfig& serverConfig, size_t
     return server;
 }
 
-Server* ServerManager::createServerForListener(const String& listenerKey, const VectorServerConfig& serversConfigsForListener,
-                                               EpollManager& epollMgr) {
+Server* ServerManager::createServerForListener(const String& listenerKey, const VectorServerConfig& serversConfigsForListener) {
     if (serversConfigsForListener.empty())
         return NULL;
     const ServerConfig& firstConfig = serversConfigsForListener[0];
-    const VectorListenAddress& addresses   = firstConfig.getListenAddresses();
-    size_t                     listenIndex = 0;
+    const VectorListenAddress& addresses = firstConfig.getListenAddresses();
+    size_t listenIndex = 0;
     for (size_t i = 0; i < addresses.size(); i++) {
         if (addresses[i].getListenAddress() == listenerKey) {
             listenIndex = i;
@@ -64,16 +66,19 @@ Server* ServerManager::createServerForListener(const String& listenerKey, const 
         }
     }
     Server* server = initializeServer(firstConfig, listenIndex);
-    if (!server)
-        return NULL;
-    epollMgr.addFd(server->getFd(), EPOLLIN);
+    if (!server) return NULL;
+#ifdef __linux__
+    epollManager.addFd(server->getFd(), EPOLLIN);
+#else
+    pollManager.addFd(server->getFd(), POLLIN);
+#endif
     return server;
 }
 
 bool ServerManager::initializeServers(const VectorServerConfig& serversConfigs) {
-    ListenerToConfigsMap      listenerToConfigs = mapListenersToConfigs(serversConfigs);
+    ListenerToConfigsMap listenerToConfigs = mapListenersToConfigs(serversConfigs);
     for (ListenerToConfigsMap::iterator it = listenerToConfigs.begin(); it != listenerToConfigs.end(); ++it) {
-        Server* server = createServerForListener(it->first, it->second, epollManager);
+        Server* server = createServerForListener(it->first, it->second);
         if (!server) continue;
         servers.push_back(server);
         serverToConfigs[server->getFd()] = it->second;
@@ -81,335 +86,267 @@ bool ServerManager::initializeServers(const VectorServerConfig& serversConfigs) 
     return !servers.empty();
 }
 
+String ServerManager::getCachedDate() {
+    static time_t lastUpdate = 0;
+    static String cachedDate;
+    time_t now = getCurrentTime();
+    if (now != lastUpdate) {
+        lastUpdate = now;
+        cachedDate = getHttpDate(now);
+    }
+    return cachedDate;
+}
+
 bool ServerManager::run() {
     if (!g_running) return false;
-    time_t lastSessionCleanup = getCurrentTime();
     while (g_running) {
-        int eventCount = epollManager.wait(10);
+#ifdef __linux__
+        int eventCount = epollManager.wait(100);
+#else
+        int eventCount = pollManager.pollConnections(100);
+#endif
         checkTimeouts(CLIENT_TIMEOUT);
-        if (getDifferentTime(lastSessionCleanup, getCurrentTime()) > SESSION_CLEANUP_INTERVAL) {
-            sessionManager.cleanupExpiredSessions(SESSION_TIMEOUT);
-            lastSessionCleanup = getCurrentTime();
-        }
-        if (eventCount <= 0) continue;
+        reapCgiProcesses();
 
+        if (eventCount < 0) continue;
+
+#ifdef __linux__
         for (int i = 0; i < eventCount; i++) {
-            int fd = epollManager.getFd(i);
+            int fd = epollManager.getEventFd(i);
             uint32_t events = epollManager.getEvents(i);
-            if (fd < 0) continue;
-
-            try {
-                if (isCgiPipe(fd)) {
-                    if (events & EPOLLOUT) handleCgiWrite(fd);
-                    if (events & (EPOLLIN | EPOLLHUP | EPOLLERR)) handleCgiRead(fd);
-                    continue;
-                }
-                if (events & (EPOLLIN | EPOLLPRI)) {
-                    if (isServerSocket(fd)) {
-                        Server* server = findServerByFd(fd);
-                        if (server) acceptNewConnection(server);
-                    } else {
-                        MapIntClientPtr::iterator it = clients.find(fd);
-                        if (it != clients.end()) {
-                            handleClientRead(fd);
-                        }
-                    }
-                }
-                if (events & EPOLLOUT) {
-                    MapIntClientPtr::iterator it = clients.find(fd);
-                    if (it != clients.end()) handleClientWrite(fd);
-                }
-                if ((events & (EPOLLERR | EPOLLHUP)) && !(events & (EPOLLIN | EPOLLOUT))) {
-                    MapIntClientPtr::iterator it = clients.find(fd);
-                    if (it != clients.end()) closeClientConnection(fd);
-                }
-            } catch (const std::exception& e) {
-                Logger::error("Exception on fd " + typeToString(fd) + ": " + e.what());
-                if (!isServerSocket(fd) && !isCgiPipe(fd) && clients.count(fd)) closeClientConnection(fd);
+            bool hasIn = events & EPOLLIN;
+            bool hasOut = events & EPOLLOUT;
+            bool hasErr = events & (EPOLLERR | EPOLLHUP);
+#else
+        for (size_t i = 0; i < pollManager.size() && eventCount > 0; i++) {
+            int fd = pollManager.getFd(i);
+            bool hasIn = pollManager.hasEvent(i, POLLIN);
+            bool hasOut = pollManager.hasEvent(i, POLLOUT);
+            bool hasErr = pollManager.hasEvent(i, POLLERR | POLLHUP);
+            if (!hasIn && !hasOut && !hasErr) continue;
+            eventCount--;
+#endif
+            if (isCgiPipe(fd)) {
+                if (hasOut) handleCgiWrite(fd);
+                if (hasIn || hasErr) handleCgiRead(fd);
+#ifndef __linux__
+                if (i < pollManager.size() && pollManager.getFd(i) != fd) --i;
+#endif
+                continue;
             }
+            if (hasIn) {
+                if (isServerSocket(fd)) {
+                    Server* s = findServerByFd(fd);
+                    if (s) acceptNewConnection(s);
+                } else if (clients.count(fd)) handleClientRead(fd);
+            }
+            if (hasOut && clients.count(fd)) handleClientWrite(fd);
+            if (hasErr && clients.count(fd)) closeClientConnection(fd);
+#ifndef __linux__
+            if (i < pollManager.size() && pollManager.getFd(i) != fd) --i;
+#endif
         }
     }
     return true;
 }
 
 bool ServerManager::acceptNewConnection(Server* server) {
-    String remoteAddress;
-    int clientFd = server->acceptConnection(remoteAddress);
-    if (clientFd < 0) return false;
-    Client* client = new Client(clientFd);
-    client->setRemoteAddress(remoteAddress);
-    clients[clientFd] = client;
-    clientToServer[clientFd] = server;
-    epollManager.addFd(clientFd, EPOLLIN);
+    String addr;
+    int fd = server->acceptConnection(addr);
+    if (fd < 0) return false;
+    if (clients.size() >= MAX_CONNECTIONS) {
+        close(fd);
+        return false;
+    }
+    fcntl(fd, F_SETFL, O_NONBLOCK);
+    int opt = 1;
+    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
+    Client* c = new Client(fd);
+    c->setRemoteAddress(addr);
+    clients[fd] = c;
+    clientToServer[fd] = server;
+#ifdef __linux__
+    epollManager.addFd(fd, EPOLLIN);
+#else
+    pollManager.addFd(fd, POLLIN);
+#endif
     return true;
 }
 
-void ServerManager::handleClientRead(int clientFd) {
-    Client* client = getValue(clients, clientFd, (Client*)NULL);
-    if (!client || client->receiveData() <= 0) {
-        closeClientConnection(clientFd);
+void ServerManager::handleClientRead(int fd) {
+    Client* c = clients[fd];
+    if (c->receiveData() <= 0) {
+        closeClientConnection(fd);
         return;
     }
-    Server* server = getValue(clientToServer, clientFd, (Server*)NULL);
-    if (server) processRequest(client, server);
+    processRequest(c, clientToServer[fd]);
 }
 
-void ServerManager::handleClientWrite(int clientFd) {
-    Client* client = getValue(clients, clientFd, (Client*)NULL);
-    if (!client || client->sendData() < 0) {
-        closeClientConnection(clientFd);
+void ServerManager::handleClientWrite(int fd) {
+    Client* c = clients[fd];
+    if (c->sendData() < 0) {
+        closeClientConnection(fd);
         return;
     }
-    if (client->getStoreSendData().empty()) {
-        if (client->isKeepAlive()) epollManager.addFd(clientFd, EPOLLIN);
-        else closeClientConnection(clientFd);
-    }
-}
-
-void ServerManager::checkTimeouts(int timeout) {
-    std::vector<int> toClose;
-    for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
-        if (it->second->getCgi().isActive()) {
-            if (getDifferentTime(it->second->getCgi().getStartTime(), getCurrentTime()) > CGI_TIMEOUT) {
-                cleanupClientCgi(it->second);
-                it->second->setSendData(ResponseBuilder(mimeTypes).buildError(HTTP_GATEWAY_TIMEOUT, "CGI Timeout").toString());
-                it->second->setHeadersParsed(false);
-                it->second->getRequest().clear();
-                epollManager.addFd(it->first, EPOLLIN | EPOLLOUT);
-            }
-        } else if (it->second->isTimedOut(timeout)) {
-            toClose.push_back(it->first);
+    if (c->getStoreSendData().empty()) {
+        if (!c->isKeepAlive()) closeClientConnection(fd);
+        else {
+#ifdef __linux__
+            epollManager.addFd(fd, EPOLLIN);
+#else
+            pollManager.addFd(fd, POLLIN);
+#endif
         }
     }
-    for (size_t i = 0; i < toClose.size(); i++) closeClientConnection(toClose[i]);
-}
-
-void ServerManager::sendErrorResponse(Client* client, int statusCode, const String& message, bool closeConnection, size_t bytesToRemove) {
-    HttpResponse response = ResponseBuilder(mimeTypes).buildError(statusCode, message);
-    if (closeConnection) {
-        response.addHeader("Connection", "close");
-        client->setKeepAlive(false);
-    }
-    client->setSendData(response.toString());
-    if (bytesToRemove > 0) client->removeReceivedData(bytesToRemove);
-    else client->clearStoreReceiveData();
-    client->setHeadersParsed(false);
-    client->getRequest().clear();
-    epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
 }
 
 void ServerManager::processRequest(Client* client, Server* server) {
     while (true) {
         if (!client->isHeadersParsed()) {
-            const String& buffer = client->getStoreReceiveData();
-            if (buffer.empty()) break;
-
-            if (buffer.size() > MAX_HEADER_SIZE) {
-                sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, 0);
+            String& buf = client->getStoreReceiveData();
+            size_t pos = buf.find(DOUBLE_CRLF);
+            size_t len = 4;
+            if (pos == String::npos) { pos = buf.find("\n\n"); len = 2; }
+            if (pos == String::npos) {
+                if (buf.size() > MAX_HEADER_SIZE) sendErrorResponse(client, 431, "Headers Too Large", true, 0);
                 return;
             }
+            if (pos > MAX_HEADER_SIZE) { sendErrorResponse(client, 431, "Headers Too Large", true, 0); return; }
 
-            if (buffer[0] == '\r' || buffer[0] == '\n') {
-                size_t start = 0;
-                while (start < buffer.size() && (buffer[start] == '\r' || buffer[start] == '\n')) start++;
-                client->removeReceivedData(start);
-                continue;
-            }
-
-            size_t headerEnd = buffer.find(DOUBLE_CRLF);
-            size_t headerEndLen = 4;
-            if (headerEnd == String::npos) {
-                headerEnd = buffer.find("\n\n");
-                headerEndLen = 2;
-            }
-            if (headerEnd == String::npos) break;
-
-            if (!client->getRequest().parseHeaders(buffer.substr(0, headerEnd))) {
-                sendErrorResponse(client, client->getRequest().getErrorCode(), "Bad Request", true, headerEnd + headerEndLen);
-                return;
-            }
+            String head = buf.substr(0, pos);
+            client->removeReceivedData(pos + len);
+            if (!client->getRequest().parseHeaders(head)) { sendErrorResponse(client, 400, "Bad Request", true, 0); return; }
             client->getRequest().setPort(server->getPort());
-
-            bool keepAlive = (client->getRequest().getHttpVersion() == HTTP_VERSION_1_1);
-            String conn = toLowerWords(client->getRequest().getHeader("connection"));
-            if (conn == "close") keepAlive = false;
-            else if (conn == "keep-alive") keepAlive = true;
-            client->setKeepAlive(keepAlive);
-
             client->setHeadersParsed(true);
-            client->removeReceivedData(headerEnd + headerEndLen);
 
+            // Check keep-alive
+            String conn = toLowerWords(client->getRequest().getHeader("Connection"));
+            client->setKeepAlive(client->getRequest().getHttpVersion() == "HTTP/1.1" && conn.find("close") == String::npos);
+        }
+
+        if (client->isHeadersParsed()) {
             Router router(serverToConfigs[server->getFd()], client->getRequest());
             RouteResult res = router.processRequest();
             res.setRemoteAddress(client->getRemoteAddress());
 
             if (res.getHandlerType() == CGI) {
-                ssize_t cl = client->getRequest().getContentLength();
-                bool isChunked = (toLowerWords(client->getRequest().getHeader("transfer-encoding")).find("chunked") != String::npos);
-                if (cl <= 0 && !isChunked) client->getCgi().setWriteDone(true);
-
-                ResponseBuilder builder(mimeTypes);
-                builder.build(res, &client->getCgi(), VectorInt());
                 if (client->getCgi().isActive()) {
-                    registerCgiPipes(client);
-                }
-            }
-        }
-
-        if (client->isHeadersParsed()) {
-            bool isChunked = (toLowerWords(client->getRequest().getHeader("transfer-encoding")).find("chunked") != String::npos);
-            if (client->getCgi().isActive()) {
-                if (isChunked) {
-                    String decoded;
-                    if (decodeChunkedBody(client->getStoreReceiveData(), decoded)) {
-                        client->getCgi().appendBuffer(decoded);
-                        client->getCgi().setWriteDone(true);
-                        client->clearStoreReceiveData();
+                    // Already active, stream body
+                    String& buf = client->getStoreReceiveData();
+                    if (!buf.empty()) {
+                        client->getCgi().appendBuffer(buf);
+                        buf.clear();
+#ifdef __linux__
                         epollManager.addFd(client->getCgi().getWriteFd(), EPOLLOUT);
+#else
+                        pollManager.addFd(client->getCgi().getWriteFd(), POLLOUT);
+#endif
                     }
-                } else {
+                    // Handle completion check (simplified for now)
                     ssize_t cl = client->getRequest().getContentLength();
-                    size_t currentBodySize = client->getRequest().getBody().size();
-                    size_t toWrite = std::min(client->getStoreReceiveData().size(), (size_t)(cl - currentBodySize));
-                    if (toWrite > 0) {
-                        String part = client->getStoreReceiveData().substr(0, toWrite);
-                        client->getCgi().appendBuffer(part);
-                        client->getRequest().parseBody(client->getRequest().getBody() + part);
-                        client->removeReceivedData(toWrite);
-                        if (client->getCgi().getWriteFd() != -1)
-                            epollManager.addFd(client->getCgi().getWriteFd(), EPOLLOUT);
-                    }
-                    if (client->getRequest().getBody().size() >= (size_t)cl) client->getCgi().setWriteDone(true);
-                }
-                break;
-            } else {
-                ssize_t cl = client->getRequest().getContentLength();
-                if (!isChunked && client->getStoreReceiveData().size() >= (size_t)cl) {
-                    if (cl > 0) client->getRequest().parseBody(client->getStoreReceiveData().substr(0, cl));
-                    Router router(serverToConfigs[server->getFd()], client->getRequest());
-                    RouteResult res = router.processRequest();
-                    res.setRemoteAddress(client->getRemoteAddress());
+                    if (cl >= 0 && client->getRequest().getBody().size() >= (size_t)cl) client->getCgi().setWriteDone();
+                } else {
+                    // Initial CGI start
+                    ssize_t cl = client->getRequest().getContentLength();
+                    bool isChunked = toLowerWords(client->getRequest().getHeader("Transfer-Encoding")).find("chunked") != String::npos;
 
-                    if (res.getHandlerType() == CGI) {
-                        bool isChunked2 = (toLowerWords(client->getRequest().getHeader("transfer-encoding")).find("chunked") != String::npos);
-                        if (cl <= 0 && !isChunked2) client->getCgi().setWriteDone(true);
-                        ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
-                        if (client->getCgi().isActive()) {
-                            registerCgiPipes(client);
-                            continue;
-                        }
-                    } else {
-                        HttpResponse response = ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
-                        if (!client->isKeepAlive()) response.addHeader("Connection", "close");
-                        else response.addHeader("Connection", "keep-alive");
-                        client->setSendData(response.toString());
-                        if (cl > 0) client->removeReceivedData(cl);
-                        client->setHeadersParsed(false);
-                        client->getRequest().clear();
-                        epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
+                    responseBuilder.build(res, &client->getCgi(), VectorInt());
+                    if (client->getCgi().isActive()) {
+                        registerCgiPipes(client);
+                        if (cl <= 0 && !isChunked) client->getCgi().setWriteDone();
                         continue;
                     }
-                } else if (isChunked) {
-                    String decoded;
-                    if (decodeChunkedBody(client->getStoreReceiveData(), decoded)) {
-                        client->getRequest().parseBody(decoded);
-                        Router router(serverToConfigs[server->getFd()], client->getRequest());
-                        RouteResult res = router.processRequest();
-                        res.setRemoteAddress(client->getRemoteAddress());
-
-                        if (res.getHandlerType() == CGI) {
-                            client->getCgi().appendBuffer(decoded);
-                            client->getCgi().setWriteDone(true);
-                            ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
-                            if (client->getCgi().isActive()) {
-                                registerCgiPipes(client);
-                                continue;
-                            }
-                        } else {
-                            HttpResponse response = ResponseBuilder(mimeTypes).build(res, &client->getCgi(), VectorInt());
-                            if (!client->isKeepAlive()) response.addHeader("Connection", "close");
-                            else response.addHeader("Connection", "keep-alive");
-                            client->setSendData(response.toString());
-                            client->clearStoreReceiveData();
-                            client->setHeadersParsed(false);
-                            client->getRequest().clear();
-                            epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
-                            continue;
-                        }
-                    }
                 }
+            } else {
+                // Regular file handler
+                ssize_t cl = client->getRequest().getContentLength();
+                if (cl > 0 && client->getStoreReceiveData().size() < (size_t)cl) return; // Wait for full body
+                if (cl > 0) {
+                    client->getRequest().parseBody(client->getStoreReceiveData().substr(0, cl));
+                    client->removeReceivedData(cl);
+                }
+                HttpResponse response = responseBuilder.build(res, &client->getCgi(), VectorInt());
+                response.addHeader("Date", getCachedDate());
+                if (!client->isKeepAlive()) response.addHeader("Connection", "close");
+                client->setSendData(response.toString());
+                client->setHeadersParsed(false);
+                client->getRequest().clear();
+#ifdef __linux__
+                epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
+#else
+                pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+#endif
             }
         }
         break;
     }
 }
 
-void ServerManager::closeClientConnection(int clientFd) {
-    Client* c = getValue(clients, clientFd, (Client*)NULL);
-    if (c) {
-        if (c->getCgi().isActive()) cleanupClientCgi(c);
-        c->closeConnection();
-        delete c;
-    }
-    epollManager.removeFd(clientFd);
-    clients.erase(clientFd);
-    clientToServer.erase(clientFd);
-}
-
-bool ServerManager::isCgiPipe(int fd) const { return cgiPipeToClient.count(fd); }
-
-void ServerManager::removeCgiPipe(int pipeFd) {
-    epollManager.removeFd(pipeFd);
-    cgiPipeToClient.erase(pipeFd);
-}
-
 void ServerManager::registerCgiPipes(Client* client) {
     CgiProcess& cgi = client->getCgi();
+#ifdef __linux__
     if (!cgi.isWriteDone()) {
         epollManager.addFd(cgi.getWriteFd(), EPOLLOUT);
         cgiPipeToClient[cgi.getWriteFd()] = client->getFd();
-    } else {
-        if (cgi.getWriteFd() != -1) {
-            close(cgi.getWriteFd());
-            cgi.setWriteFd(-1);
-        }
     }
     epollManager.addFd(cgi.getReadFd(), EPOLLIN);
+#else
+    if (!cgi.isWriteDone()) {
+        pollManager.addFd(cgi.getWriteFd(), POLLOUT);
+        cgiPipeToClient[cgi.getWriteFd()] = client->getFd();
+    }
+    pollManager.addFd(cgi.getReadFd(), POLLIN);
+#endif
     cgiPipeToClient[cgi.getReadFd()] = client->getFd();
 }
 
 void ServerManager::handleCgiWrite(int pipeFd) {
-    Client* client = getValue(clients, getValue(cgiPipeToClient, pipeFd, -1), (Client*)NULL);
-    if (!client || client->getCgi().writeBody(pipeFd)) {
-        removeCgiPipe(pipeFd);
-        if (client && client->getCgi().getWriteFd() != -1) {
-            close(client->getCgi().getWriteFd());
-            client->getCgi().setWriteFd(-1);
-        }
+    int clientFd = cgiPipeToClient[pipeFd];
+    Client* c = clients[clientFd];
+    if (c->getCgi().writeBody(pipeFd)) {
+#ifdef __linux__
+        epollManager.removeFd(pipeFd);
+#else
+        pollManager.removeFdByValue(pipeFd);
+#endif
+        cgiPipeToClient.erase(pipeFd);
     }
 }
 
 void ServerManager::handleCgiRead(int pipeFd) {
-    Client* client = getValue(clients, getValue(cgiPipeToClient, pipeFd, -1), (Client*)NULL);
-    if (!client || !client->getCgi().handleRead()) {
-        removeCgiPipe(pipeFd);
-        if (client) {
-            if (client->getCgi().getWriteFd() != -1) {
-                removeCgiPipe(client->getCgi().getWriteFd());
-                close(client->getCgi().getWriteFd());
-                client->getCgi().setWriteFd(-1);
-            }
-            if (client->getCgi().getReadFd() != -1) {
-                close(client->getCgi().getReadFd());
-                client->getCgi().setReadFd(-1);
-            }
-            client->setSendData(ResponseBuilder(mimeTypes).buildCgiResponse(client->getCgi()).toString());
-            client->setHeadersParsed(false);
-            client->getRequest().clear();
-            client->getCgi().finish();
-            epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
-        }
+    int clientFd = cgiPipeToClient[pipeFd];
+    Client* c = clients[clientFd];
+    if (!c->getCgi().handleRead()) {
+#ifdef __linux__
+        epollManager.removeFd(pipeFd);
+#else
+        pollManager.removeFdByValue(pipeFd);
+#endif
+        cgiPipeToClient.erase(pipeFd);
+        HttpResponse resp = responseBuilder.buildCgiResponse(c->getCgi());
+        resp.addHeader("Date", getCachedDate());
+        c->setSendData(resp.toString());
+        c->setHeadersParsed(false);
+        c->getRequest().clear();
+#ifdef __linux__
+        epollManager.addFd(clientFd, EPOLLIN | EPOLLOUT);
+#else
+        pollManager.addFd(clientFd, POLLIN | POLLOUT);
+#endif
     }
+}
+
+void ServerManager::closeClientConnection(int fd) {
+    Client* c = clients[fd];
+    if (c->getCgi().isActive()) cleanupClientCgi(c);
+#ifdef __linux__
+    epollManager.removeFd(fd);
+#else
+    pollManager.removeFdByValue(fd);
+#endif
+    delete c;
+    clients.erase(fd);
+    clientToServer.erase(fd);
 }
 
 void ServerManager::cleanupClientCgi(Client* client) {
@@ -418,16 +355,62 @@ void ServerManager::cleanupClientCgi(Client* client) {
     client->getCgi().cleanup();
 }
 
-Server* ServerManager::findServerByFd(int serverFd) const {
-    for (size_t i = 0; i < servers.size(); i++) if (servers[i]->getFd() == serverFd) return servers[i];
+void ServerManager::removeCgiPipe(int fd) {
+#ifdef __linux__
+    epollManager.removeFd(fd);
+#endif
+    cgiPipeToClient.erase(fd);
+}
+
+void ServerManager::reapCgiProcesses() {
+    for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
+        Client* c = it->second;
+        if (!c->getCgi().isActive()) continue;
+        int status;
+        if (waitpid(c->getCgi().getPid(), &status, WNOHANG) > 0) {
+            c->getCgi().setExited(status);
+        }
+    }
+}
+
+void ServerManager::checkTimeouts(int timeout) {
+    std::vector<int> toClose;
+    for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
+        if (it->second->isTimedOut(timeout)) toClose.push_back(it->first);
+    }
+    for (size_t i = 0; i < toClose.size(); i++) closeClientConnection(toClose[i]);
+}
+
+void ServerManager::sendErrorResponse(Client* client, int code, const String& msg, bool closeConn, size_t) {
+    HttpResponse res = responseBuilder.buildError(code, msg);
+    res.addHeader("Date", getCachedDate());
+    if (closeConn) {
+        res.addHeader("Connection", "close");
+        client->setKeepAlive(false);
+    }
+    client->setSendData(res.toString());
+#ifdef __linux__
+    epollManager.addFd(client->getFd(), EPOLLIN | EPOLLOUT);
+#endif
+}
+
+bool ServerManager::isServerSocket(int fd) const {
+    for (size_t i = 0; i < servers.size(); i++) if (servers[i]->getFd() == fd) return true;
+    return false;
+}
+
+bool ServerManager::isCgiPipe(int fd) const {
+    return cgiPipeToClient.count(fd);
+}
+
+Server* ServerManager::findServerByFd(int fd) const {
+    for (size_t i = 0; i < servers.size(); i++) if (servers[i]->getFd() == fd) return servers[i];
     return NULL;
 }
 
-bool ServerManager::isServerSocket(int fd) const { return findServerByFd(fd) != NULL; }
-
 void ServerManager::shutdown() {
+    g_running = 0;
     for (MapIntClientPtr::iterator it = clients.begin(); it != clients.end(); ++it) {
-        if (it->second->getCgi().isActive()) cleanupClientCgi(it->second);
         delete it->second;
     }
     clients.clear();

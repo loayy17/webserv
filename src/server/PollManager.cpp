@@ -43,6 +43,8 @@ void PollManager::removeFd(size_t index) {
 
     int removedFd = fds[index].fd;
     _fdIndex.erase(removedFd);
+
+    // Swap with last element and pop (O(1) instead of O(n) erase)
     if (index < fds.size() - 1) {
         fds[index] = fds.back();
         _fdIndex[fds[index].fd] = index;

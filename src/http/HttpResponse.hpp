@@ -18,11 +18,11 @@ class HttpResponse {
     void   setResponseHeaders(const String& contentType, size_t contentLength);
     void   setBody(const String&);
     void   setHttpVersion(const String& version);
-    const String& getBody() const;
+    String getBody() const;
     String toString();
     int    getStatusCode() const;
 
-    const String& getStatusMessage() const;
+    String getStatusMessage() const;
 
    private:
     int          statusCode;

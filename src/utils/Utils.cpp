@@ -45,11 +45,9 @@ String formatDateTime(time_t t) {
     }
 
     // Month and day calculation
-
     int month = 0;
     while (month < 12) {
         int daysInMonth = MONTH_DAYS[month];
-        // Adjust February for leap year
         if (month == 1 && isLeapYear(year))
             daysInMonth = 29;
         if (remainingDays >= daysInMonth) {
@@ -77,6 +75,10 @@ String formatDateTime(time_t t) {
     date += " " + hourStr + ":" + minStr + ":" + secStr;
     date += " GMT";
     return date;
+}
+
+String getHttpDate(time_t t) {
+    return formatDateTime(t);
 }
 
 // ============================================================================
@@ -233,16 +235,12 @@ bool parseKeyValue(const String& line, String& key, VectorString& values) {
 
 String findValueStrInMap(const MapString& map, const String& key) {
     MapString::const_iterator it = map.find(key);
-    if (it != map.end())
-        return it->second;
-    return String(EMPTY_STRING);
+    return (it != map.end()) ? it->second : "";
 }
 
 String findValueIntInMap(const MapIntString& map, int key) {
     MapIntString::const_iterator it = map.find(key);
-    if (it != map.end())
-        return it->second;
-    return String(EMPTY_STRING);
+    return (it != map.end()) ? it->second : "";
 }
 
 // ============================================================================
@@ -460,7 +458,7 @@ String getUriRemainder(const String& uri, const String& locPath) {
     if (pathStartsWith(normalUri, normalLoc)) {
         String rest = normalUri.substr(normalLoc.length());
         if (rest.empty() || rest[0] != '/')
-            return String("/") + rest;
+            return "/" + rest;
         return rest;
     }
 
@@ -495,7 +493,7 @@ size_t convertMaxBodySize(const String& clientMaxBodySize) {
 
     size_t            size       = 0;
     char              unit       = clientMaxBodySize[clientMaxBodySize.size() - 1];
-    String            numberPart = (unit >= '9' || unit <= '0') ? clientMaxBodySize : clientMaxBodySize.substr(0, clientMaxBodySize.size() - 1);
+    String            numberPart = std::isdigit(static_cast<unsigned char>(unit)) ? clientMaxBodySize : clientMaxBodySize.substr(0, clientMaxBodySize.size() - 1);
     std::stringstream ss(numberPart);
     ss >> size;
     if (ss.fail())
@@ -541,132 +539,90 @@ String formatSize(double size) {
 }
 
 String getHttpStatusMessage(int code) {
-    String result = "Unknown Error";
     switch (code) {
         case 100:
-            result = "Continue";
-            break;
+            return "Continue";
         case 101:
-            result = "Switching Protocols";
-            break;
+            return "Switching Protocols";
         case 200:
-            result = "OK";
-            break;
+            return "OK";
         case 201:
-            result = "Created";
-            break;
+            return "Created";
         case 202:
-            result = "Accepted";
-            break;
+            return "Accepted";
         case 203:
-            result = "Non-Authoritative Information";
-            break;
+            return "Non-Authoritative Information";
         case 204:
-            result = "No Content";
-            break;
+            return "No Content";
         case 205:
-            result = "Reset Content";
-            break;
+            return "Reset Content";
         case 206:
-            result = "Partial Content";
-            break;
+            return "Partial Content";
         case 300:
-            result = "Multiple Choices";
-            break;
+            return "Multiple Choices";
         case 301:
-            result = "Moved Permanently";
-            break;
+            return "Moved Permanently";
         case 302:
-            result = "Found";
-            break;
+            return "Found";
         case 303:
-            result = "See Other";
-            break;
+            return "See Other";
         case 304:
-            result = "Not Modified";
-            break;
+            return "Not Modified";
         case 305:
-            result = "Use Proxy";
-            break;
+            return "Use Proxy";
         case 307:
-            result = "Temporary Redirect";
-            break;
+            return "Temporary Redirect";
         case 400:
-            result = "Bad Request";
-            break;
+            return "Bad Request";
         case 401:
-            result = "Unauthorized";
-            break;
+            return "Unauthorized";
         case 402:
-            result = "Payment Required";
-            break;
+            return "Payment Required";
         case 403:
-            result = "Forbidden";
-            break;
+            return "Forbidden";
         case 404:
-            result = "Not Found";
-            break;
+            return "Not Found";
         case 405:
-            result = "Method Not Allowed";
-            break;
+            return "Method Not Allowed";
         case 406:
-            result = "Not Acceptable";
-            break;
+            return "Not Acceptable";
         case 407:
-            result = "Proxy Authentication Required";
-            break;
+            return "Proxy Authentication Required";
         case 408:
-            result = "Request Timeout";
-            break;
+            return "Request Timeout";
         case 409:
-            result = "Conflict";
-            break;
+            return "Conflict";
         case 410:
-            result = "Gone";
-            break;
+            return "Gone";
         case 411:
-            result = "Length Required";
-            break;
+            return "Length Required";
         case 412:
-            result = "Precondition Failed";
-            break;
+            return "Precondition Failed";
         case 413:
-            result = "Payload Too Large";
-            break;
+            return "Payload Too Large";
         case 414:
-            result = "URI Too Long";
-            break;
+            return "URI Too Long";
         case 415:
-            result = "Unsupported Media Type";
-            break;
+            return "Unsupported Media Type";
         case 416:
-            result = "Range Not Satisfiable";
-            break;
+            return "Range Not Satisfiable";
         case 417:
-            result = "Expectation Failed";
-            break;
+            return "Expectation Failed";
         case 500:
-            result = "Internal Server Error";
-            break;
+            return "Internal Server Error";
         case 501:
-            result = "Not Implemented";
-            break;
+            return "Not Implemented";
         case 502:
-            result = "Bad Gateway";
-            break;
+            return "Bad Gateway";
         case 503:
-            result = "Service Unavailable";
-            break;
+            return "Service Unavailable";
         case 504:
-            result = "Gateway Timeout";
-            break;
+            return "Gateway Timeout";
         case 505:
-            result = "HTTP Version Not Supported";
-            break;
+            return "HTTP Version Not Supported";
         default:
-            result = "Unknown Error";
+            return "Unknown Error";
     }
-    return result;
 }
 
 // ============================================================================

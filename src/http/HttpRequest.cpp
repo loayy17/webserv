@@ -51,22 +51,6 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& other) {
 
 HttpRequest::~HttpRequest() {}
 
-void HttpRequest::clear() {
-    method = "";
-    uri = "";
-    httpVersion = "";
-    queryString = "";
-    fragment = "";
-    headers.clear();
-    body = "";
-    contentType = "";
-    contentLength = 0;
-    host = "";
-    port = 80;
-    cookies.clear();
-    errorCode = 0;
-}
-
 bool HttpRequest::parse(const String& raw) {
     errorCode        = 0;
     size_t headerEnd = raw.find(DOUBLE_CRLF);
@@ -90,19 +74,8 @@ bool HttpRequest::parse(const String& raw) {
 }
 bool HttpRequest::parseHeaders(const String& headerSection) {
     size_t lineEnd = headerSection.find(CRLF);
-    size_t lineEndLen = 2;
-    if (lineEnd == String::npos) {
-        lineEnd = headerSection.find("\n");
-        lineEndLen = 1;
-    }
-
-    if (lineEnd == String::npos) {
-        lineEnd = headerSection.size();
-        lineEndLen = 0;
-    }
-
-    if (lineEnd == 0 && (errorCode = HTTP_BAD_REQUEST)) {
-        return Logger::error("Empty request line");
+    if (lineEnd == String::npos && (errorCode = HTTP_BAD_REQUEST)) {
+        return Logger::error("Failed to find end of request line");
     }
 
     String       requestLine = headerSection.substr(0, lineEnd);
@@ -142,20 +115,13 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
         queryString = "";
     uri = urlDecode(uri);
 
-    size_t pos = lineEnd + lineEndLen;
+    size_t pos = lineEnd + 2; // +2 to skip \r\n
     while (pos < headerSection.size()) {
         lineEnd = headerSection.find(CRLF, pos);
-        lineEndLen = 2;
-        if (lineEnd == String::npos) {
-            lineEnd = headerSection.find("\n", pos);
-            lineEndLen = 1;
-        }
 
-        // If no more line endings found, process remaining content as last header
-        if (lineEnd == String::npos) {
+        // If no more \r\n found, process remaining content as last header
+        if (lineEnd == String::npos)
             lineEnd = headerSection.size();
-            lineEndLen = 0;
-        }
 
         String line = headerSection.substr(pos, lineEnd - pos);
         if (line.empty())
@@ -181,7 +147,7 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
             else
                 headers[headerKey] += "," + headerVal;
         }
-        pos = lineEnd + lineEndLen;
+        pos = lineEnd + 2;
     }
 
     // ! Validate Host header (required in HTTP/1.1)
@@ -356,4 +322,20 @@ int HttpRequest::getErrorCode() const {
 
 const String& HttpRequest::getQueryString() const {
     return queryString;
+}
+
+void HttpRequest::clear() {
+    method.clear();
+    uri.clear();
+    httpVersion.clear();
+    queryString.clear();
+    fragment.clear();
+    headers.clear();
+    body.clear();
+    contentType.clear();
+    contentLength = 0;
+    host.clear();
+    port = 80;
+    cookies.clear();
+    errorCode = 0;
 }

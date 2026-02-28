@@ -10,11 +10,11 @@ class FileHandler {
     FileHandler& operator=(const FileHandler& other);
     ~FileHandler();
 
-    const String& getFileName() const;
-    const String& getFileLink() const;
-    const String& getIcon() const;
-    const String& getSize() const;
-    const String& getLastModifiedDate() const;
+    String getFileName() const;
+    String getFileLink() const;
+    String getIcon() const;
+    String getSize() const;
+    String getLastModifiedDate() const;
 
    private:
     String name;

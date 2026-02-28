@@ -1,6 +1,0 @@
-GET /page HTTP/1.1
-Host: localhost:8080
-User-Agent: Mozilla/5.0
-Accept: text/html
-Accept-Language: en-US
-Connection: keep-alive

@@ -82,18 +82,13 @@ jobs:
             done
           sleep 3 
 
-
-      - name: echo pwd
-        run: pwd
-      - name: echo ls
-        run: ls -la
         
       - name: Run tester
-        run: printf "\n%.0s" {1..20} | ./tester http://localhost:1234
+        run: printf "\n%.0s" {1..20} | ./tester http://localhost:1234 >> tester.log 2>&1
 
       - name: Print server log (if any)
-        if: failure()
-        run: cat server.log || true
+        if: always()
+        run: cat server.log && sleep 1 && cat tester.log
 
       - name: Stop server
         if: always()

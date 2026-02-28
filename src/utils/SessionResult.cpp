@@ -2,13 +2,18 @@
 
 SessionResult::SessionResult() : createdAt(0), lastActivity(0) {}
 
-SessionResult::SessionResult(const String& sid, const String& uid) : sessionId(sid), userId(uid) {
+SessionResult::SessionResult(const String& sid, const String& uid) : sessionId(sid), userId(uid)
+{
     createdAt    = getCurrentTime();
     lastActivity = createdAt;
 }
 
 SessionResult::SessionResult(const SessionResult& other)
-    : sessionId(other.sessionId), userId(other.userId), createdAt(other.createdAt), lastActivity(other.lastActivity), data(other.data) {}
+    : sessionId(other.sessionId),
+      userId(other.userId),
+      createdAt(other.createdAt),
+      lastActivity(other.lastActivity),
+      data(other.data) {}
 
 SessionResult& SessionResult::operator=(const SessionResult& other) {
     if (this != &other) {
@@ -27,8 +32,8 @@ bool SessionResult::isExpired(int timeoutSeconds) const {
     return getDifferentTime(lastActivity, getCurrentTime()) > timeoutSeconds;
 }
 
-void SessionResult::updateTime() {
-    lastActivity = getCurrentTime();
+void SessionResult::touch() {
+    updateTime(lastActivity);
 }
 
 String SessionResult::getData(const String& key) const {

@@ -8,17 +8,20 @@
 #include "../handlers/CgiProcess.hpp"
 #include "../http/HttpRequest.hpp"
 #include "../utils/Utils.hpp"
+
 class Client {
    private:
-    int        client_fd;
-    String     storeReceiveData;
-    String     storeSendData;
-    time_t     lastActivity;
-    CgiProcess _cgi;
-    bool       _keepAlive;
-    String     remoteAddress;
-    bool       _headersParsed;
+    int         client_fd;
+    String      storeReceiveData;
+    String      storeSendData;
+    size_t      _sendOffset;
+    time_t      lastActivity;
+    CgiProcess  _cgi;
     HttpRequest _request;
+    bool        _keepAlive;
+    bool        _headersParsed;
+    String      remoteAddress;
+    int         _requestCount;
 
    public:
     Client(const Client&);
@@ -36,18 +39,21 @@ class Client {
     void          closeConnection();
     void          removeReceivedData(size_t len);
     const String& getStoreReceiveData() const;
+    String&       getStoreReceiveData();
     const String& getStoreSendData() const;
     int           getFd() const;
-    String        getRemoteAddress() const;
-    bool          isHeadersParsed() const;
-    void          setHeadersParsed(bool parsed);
-    HttpRequest&  getRequest();
+    const String& getRemoteAddress() const;
 
     CgiProcess&       getCgi();
     const CgiProcess& getCgi() const;
+    HttpRequest&      getRequest();
     void              setKeepAlive(bool keepAlive);
     bool              isKeepAlive() const;
-    void              refreshActivity();
+    void              incrementRequestCount();
+    int               getRequestCount() const;
+    bool              isHeadersParsed() const;
+    void              setHeadersParsed(bool parsed);
+    void              updateLastActivity();
 };
 
 #endif

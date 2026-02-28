@@ -1,8 +1,8 @@
 #include "Router.hpp"
 
 // Constructors / Destructor
-Router::Router() : _servers(), _request() {}
-Router::Router(const VectorServerConfig& servers, const HttpRequest& request) : _servers(servers), _request(request) {}
+Router::Router() : _servers(NULL), _request() {}
+Router::Router(const VectorServerConfig& servers, const HttpRequest& request) : _servers(&servers), _request(request) {}
 Router::Router(const Router& other) : _servers(other._servers), _request(other._request) {}
 Router& Router::operator=(const Router& other) {
     if (this != &other) {
@@ -177,20 +177,24 @@ RouteResult Router::processRequest() {
 
 // Server lookup
 const ServerConfig* Router::findServer() const {
+    if (!_servers)
+        return NULL;
     int    port = _request.getPort();
     String host = _request.getHost();
 
-    for (size_t i = 0; i < _servers.size(); ++i) {
-        if (_servers[i].hasPort(port) && _servers[i].hasServerName(host))
-            return &_servers[i];
+    for (size_t i = 0; i < _servers->size(); ++i) {
+        if ((*_servers)[i].hasPort(port) && (*_servers)[i].hasServerName(host))
+            return &(*_servers)[i];
     }
     return getDefaultServer(port);
 }
 
 const ServerConfig* Router::getDefaultServer(int port) const {
-    for (size_t i = 0; i < _servers.size(); ++i)
-        if (_servers[i].hasPort(port))
-            return &_servers[i];
+    if (!_servers)
+        return NULL;
+    for (size_t i = 0; i < _servers->size(); ++i)
+        if ((*_servers)[i].hasPort(port))
+            return &(*_servers)[i];
     return NULL;
 }
 

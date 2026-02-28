@@ -112,7 +112,7 @@ tests: config_tester request_tester router_tester
 # CLEANING
 # =================================================
 clean:
-	rm -rf $(OBJ_DIR)
+	rm -rf $(OBJS_MAIN) $(OBJS_CONFIG_TESTER) $(OBJS_REQUEST_TESTER) $(OBJS_ROUTER_TESTER)
 
 fclean: clean
 	rm -f $(NAME) config_tester request_tester router_tester

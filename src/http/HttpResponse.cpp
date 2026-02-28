@@ -71,5 +71,6 @@ String HttpResponse::toString() {
 
     ss += "\r\n";
     ss += body;
+    Logger::debug("response Sent (" + typeToString<int>(statusCode) + "): " + statusMessage);
     return ss;
 }

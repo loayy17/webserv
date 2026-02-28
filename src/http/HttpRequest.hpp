@@ -27,6 +27,7 @@ class HttpRequest {
     HttpRequest(const HttpRequest& other);
     HttpRequest& operator=(const HttpRequest& other);
     ~HttpRequest();
+    void clear();
     // Parsing
     bool parse(const String& raw);
     bool parseHeaders(const String& headerSection);

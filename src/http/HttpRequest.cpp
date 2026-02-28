@@ -51,6 +51,22 @@ HttpRequest& HttpRequest::operator=(const HttpRequest& other) {
 
 HttpRequest::~HttpRequest() {}
 
+void HttpRequest::clear() {
+    method      = "";
+    uri         = "";
+    httpVersion = "";
+    queryString = "";
+    fragment    = "";
+    headers.clear();
+    body          = "";
+    contentType   = "";
+    contentLength = 0;
+    host          = "";
+    port          = 80;
+    cookies.clear();
+    errorCode = 0;
+}
+
 bool HttpRequest::parse(const String& raw) {
     errorCode        = 0;
     size_t headerEnd = raw.find(DOUBLE_CRLF);
@@ -73,9 +89,20 @@ bool HttpRequest::parse(const String& raw) {
     return true;
 }
 bool HttpRequest::parseHeaders(const String& headerSection) {
-    size_t lineEnd = headerSection.find(CRLF);
-    if (lineEnd == String::npos && (errorCode = HTTP_BAD_REQUEST)) {
-        return Logger::error("Failed to find end of request line");
+    size_t lineEnd    = headerSection.find(CRLF);
+    size_t lineEndLen = 2;
+    if (lineEnd == String::npos) {
+        lineEnd    = headerSection.find("\n");
+        lineEndLen = 1;
+    }
+
+    if (lineEnd == String::npos) {
+        lineEnd    = headerSection.size();
+        lineEndLen = 0;
+    }
+
+    if (lineEnd == 0 && (errorCode = HTTP_BAD_REQUEST)) {
+        return Logger::error("Empty request line");
     }
 
     String       requestLine = headerSection.substr(0, lineEnd);
@@ -115,13 +142,20 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
         queryString = "";
     uri = urlDecode(uri);
 
-    size_t pos = lineEnd + 2; // +2 to skip \r\n
+    size_t pos = lineEnd + lineEndLen;
     while (pos < headerSection.size()) {
-        lineEnd = headerSection.find(CRLF, pos);
+        lineEnd    = headerSection.find(CRLF, pos);
+        lineEndLen = 2;
+        if (lineEnd == String::npos) {
+            lineEnd    = headerSection.find("\n", pos);
+            lineEndLen = 1;
+        }
 
-        // If no more \r\n found, process remaining content as last header
-        if (lineEnd == String::npos)
-            lineEnd = headerSection.size();
+        // If no more line endings found, process remaining content as last header
+        if (lineEnd == String::npos) {
+            lineEnd    = headerSection.size();
+            lineEndLen = 0;
+        }
 
         String line = headerSection.substr(pos, lineEnd - pos);
         if (line.empty())
@@ -147,7 +181,7 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
             else
                 headers[headerKey] += "," + headerVal;
         }
-        pos = lineEnd + 2;
+        pos = lineEnd + lineEndLen;
     }
 
     // ! Validate Host header (required in HTTP/1.1)

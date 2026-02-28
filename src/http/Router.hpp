@@ -27,8 +27,8 @@ class Router {
     String                resolveFilesystemPath(const LocationConfig* loc) const;
     bool                  isCgiRequest(const String& path, const LocationConfig& loc) const;
     void                  resolveCgiScriptAndPathInfo(const LocationConfig* loc, String& scriptPath, String& pathInfo) const;
-    VectorServerConfig    _servers; // params from config
-    HttpRequest           _request; // param from http request
+    const VectorServerConfig* _servers; // pointer to params from config (no copy)
+    HttpRequest               _request; // param from http request
 };
 
 #endif

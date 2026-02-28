@@ -6,16 +6,19 @@
 #include <ctime>
 #include <iostream>
 #include "../handlers/CgiProcess.hpp"
+#include "../http/HttpRequest.hpp"
 #include "../utils/Utils.hpp"
 class Client {
    private:
-    int        client_fd;
-    String     storeReceiveData;
-    String     storeSendData;
-    time_t     lastActivity;
-    CgiProcess _cgi;
-    bool       _keepAlive;
-    String     remoteAddress;
+    int         client_fd;
+    String      storeReceiveData;
+    String      storeSendData;
+    time_t      lastActivity;
+    CgiProcess  _cgi;
+    bool        _keepAlive;
+    String      remoteAddress;
+    bool        _headersParsed;
+    HttpRequest _request;
 
    public:
     Client(const Client&);
@@ -36,6 +39,9 @@ class Client {
     const String& getStoreSendData() const;
     int           getFd() const;
     String        getRemoteAddress() const;
+    bool          isHeadersParsed() const;
+    void          setHeadersParsed(bool parsed);
+    HttpRequest&  getRequest();
 
     CgiProcess&       getCgi();
     const CgiProcess& getCgi() const;

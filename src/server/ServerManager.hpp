@@ -36,17 +36,18 @@ class ServerManager {
 
    private:
     ServerManager(const ServerManager&);
-    ServerManager&           operator=(const ServerManager&);
-    PollManager              pollManager;
-    std::vector<Server*>     servers;
-    const VectorServerConfig serverConfigs;
-    MapIntClientPtr          clients;
-    MapIntServerPtr          clientToServer;
-    MapIntVectorServerConfig serverToConfigs;
-    MimeTypes                mimeTypes;
-    ResponseBuilder          responseBuilder;
-    SessionManager           sessionManager;
-    MapInt                   cgiPipeToClient;
+    ServerManager&             operator=(const ServerManager&);
+    PollManager                pollManager;
+    std::vector<Server*>       servers;
+    const VectorServerConfig   serverConfigs;
+    MapIntClientPtr            clients;
+    MapIntServerPtr            clientToServer;
+    MapIntVectorServerConfig   serverToConfigs;
+    MimeTypes                  mimeTypes;
+    ResponseBuilder            responseBuilder;
+    SessionManager             sessionManager;
+    MapInt                     cgiPipeToClient;
+    std::map<int, RouteResult> clientRoutes;
 
     // Internal helpers
     bool    initializeServers(const VectorServerConfig& serversConfigs);

@@ -645,6 +645,9 @@ String getHttpStatusMessage(int code) {
         case 417:
             result = "Expectation Failed";
             break;
+        case 431:
+            result = "Request Header Fields Too Large";
+            break;
         case 500:
             result = "Internal Server Error";
             break;

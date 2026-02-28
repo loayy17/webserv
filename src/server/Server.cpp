@@ -31,6 +31,9 @@ bool Server::configureSocket() {
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         return Logger::error("Failed to set SO_REUSEADDR");
     }
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+        return Logger::error("Failed to set SO_REUSEPORT");
+    }
     return true;
 }
 bool Server::bindSocket() {
@@ -90,9 +93,9 @@ int Server::acceptConnection(String& remoteAddress) {
         return -1;
     }
 
-    sockaddr_in  addr;
-    socklen_t    addr_len  = sizeof(addr);
-    int          client_fd = accept(server_fd, (sockaddr*)&addr, &addr_len);
+    sockaddr_in addr;
+    socklen_t   addr_len  = sizeof(addr);
+    int         client_fd = accept(server_fd, (sockaddr*)&addr, &addr_len);
     if (client_fd < 0) {
         Logger::error("Failed to accept new connection");
         return -1;
@@ -103,7 +106,7 @@ int Server::acceptConnection(String& remoteAddress) {
         return -1;
     }
     unsigned char* ip = (unsigned char*)&addr.sin_addr.s_addr;
-    remoteAddress = typeToString<int>(ip[0]) + "." + typeToString<int>(ip[1]) + "." + typeToString<int>(ip[2]) + "." + typeToString<int>(ip[3]);
+    remoteAddress     = typeToString<int>(ip[0]) + "." + typeToString<int>(ip[1]) + "." + typeToString<int>(ip[2]) + "." + typeToString<int>(ip[3]);
     return client_fd;
 }
 

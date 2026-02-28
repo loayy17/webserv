@@ -15,6 +15,7 @@ class CgiProcess {
     int    _readFd;
     String _writeBuffer;
     size_t _writeOffset;
+    bool   _writeDone;
     String _output;
     time_t _startTime;
     bool   _active;
@@ -25,18 +26,20 @@ class CgiProcess {
     CgiProcess& operator=(const CgiProcess& other);
     ~CgiProcess();
 
-    void   init(pid_t pid, int writeFd, int readFd, const String& body);
-    void   reset();
-    bool   isActive() const;
-    pid_t  getPid() const;
-    int    getWriteFd() const;
-    int    getReadFd() const;
-    time_t getStartTime() const;
+    void          init(pid_t pid, int writeFd, int readFd);
+    void          appendBuffer(const String& data);
+    void          reset();
+    bool          isActive() const;
+    pid_t         getPid() const;
+    int           getWriteFd() const;
+    int           getReadFd() const;
+    time_t        getStartTime() const;
     const String& getOutput() const;
 
     void setWriteFd(int fd);
     void setReadFd(int fd);
     bool isWriteDone() const;
+    void setWriteDone(bool done);
     bool writeBody(int fd);
     void appendOutput(const char* data, size_t len);
     bool handleRead();

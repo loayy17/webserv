@@ -1,6 +1,6 @@
 #include "Client.hpp"
 
-Client::Client() : client_fd(-1), lastActivity(0), _keepAlive(false) {}
+Client::Client() : client_fd(-1), lastActivity(0), _keepAlive(false), _headersParsed(false) {}
 
 Client::Client(const Client& other)
     : client_fd(other.client_fd),
@@ -8,7 +8,9 @@ Client::Client(const Client& other)
       storeSendData(other.storeSendData),
       lastActivity(other.lastActivity),
       _cgi(other._cgi),
-      _keepAlive(other._keepAlive) {}
+      _keepAlive(other._keepAlive),
+      _headersParsed(other._headersParsed),
+      _request(other._request) {}
 
 Client& Client::operator=(const Client& other) {
     if (this != &other) {
@@ -18,11 +20,13 @@ Client& Client::operator=(const Client& other) {
         lastActivity     = other.lastActivity;
         _cgi             = other._cgi;
         _keepAlive       = other._keepAlive;
+        _headersParsed   = other._headersParsed;
+        _request         = other._request;
     }
     return *this;
 }
 
-Client::Client(int fd) : client_fd(fd), _keepAlive(false) {
+Client::Client(int fd) : client_fd(fd), _keepAlive(false), _headersParsed(false) {
     lastActivity = getCurrentTime();
 }
 
@@ -108,6 +112,18 @@ const CgiProcess& Client::getCgi() const {
 
 String Client::getRemoteAddress() const {
     return remoteAddress;
+}
+
+bool Client::isHeadersParsed() const {
+    return _headersParsed;
+}
+
+void Client::setHeadersParsed(bool parsed) {
+    _headersParsed = parsed;
+}
+
+HttpRequest& Client::getRequest() {
+    return _request;
 }
 // "http://localhost:8080/cgi-bin/env.py/loay?omar=my_bitch
 // scriptNmae: /cgi-bin/env.py

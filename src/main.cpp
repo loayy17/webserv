@@ -38,9 +38,7 @@ int main(int ac, char** av) {
         }
 
         ServerManager serverManager(configs);
-
         setupSignals();
-
         if (!serverManager.initialize()) {
             Logger::error("Failed to initialize server manager");
             return 1;

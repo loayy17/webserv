@@ -15,6 +15,7 @@ void setupSignals() {
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
     signal(SIGPIPE, SIG_IGN);
+    signal(SIGCHLD, SIG_IGN);
 }
 
 int main(int ac, char** av) {

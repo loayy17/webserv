@@ -172,13 +172,21 @@ String generateGUID() {
     int fd = open("/dev/urandom", O_RDONLY);
     if (fd < 0) {
         Logger::error("CRITICAL: /dev/urandom unavailable");
-        throw std::runtime_error("Secure random source unavailable");
-    }
-
-    ssize_t n = read(fd, bytes, numBytes);
-    close(fd);
-    if (n != numBytes) {
-        throw std::runtime_error("Failed to read from /dev/urandom");
+        // Fallback: use time-based seed
+        srand(static_cast<unsigned int>(time(NULL)));
+        for (int i = 0; i < numBytes; ++i) {
+            bytes[i] = static_cast<unsigned char>(rand() % 256);
+        }
+    } else {
+        ssize_t n = read(fd, bytes, numBytes);
+        close(fd);
+        if (n != numBytes) {
+            Logger::error("Failed to read from /dev/urandom");
+            srand(static_cast<unsigned int>(time(NULL)));
+            for (int i = 0; i < numBytes; ++i) {
+                bytes[i] = static_cast<unsigned char>(rand() % 256);
+            }
+        }
     }
 
     for (int i = 0; i < numBytes; ++i) {
@@ -230,8 +238,6 @@ bool parseKeyValue(const String& line, String& key, VectorString& values) {
     }
     return !values.empty();
 }
-
-
 
 // ============================================================================
 // File System Methods
@@ -318,7 +324,7 @@ String sanitizeFilename(const String& filename) {
     safe.reserve(filename.size());
     for (size_t i = 0; i < filename.size(); ++i) {
         char c = filename[i];
-        if (std::isalnum(c) || c == '.' || c == '-' || c == '_')
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_')
             safe += c;
         else
             safe += '_';
@@ -328,10 +334,10 @@ String sanitizeFilename(const String& filename) {
 
 bool ensureDirectoryExists(const String& dirPath) {
     struct stat st;
-    if (stat(dirPath.c_str(), &st) == -1) {
-        if (mkdir(dirPath.c_str(), DIR_PERMISSIONS) == -1)
-            return false;
-    }
+    if (stat(dirPath.c_str(), &st) == -1)
+        return false;
+    if (!S_ISDIR(st.st_mode))
+        return false;
     return true;
 }
 
@@ -476,7 +482,10 @@ bool isMethodWithBody(const String& m) {
 }
 
 bool setNonBlocking(int fd) {
-    if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1)
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1)
+        return Logger::error("Failed to get fd flags");
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
         return Logger::error("Failed to set non-blocking mode");
     return true;
 }
@@ -761,8 +770,6 @@ bool parseMultipartFormData(const String& body, const String& boundary, String& 
     return !filename.empty();
 }
 
-
-
 bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
     decodedBody.clear();
     size_t pos      = 0;
@@ -824,7 +831,58 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
     return false; // should never reach here without a zero chunk
 }
 
+size_t findChunkedBodyEnd(const String& data) {
+    size_t pos      = 0;
+    size_t totalLen = data.size();
 
+    while (pos < totalLen) {
+        size_t lineEnd = data.find("\r\n", pos);
+        if (lineEnd == String::npos)
+            return String::npos;
+
+        String sizeLine = data.substr(pos, lineEnd - pos);
+        size_t semiPos  = sizeLine.find(';');
+        if (semiPos != String::npos)
+            sizeLine = sizeLine.substr(0, semiPos);
+
+        sizeLine = trimSpaces(sizeLine);
+        if (sizeLine.empty())
+            return String::npos;
+
+        unsigned long chunkSize = 0;
+        for (size_t i = 0; i < sizeLine.size(); i++) {
+            char c = sizeLine[i];
+            chunkSize *= 16;
+            if (c >= '0' && c <= '9')
+                chunkSize += c - '0';
+            else if (c >= 'a' && c <= 'f')
+                chunkSize += c - 'a' + 10;
+            else if (c >= 'A' && c <= 'F')
+                chunkSize += c - 'A' + 10;
+            else
+                return String::npos;
+        }
+
+        pos = lineEnd + 2;
+
+        if (chunkSize == 0) {
+            if (pos + 2 <= totalLen && data.substr(pos, 2) == "\r\n")
+                pos += 2;
+            return pos;
+        }
+
+        if (pos + chunkSize + 2 > totalLen)
+            return String::npos;
+
+        pos += chunkSize;
+
+        if (data.substr(pos, 2) != "\r\n")
+            return String::npos;
+        pos += 2;
+    }
+
+    return String::npos;
+}
 
 String urlDecode(const String& input) {
     String result;

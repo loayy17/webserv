@@ -71,5 +71,6 @@ String HttpResponse::toString() const {
 
     ss += "\r\n";
     ss += body;
+    Logger::info("Status code is " + typeToString<int>(statusCode) + " with body length " + typeToString<size_t>(body.size()));
     return ss;
 }

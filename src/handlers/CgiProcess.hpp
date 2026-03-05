@@ -19,6 +19,7 @@ class CgiProcess {
     String _output;
     time_t _startTime;
     bool   _active;
+    size_t _totalBytesReceived;
 
    public:
     CgiProcess();
@@ -36,14 +37,16 @@ class CgiProcess {
     time_t        getStartTime() const;
     const String& getOutput() const;
 
-    void setWriteFd(int fd);
-    void setReadFd(int fd);
-    bool isWriteDone() const;
-    void setWriteDone(bool done);
-    bool writeBody(int fd);
-    bool handleRead();
-    bool finish();
-    void cleanup();
+    void   setWriteFd(int fd);
+    void   setReadFd(int fd);
+    bool   isWriteDone() const;
+    void   setWriteDone(bool done);
+    bool   writeBody(int fd);
+    bool   handleRead();
+    bool   finish();
+    void   cleanup();
+    size_t getBufferSize() const;
+    size_t getTotalReceived() const;
 };
 
 #endif

@@ -48,6 +48,8 @@ ssize_t Client::receiveData() {
     while ((n = read(client_fd, tmp, BUFFER_SIZE)) > 0) {
         storeReceiveData.append(tmp, n);
         total += n;
+        // if (storeReceiveData.size() > MAX_RECEIVE_BUFFER_SIZE)
+        //     break;
     }
     if (total > 0) {
         updateTime(lastActivity);
@@ -63,6 +65,11 @@ ssize_t Client::sendData() {
     if (sent > 0) {
         storeSendData.erase(0, sent);
         updateTime(lastActivity);
+    // } else if (sent < 0) {
+    //     // Non-blocking write returned -1: could be EAGAIN (try later)
+    //     // Since we cannot check errno, treat as transient - return 0 to keep connection alive
+    //     // Real errors will be caught by POLLERR/POLLHUP in the next poll cycle
+    //     return 0;
     }
     return sent;
 }

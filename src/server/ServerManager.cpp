@@ -76,7 +76,7 @@ bool ServerManager::initializeServers(const VectorServerConfig& serversConfigs) 
             continue;
         servers.push_back(server);
         serverToConfigs[server->getFd()] = it->second;
-        serverFdMap[server->getFd()] = server;
+        serverFdMap[server->getFd()]     = server;
     }
     return !servers.empty();
 }
@@ -108,36 +108,29 @@ bool ServerManager::run() {
                 continue;
 
             try {
-                if (isCgiPipe(fd)) {
-                    if (hasOut)
-                        handleCgiWrite(fd);
-                    if (hasIn || hasHup || hasErr)
-                        handleCgiRead(fd);
-                    eventCount--;
-                    if (i < pollManager.size() && pollManager.getFd(i) != fd)
-                        --i;
-                    continue;
-                }
                 if (hasIn) {
-                    if (isServerSocket(fd)) {
+                    if (isCgiPipe(fd))
+                        handleCgiRead(fd);
+                    else if (isServerSocket(fd)) {
                         Server* server = findServerByFd(fd);
                         if (server)
                             acceptNewConnection(server);
-                    } else if (clients.count(fd)) {
+                    } else if (clients.count(fd))
                         handleClientRead(fd);
-                    }
-                    eventCount--;
                 }
                 if (hasOut) {
-                    if (clients.count(fd))
+                    if (isCgiPipe(fd))
+                        handleCgiWrite(fd);
+                    else if (clients.count(fd))
                         handleClientWrite(fd);
-                    eventCount--;
                 }
                 if ((hasErr || hasHup) && !hasIn && !hasOut) {
-                    if (clients.count(fd))
+                    if (isCgiPipe(fd))
+                        handleCgiRead(fd);
+                    else if (clients.count(fd))
                         closeClientConnection(fd);
-                    eventCount--;
                 }
+                eventCount--;
             } catch (const std::exception& e) {
                 Logger::error("Exception on fd " + typeToString(fd) + ": " + e.what());
                 if (!isServerSocket(fd) && !isCgiPipe(fd) && clients.count(fd))
@@ -154,7 +147,9 @@ bool ServerManager::acceptNewConnection(Server* server) {
     if (clients.size() >= MAX_CONNECTIONS) {
         Logger::error("Max connections reached (" + typeToString(MAX_CONNECTIONS) + "), rejecting new connection");
         String remoteAddress;
-        int    tmpFd = server->acceptConnection(remoteAddress);
+        // i must accept the connection and immediately close it to prevent the client from hanging while trying to connect
+        // in keep in kernel's accept queue until it times out, since the client will not receive any response until the connection is accepted and closed
+        int tmpFd = server->acceptConnection(remoteAddress);
         if (tmpFd >= 0)
             close(tmpFd);
         return false;
@@ -163,7 +158,13 @@ bool ServerManager::acceptNewConnection(Server* server) {
     int    clientFd = server->acceptConnection(remoteAddress);
     if (clientFd < 0)
         return false;
-    Client* client = new Client(clientFd);
+    Client* client;
+    try {
+        client = new Client(clientFd);
+    } catch (...) {
+        close(clientFd);
+        return false;
+    }
     client->setRemoteAddress(remoteAddress);
     clients[clientFd]        = client;
     clientToServer[clientFd] = server;
@@ -182,9 +183,8 @@ void ServerManager::handleClientRead(int clientFd) {
         closeClientConnection(clientFd);
         return;
     }
-    if (received < 0) {
+    if (received < 0)
         return;
-    }
     Server* server = getValue(clientToServer, clientFd, (Server*)NULL);
     if (server)
         processRequest(client, server);
@@ -212,6 +212,7 @@ void ServerManager::checkTimeouts(int timeout) {
                 cleanupClientCgi(it->second);
                 it->second->setSendData(responseBuilder.buildError(HTTP_GATEWAY_TIMEOUT, "CGI Timeout").toString());
                 it->second->resetForNextRequest();
+                clientRoutes.erase(it->first);
                 pollManager.addFd(it->first, POLLIN | POLLOUT);
             }
         } else if (it->second->isTimedOut(timeout)) {
@@ -227,25 +228,33 @@ void ServerManager::sendErrorResponse(Client* client, int statusCode, const Stri
     if (closeConnection) {
         response.addHeader("Connection", "close");
         client->setKeepAlive(false);
+        //     client->clearStoreReceiveData();
+        // } else {
+        //     response.addHeader("Connection", "keep-alive");
+        //     if (bytesToRemove > 0)
+        //         client->removeReceivedData(bytesToRemove);
     }
     client->setSendData(response.toString());
+    //
     if (bytesToRemove > 0)
         client->removeReceivedData(bytesToRemove);
     else
         client->clearStoreReceiveData();
+    //
     client->resetForNextRequest();
     clientRoutes.erase(client->getFd());
     pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
 }
 
 void ServerManager::processRequest(Client* client, Server* server) {
+    // while loop to handle cases where we receive the full request including body in one go, so we can process it immediately without waiting for another read event
     while (true) {
-        if (!client->isHeadersParsed()) {
+        if (!client->isHeadersParsed())
             if (!parseAndRouteHeaders(client, server))
                 return;
-            if (!client->isHeadersParsed())
-                break;
-        }
+        //     if (!client->isHeadersParsed())
+        //         break;
+        // }
 
         if (client->isHeadersParsed()) {
             if (client->getCgi().isActive()) {
@@ -276,10 +285,11 @@ void ServerManager::finalizeResponse(Client* client, const HttpResponse& respons
     else
         resp.addHeader("Connection", "keep-alive");
     client->setSendData(resp.toString());
-    if (bodyLen > 0)
-        client->removeReceivedData(bodyLen);
-    else
-        client->clearStoreReceiveData();
+    // if (bodyLen > 0)
+    //     client->removeReceivedData(bodyLen);
+    // else
+    //     client->clearStoreReceiveData();
+    client->removeReceivedData(bodyLen);
     client->resetForNextRequest();
     clientRoutes.erase(client->getFd());
     pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
@@ -308,19 +318,27 @@ bool ServerManager::parseAndRouteHeaders(Client* client, Server* server) {
         return false;
 
     if (!client->getRequest().parseHeaders(buffer.substr(0, headerEnd))) {
-        sendErrorResponse(client, client->getErrorCode(), "Bad Request", true, headerEnd + headerEndLen);
+        sendErrorResponse(client, client->getErrorCode(), getHttpStatusMessage(client->getErrorCode()), true, headerEnd + headerEndLen);
         return false;
     }
     client->getRequest().setPort(server->getPort());
-
     bool   keepAlive = (client->getRequest().getHttpVersion() == HTTP_VERSION_1_1);
-    String conn      = toLowerWords(client->getRequest().getHeader("connection"));
-    if (conn == "close")
-        keepAlive = false;
-    else if (conn == "keep-alive")
-        keepAlive = true;
-    client->setKeepAlive(keepAlive);
+    String conn      = toLowerWords(client->getRequest().getHeader(HEADER_CONNECTION));
 
+    VectorString connValues;
+    if (!splitByString(conn, connValues, ",")) {
+        sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, headerEnd + headerEndLen);
+        return false;
+    }
+    for (size_t i = 0; i < connValues.size(); i++) {
+        String val = trimSpaces(connValues[i]);
+        if (val == CLOSE) {
+            keepAlive = false;
+            break;
+        } else if (val == KEEP_ALIVE)
+            keepAlive = true;
+    }
+    client->setKeepAlive(keepAlive);
     client->setHeadersParsed(true);
     client->removeReceivedData(headerEnd + headerEndLen);
 
@@ -330,12 +348,35 @@ bool ServerManager::parseAndRouteHeaders(Client* client, Server* server) {
     clientRoutes[client->getFd()] = res;
 
     if (res.getStatusCode() >= 400) {
+        // Try to consume body data from the buffer to preserve keep-alive
+        // bool hasBody = !client->getRequest().getHeader(HEADER_CONTENT_LENGTH).empty() &&
+        //                client->getContentLength() > 0;
+        // bool isChunkedReq = client->isChunkedEncoding();
+        // bool shouldClose = false;
+        // size_t bodyBytesToRemove = 0;
+
+        // if (hasBody) {
+        //     size_t cl = client->getContentLength();
+        //     if (client->getStoreReceiveData().size() >= cl)
+        //         bodyBytesToRemove = cl;
+        //     else
+        //         shouldClose = true;
+        // } else if (isChunkedReq) {
+        //     size_t chunkedEnd = findChunkedBodyEnd(client->getStoreReceiveData());
+        //     if (chunkedEnd != String::npos)
+        //         bodyBytesToRemove = chunkedEnd;
+        //     else
+        //         shouldClose = true;
+        // }
+
         sendErrorResponse(client, res.getStatusCode(),
                           res.getErrorMessage().empty() ? getHttpStatusMessage(res.getStatusCode()) : res.getErrorMessage(), true, 0);
+        //                          res.getErrorMessage().empty() ? getHttpStatusMessage(res.getStatusCode()) : res.getErrorMessage(), shouldClose, bodyBytesToRemove);
+
         return false;
     }
 
-    bool hasContentLength = !client->getRequest().getHeader("content-length").empty();
+    bool hasContentLength = !client->getRequest().getHeader(HEADER_CONTENT_LENGTH).empty();
     bool isChunked        = client->isChunkedEncoding();
 
     if (!validateRequestBody(client, res, hasContentLength, isChunked))
@@ -361,7 +402,7 @@ bool ServerManager::validateRequestBody(Client* client, const RouteResult& res, 
     ssize_t maxBody = getMaxBodySize(res);
     String  method  = client->getMethod();
 
-    if ((method == "GET" || method == "DELETE" || method == "TRACE") && (hasContentLength || isChunked)) {
+    if ((method == METHOD_GET || method == METHOD_HEAD || method == METHOD_DELETE || method == METHOD_TRACE) && (hasContentLength || isChunked)) {
         sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
         return false;
     }
@@ -408,26 +449,25 @@ void ServerManager::handleCgiBodyStreaming(Client* client) {
             pollManager.addFd(client->getCgi().getWriteFd(), POLLOUT);
         }
     } else {
-        size_t cl              = client->getContentLength();
-        size_t currentBodySize = client->getRequest().getBody().size();
-        if (cl < currentBodySize) {
+        size_t cl            = client->getContentLength();
+        size_t totalReceived = client->getCgi().getTotalReceived();
+        if (cl < totalReceived) {
             sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
             return;
         }
-        size_t toWrite = std::min(client->getStoreReceiveData().size(), cl - currentBodySize);
+        size_t toWrite = minValue(client->getStoreReceiveData().size(), cl - totalReceived);
         if (toWrite > 0) {
             String part = client->getStoreReceiveData().substr(0, toWrite);
-            if (maxBody >= 0 && (ssize_t)(currentBodySize + part.size()) > maxBody) {
+            if (maxBody >= 0 && (ssize_t)(totalReceived + part.size()) > maxBody) {
                 sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, 0);
                 return;
             }
             client->getCgi().appendBuffer(part);
-            client->getRequest().parseBody(client->getRequest().getBody() + part);
             client->removeReceivedData(toWrite);
             if (client->getCgi().getWriteFd() != -1)
                 pollManager.addFd(client->getCgi().getWriteFd(), POLLOUT);
         }
-        if (client->getRequest().getBody().size() >= cl)
+        if (client->getCgi().getTotalReceived() >= cl)
             client->getCgi().setWriteDone(true);
     }
 }
@@ -435,11 +475,11 @@ void ServerManager::handleCgiBodyStreaming(Client* client) {
 bool ServerManager::handleRegularBody(Client* client) {
     bool    isChunked = client->isChunkedEncoding();
     ssize_t cl        = client->getContentLength();
-
     if (!isChunked && client->getStoreReceiveData().size() >= (size_t)cl) {
         if (cl > 0)
             client->getRequest().parseBody(client->getStoreReceiveData().substr(0, cl));
         RouteResult res = getValue(clientRoutes, client->getFd(), RouteResult());
+        // res.setRequest(client->getRequest());
 
         if (res.getHandlerType() == CGI) {
             if (cl <= 0 && !isChunked)
@@ -467,6 +507,7 @@ bool ServerManager::handleRegularBody(Client* client) {
             }
 
             client->getRequest().parseBody(decoded);
+            // res.setRequest(client->getRequest());
 
             if (res.getHandlerType() == CGI) {
                 client->getCgi().appendBuffer(decoded);
@@ -477,6 +518,7 @@ bool ServerManager::handleRegularBody(Client* client) {
                     return true;
                 }
             } else {
+                // client->clearStoreReceiveData();
                 HttpResponse response = responseBuilder.build(res, &client->getCgi(), getServerFds());
                 finalizeResponse(client, response, 0);
                 return true;
@@ -491,12 +533,15 @@ void ServerManager::closeClientConnection(int clientFd) {
     if (c) {
         if (c->getCgi().isActive())
             cleanupClientCgi(c);
+    }
+    pollManager.removeFdByValue(clientFd);
+    if (c) {
         c->closeConnection();
         delete c;
     }
-    pollManager.removeFdByValue(clientFd);
     clients.erase(clientFd);
     clientToServer.erase(clientFd);
+    clientRoutes.erase(clientFd);
 }
 
 bool ServerManager::isCgiPipe(int fd) const {
@@ -525,9 +570,13 @@ void ServerManager::registerCgiPipes(Client* client) {
 
 void ServerManager::handleCgiWrite(int pipeFd) {
     Client* client = getValue(clients, getValue(cgiPipeToClient, pipeFd, -1), (Client*)NULL);
-    if (!client || client->getCgi().writeBody(pipeFd)) {
+    if (!client) {
         removeCgiPipe(pipeFd);
-        if (client && client->getCgi().getWriteFd() != -1) {
+        return;
+    }
+    if (client->getCgi().writeBody(pipeFd)) {
+        removeCgiPipe(pipeFd);
+        if (client->getCgi().getWriteFd() != -1) {
             close(client->getCgi().getWriteFd());
             client->getCgi().setWriteFd(-1);
         }
@@ -536,24 +585,31 @@ void ServerManager::handleCgiWrite(int pipeFd) {
 
 void ServerManager::handleCgiRead(int pipeFd) {
     Client* client = getValue(clients, getValue(cgiPipeToClient, pipeFd, -1), (Client*)NULL);
-    if (!client || !client->getCgi().handleRead()) {
+    if (!client) {
         removeCgiPipe(pipeFd);
-        if (client) {
-            if (client->getCgi().getWriteFd() != -1) {
-                removeCgiPipe(client->getCgi().getWriteFd());
-                close(client->getCgi().getWriteFd());
-                client->getCgi().setWriteFd(-1);
-            }
-            if (client->getCgi().getReadFd() != -1) {
-                close(client->getCgi().getReadFd());
-                client->getCgi().setReadFd(-1);
-            }
-            client->getCgi().finish();
-            client->setSendData(responseBuilder.buildCgiResponse(client->getCgi()).toString());
-            client->resetForNextRequest();
-            clientRoutes.erase(client->getFd());
-            pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
+        return;
+    }
+    if (!client->getCgi().handleRead()) {
+        removeCgiPipe(pipeFd);
+        if (client->getCgi().getWriteFd() != -1) {
+            removeCgiPipe(client->getCgi().getWriteFd());
+            close(client->getCgi().getWriteFd());
+            client->getCgi().setWriteFd(-1);
         }
+        if (client->getCgi().getReadFd() != -1) {
+            close(client->getCgi().getReadFd());
+            client->getCgi().setReadFd(-1);
+        }
+        client->getCgi().finish();
+        HttpResponse cgiResponse = responseBuilder.buildCgiResponse(client->getCgi());
+        if (!client->isKeepAlive())
+            cgiResponse.addHeader("Connection", "close");
+        else
+            cgiResponse.addHeader("Connection", "keep-alive");
+        client->setSendData(cgiResponse.toString());
+        client->resetForNextRequest();
+        clientRoutes.erase(client->getFd());
+        pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
     }
 }
 

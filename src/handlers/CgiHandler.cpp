@@ -58,43 +58,21 @@ bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response,
     String scriptDir = extractDirectoryFromPath(scriptPath);
 
     if (pid == 0) {
-        if (close(parentToChild[1]) == -1) {
-            perror("CGI close parentToChild[1] failed");
+        close(parentToChild[1]);
+        close(childToParent[0]);
+        if (dup2(parentToChild[0], STDIN_FILENO) == -1)
             _exit(1);
-        }
-        if (close(childToParent[0]) == -1) {
-            perror("CGI close childToParent[0] failed");
+        if (dup2(childToParent[1], STDOUT_FILENO) == -1)
             _exit(1);
-        }
-        if (dup2(parentToChild[0], STDIN_FILENO) == -1) {
-            perror("CGI dup2 parentToChild[0] failed");
-            _exit(1);
-        }
-        if (dup2(childToParent[1], STDOUT_FILENO) == -1) {
-            perror("CGI dup2 childToParent[1] failed");
-            _exit(1);
-        }
-        if (close(parentToChild[0]) == -1) {
-            perror("CGI close parentToChild[0] failed");
-            _exit(1);
-        }
-        if (close(childToParent[1]) == -1) {
-            perror("CGI close childToParent[1] failed");
-            _exit(1);
-        }
-        for (size_t i = 0; i < openFds.size(); i++) {
-            if (close(openFds[i]) == -1) {
-                perror("CGI close openFds failed");
-                _exit(1);
-            }
-        }
+        close(parentToChild[0]);
+        close(childToParent[1]);
+        for (size_t i = 0; i < openFds.size(); i++)
+            close(openFds[i]);
 
         String fileName = scriptPath.substr(scriptDir.size());
         if (!scriptDir.empty()) {
-            if (chdir(scriptDir.c_str()) != 0) {
-                perror("CGI chdir failed");
+            if (chdir(scriptDir.c_str()) != 0)
                 _exit(1);
-            }
         }
 
         VectorString       envStrings = buildEnv(resultRouter);
@@ -149,8 +127,10 @@ bool CgiHandler::parseOutput(const String& raw, HttpResponse& response) {
         String key = trimSpaces(line.substr(0, colon));
         String val = trimSpaces(line.substr(colon + 1));
         if (toLowerWords(key) == "status") {
-            int    code  = atoi(val.c_str());
-            String msg   = "OK";
+            int               code = 0;
+            if(!stringToType<int>(val, code))
+                code = HTTP_INTERNAL_SERVER_ERROR;
+            String msg   = getHttpStatusMessage(code);
             size_t space = val.find(' ');
             if (space != String::npos)
                 msg = val.substr(space + 1);
@@ -219,7 +199,7 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
         for (size_t i = 0; i < key.size(); i++) {
             if (key[i] == '-')
                 key[i] = '_';
-            else if (!std::isalnum(key[i]) && key[i] != '_')
+            else if (!std::isalnum(static_cast<unsigned char>(key[i])) && key[i] != '_')
                 key[i] = '_';
         }
 

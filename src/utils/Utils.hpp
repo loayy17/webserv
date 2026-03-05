@@ -46,18 +46,18 @@ String      extractFileExtension(const String& path);
 String      extractDirectoryFromPath(const String& path);
 
 // --- Path Methods ---
-String        normalizePath(const String& path);
-String        joinPaths(const String& firstPath, const String& secondPath);
-bool          pathStartsWith(const String& path, const String& prefix);
+String normalizePath(const String& path);
+String joinPaths(const String& firstPath, const String& secondPath);
+bool   pathStartsWith(const String& path, const String& prefix);
 String getUriRemainder(const String& uri, const String& locPath);
 
 // --- HTTP/Network Helpers ---
-bool          isValidHttpMethod(const String& m);
-bool          isMethodWithBody(const String& m);
-bool          parseKeyValue(const String& line, String& key, VectorString& values);
-size_t        convertMaxBodySize(const String& maxBody);
+bool   isValidHttpMethod(const String& m);
+bool   isMethodWithBody(const String& m);
+bool   parseKeyValue(const String& line, String& key, VectorString& values);
+size_t convertMaxBodySize(const String& maxBody);
 String formatSize(double size);
-bool          setNonBlocking(int fd);
+bool   setNonBlocking(int fd);
 String getHttpStatusMessage(int code);
 
 // --- Header/Body Parsing ---
@@ -65,6 +65,7 @@ String extractFilenameFromHeader(const String& contentDisposition);
 String extractBoundaryFromContentType(const String& contentType);
 bool   parseMultipartFormData(const String& body, const String& boundary, String& filename, String& fileContent);
 bool   decodeChunkedBody(const String& chunkedBody, String& decodedBody);
+size_t findChunkedBodyEnd(const String& data);
 bool   requireSingleValue(const VectorString& v, const String& directive);
 
 //! --- Templates ---
@@ -112,5 +113,11 @@ bool isKeyInVector(const K& key, const std::vector<K>& vector) {
             return true;
     return false;
 }
+
+template <typename T>
+T minValue(const T& a, const T& b) {
+    return (a < b) ? a : b;
+}
+
 String urlDecode(const String& input);
 #endif

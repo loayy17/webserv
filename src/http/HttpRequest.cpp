@@ -266,7 +266,7 @@ bool HttpRequest::validateContentLength() {
     }
     const String& clValue = it->second;
     for (size_t i = 0; i < clValue.length(); ++i) {
-        if (!std::isdigit(clValue[i])) {
+        if (!std::isdigit(static_cast<unsigned char>(clValue[i]))) {
             errorCode = HTTP_BAD_REQUEST;
             return false;
         }

@@ -34,11 +34,14 @@
 #define HEADER_CONNECTION "Connection"
 #define HEADER_DATE "Date"
 #define HEADER_SERVER "Server"
+#define CLOSE "close"
+#define KEEP_ALIVE "keep-alive"
 
 // ! HTTP METHODS
 #define METHOD_GET "GET"
 #define METHOD_POST "POST"
 #define METHOD_DELETE "DELETE"
+#define METHOD_TRACE "TRACE"
 #define METHOD_PUT "PUT"
 #define METHOD_PATCH "PATCH"
 #define METHOD_HEAD "HEAD"
@@ -70,6 +73,7 @@
 // ! CONNECTION LIMITS
 #define MAX_CONNECTIONS 1024
 #define MAX_KEEPALIVE_REQUESTS 100
+#define MAX_RECEIVE_BUFFER_SIZE (10 * 1024 * 1024)
 
 // ! TIMEOUTS
 #define CLIENT_TIMEOUT 160

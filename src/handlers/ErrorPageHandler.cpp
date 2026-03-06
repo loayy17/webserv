@@ -112,28 +112,20 @@ std::string ErrorPageHandler::generateHtml(int code, const std::string& msg) con
 void ErrorPageHandler::handle(HttpResponse& response, const RouteResult& resultRouter, const MimeTypes& mimeTypes) const {
     int         code = resultRouter.getStatusCode() ? resultRouter.getStatusCode() : 500;
     std::string msg  = resultRouter.getErrorMessage().empty() ? getHttpStatusMessage(code) : resultRouter.getErrorMessage();
-
     std::string body;
+    bool        isHead = (resultRouter.getRequest().getMethod() == "HEAD");
+
     // Check for custom error page in location first, then server
     const std::string customPage = resultRouter.getLocation() ? resultRouter.getLocation()->getErrorPage(code) : "";
-    if (!customPage.empty() && readFileContent(customPage, body)) {
-        response.setStatus(code, msg);
-        response.addHeader("Content-Type", mimeTypes.get(customPage));
-        response.addHeader("Content-Length", typeToString<size_t>(body.size()));
-        if (resultRouter.getRequest().getMethod() != "HEAD")
-            response.setBody(body);
-        
-        return;
-    }
-
     const std::string serverPage = resultRouter.getServer() ? resultRouter.getServer()->getErrorPage(code) : "";
-    if (!serverPage.empty() && readFileContent(serverPage, body)) {
+    const std::string& pagePath  = !customPage.empty() ? customPage : serverPage;
+
+    if (!pagePath.empty() && readFileContent(pagePath, body)) {
         response.setStatus(code, msg);
-        response.addHeader("Content-Type", mimeTypes.get(serverPage));
+        response.addHeader("Content-Type", mimeTypes.get(pagePath));
         response.addHeader("Content-Length", typeToString<size_t>(body.size()));
-        if (resultRouter.getRequest().getMethod() != "HEAD") 
+        if (!isHead)
             response.setBody(body);
-        
         return;
     }
 
@@ -142,7 +134,6 @@ void ErrorPageHandler::handle(HttpResponse& response, const RouteResult& resultR
     response.setStatus(code, msg);
     response.addHeader("Content-Type", "text/html");
     response.addHeader("Content-Length", typeToString<size_t>(body.size()));
-    if (resultRouter.getRequest().getMethod() != "HEAD") 
+    if (!isHead)
         response.setBody(body);
-    
 }

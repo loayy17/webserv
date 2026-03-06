@@ -162,7 +162,9 @@ bool CgiProcess::finish() {
         }
     }
     _active = false;
-    if (ret <= 0)
+    if (ret < 0)
+        return true;
+    if (ret == 0)
         return false;
     return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }

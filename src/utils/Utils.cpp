@@ -789,10 +789,17 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
 
         // 3. Handle last chunk (0)
         if (chunkSize == 0) {
-            // Expect a final CRLF (or optional trailer headers + CRLF)
-            if (pos + 2 <= totalLen && chunkedBody.substr(pos, 2) == "\r\n")
-                pos += 2;
-            return pos == totalLen; // ensure all input consumed
+            while (pos < totalLen) {
+                size_t crlfPos = chunkedBody.find("\r\n", pos);
+                if (crlfPos == String::npos)
+                    return false;
+                if (crlfPos == pos) {
+                    pos += 2;
+                    break;
+                }
+                pos = crlfPos + 2;
+            }
+            return pos <= totalLen;
         }
 
         // 4. Validate chunk size fits remaining data
@@ -847,8 +854,16 @@ size_t findChunkedBodyEnd(const String& data) {
         pos = lineEnd + 2;
 
         if (chunkSize == 0) {
-            if (pos + 2 <= totalLen && data.substr(pos, 2) == "\r\n")
-                pos += 2;
+            while (pos < totalLen) {
+                size_t crlfPos = data.find("\r\n", pos);
+                if (crlfPos == String::npos)
+                    return String::npos;
+                if (crlfPos == pos) {
+                    pos += 2;
+                    break;
+                }
+                pos = crlfPos + 2;
+            }
             return pos;
         }
 

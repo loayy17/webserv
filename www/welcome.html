@@ -1,44 +1,744 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome</title>
-</head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Webserv — HTTP/1.1 Server</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root {
+      --bg:    #0a0e1a;
+      --card:  #0f1629;
+      --border:#1e2d4a;
+      --accent:#3b82f6;
+      --acc2:  #8b5cf6;
+      --acc3:  #10b981;
+      --text:  #e2e8f0;
+      --muted: #64748b;
+      --code:  #1e293b;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── ANIMATED GRID BACKGROUND ─────────────────────────────── */
+    body::before {
+      content: "";
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(59,130,246,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ── NAVBAR ────────────────────────────────────────────────── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(12px);
+      background: rgba(10,14,26,.85);
+      border-bottom: 1px solid var(--border);
+      padding: .75rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { font-size: 1.2rem; font-weight: 700; color: var(--accent); letter-spacing: 1px; }
+    .logo span { color: var(--acc2); }
+    .nav-links { display: flex; gap: 1.5rem; }
+    .nav-links a {
+      color: var(--muted); text-decoration: none; font-size: .9rem;
+      transition: color .2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    /* ── HERO ──────────────────────────────────────────────────── */
+    .hero {
+      position: relative; z-index: 1;
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+    }
+    .badge {
+      display: inline-block; margin-bottom: 1.5rem;
+      padding: .3rem .9rem;
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      font-size: .8rem; color: var(--muted);
+      background: var(--card);
+    }
+    .badge span { color: var(--accent); }
+    h1 {
+      font-size: clamp(2.2rem, 6vw, 4rem);
+      font-weight: 800;
+      line-height: 1.1;
+      background: linear-gradient(135deg, #fff 0%, #93c5fd 50%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 1rem;
+    }
+    .hero-sub {
+      font-size: 1.1rem; color: var(--muted);
+      max-width: 540px; margin: 0 auto 2.5rem;
+    }
+    .hero-btns { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: .5rem;
+      padding: .7rem 1.6rem;
+      border-radius: 8px;
+      font-size: .95rem; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--acc2));
+      color: #fff; border: none;
+    }
+    .btn-outline {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    /* ── STATUS BAR ────────────────────────────────────────────── */
+    .status-bar {
+      position: relative; z-index: 1;
+      display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
+      padding: 0 2rem 3rem;
+    }
+    .status-chip {
+      display: flex; align-items: center; gap: .5rem;
+      padding: .5rem 1.2rem;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 99px; font-size: .85rem;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot-green { background: var(--acc3); box-shadow: 0 0 6px var(--acc3); }
+    .dot-blue  { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .dot-purple{ background: var(--acc2); box-shadow: 0 0 6px var(--acc2); }
+
+    /* ── SECTION ───────────────────────────────────────────────── */
+    section {
+      position: relative; z-index: 1;
+      max-width: 1100px; margin: 0 auto; padding: 3.5rem 2rem;
+    }
+    .section-header { text-align: center; margin-bottom: 2.5rem; }
+    .section-header h2 {
+      font-size: 1.9rem; font-weight: 700; margin-bottom: .5rem;
+    }
+    .section-header p { color: var(--muted); }
+
+    /* ── FEATURE GRID ──────────────────────────────────────────── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.25rem;
+    }
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: border-color .25s, transform .2s;
+    }
+    .feature-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+    .feat-icon {
+      width: 44px; height: 44px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; margin-bottom: 1rem;
+    }
+    .feat-icon.blue   { background: rgba(59,130,246,.15); }
+    .feat-icon.purple { background: rgba(139,92,246,.15); }
+    .feat-icon.green  { background: rgba(16,185,129,.15); }
+    .feat-icon.orange { background: rgba(249,115,22,.15); }
+    .feat-icon.pink   { background: rgba(236,72,153,.15); }
+    .feat-icon.teal   { background: rgba(20,184,166,.15); }
+    .feature-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: .4rem; }
+    .feature-card p  { font-size: .875rem; color: var(--muted); }
+
+    /* ── LIVE DEMO ─────────────────────────────────────────────── */
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+    }
+    .demo-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.25rem;
+      display: flex; flex-direction: column; gap: .75rem;
+    }
+    .demo-card h3 { font-size: .9rem; font-weight: 600; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+    .demo-btn {
+      display: inline-flex; align-items: center; justify-content: space-between;
+      padding: .6rem 1rem;
+      background: var(--code); border: 1px solid var(--border);
+      border-radius: 8px; font-size: .85rem; color: var(--text);
+      text-decoration: none; cursor: pointer;
+      transition: background .2s, border-color .2s;
+    }
+    .demo-btn:hover { background: var(--border); border-color: var(--accent); }
+    .demo-btn .tag {
+      font-size: .7rem; padding: .15rem .5rem;
+      border-radius: 4px; font-weight: 600;
+    }
+    .tag-get    { background: rgba(16,185,129,.2); color: var(--acc3); }
+    .tag-post   { background: rgba(59,130,246,.2); color: var(--accent); }
+    .tag-delete { background: rgba(239,68,68,.2);  color: #f87171; }
+    .tag-cgi    { background: rgba(139,92,246,.2); color: var(--acc2); }
+    .tag-redir  { background: rgba(249,115,22,.2); color: #fb923c; }
+
+    /* ── CONFIG BLOCK ──────────────────────────────────────────── */
+    .config-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px; overflow: hidden;
+    }
+    .config-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      font-size: .85rem; color: var(--muted);
+    }
+    .config-dots { display: flex; gap: .4rem; }
+    .config-dots span {
+      width: 12px; height: 12px; border-radius: 50%;
+    }
+    pre.config {
+      margin: 0; padding: 1.5rem;
+      font-family: "Fira Code", "Cascadia Code", monospace;
+      font-size: .82rem; line-height: 1.7;
+      overflow-x: auto;
+      color: #cdd6f4;
+    }
+    .kw  { color: #89b4fa; } /* keyword  */
+    .val { color: #a6e3a1; } /* value    */
+    .cmt { color: #585b70; font-style: italic; } /* comment */
+    .num { color: #fab387; } /* number   */
+
+    /* ── TABLE ─────────────────────────────────────────────────── */
+    .table-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: var(--code);
+      padding: .85rem 1.25rem;
+      text-align: left; font-size: .8rem;
+      color: var(--muted); letter-spacing: .05em; text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: .9rem 1.25rem; font-size: .88rem;
+      border-bottom: 1px solid var(--border);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+    code {
+      font-family: monospace;
+      background: var(--code); padding: .1rem .4rem;
+      border-radius: 4px; font-size: .82rem; color: #93c5fd;
+    }
+
+    /* ── QUICK START ───────────────────────────────────────────── */
+    .steps { display: flex; flex-direction: column; gap: 1rem; }
+    .step {
+      display: flex; gap: 1rem; align-items: flex-start;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.2rem 1.5rem;
+    }
+    .step-num {
+      width: 32px; height: 32px; min-width: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--acc2));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: .9rem; color: #fff;
+    }
+    .step-body h4 { font-size: .95rem; font-weight: 600; margin-bottom: .25rem; }
+    .step-body p  { font-size: .85rem; color: var(--muted); }
+
+    /* ── UPLOAD DEMO ───────────────────────────────────────────── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px; padding: 2.5rem;
+      text-align: center; background: var(--card);
+      cursor: pointer; transition: border-color .2s, background .2s;
+    }
+    .upload-zone:hover { border-color: var(--accent); background: rgba(59,130,246,.05); }
+    .upload-zone input[type=file] { display: none; }
+    .upload-icon { font-size: 2.5rem; margin-bottom: .75rem; }
+    #upload-status { margin-top: 1rem; font-size: .9rem; color: var(--muted); min-height: 1.4em; }
+    #upload-status.ok  { color: var(--acc3); }
+    #upload-status.err { color: #f87171; }
+
+    /* ── FOOTER ────────────────────────────────────────────────── */
+    footer {
+      position: relative; z-index: 1;
+      text-align: center; padding: 2rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted); font-size: .85rem;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    /* ── DIVIDER ───────────────────────────────────────────────── */
+    hr.divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0 2rem;
+    }
+  </style>
+</head>
 <body>
-    <h1>Welcome to the Web Server!</h1>
-    <p>You have successfully logged in.</p>
-    <a href="/logout">Logout</a>
-    <div id="userDetails">
-        <h2>User Details</h2>
-        <p id="username">Username: </p>
-        <p id="email">Email: </p>
+
+<!-- ── NAVBAR ─────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="logo">web<span>serv</span></div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#demo">Demo</a>
+    <a href="#config">Config</a>
+    <a href="#quickstart">Quick&nbsp;Start</a>
+    <a href="#upload">Upload</a>
+  </div>
+</nav>
+
+<!-- ── HERO ───────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="badge">42 School Project &nbsp;·&nbsp; <span>HTTP/1.1</span> in C++98</div>
+  <h1>Your Own HTTP Server,<br/>Built from Scratch</h1>
+  <p class="hero-sub">
+    A fully non-blocking, poll-driven web server written in pure C++98 — no frameworks,
+    no external libraries, just raw sockets and RFC compliance.
+  </p>
+  <div class="hero-btns">
+    <a class="btn btn-primary" href="#demo">&#9654;&nbsp; Live Demo</a>
+    <a class="btn btn-outline"  href="#config">&#128196;&nbsp; Configuration</a>
+  </div>
+</div>
+
+<!-- ── STATUS BAR ─────────────────────────────────────────────────────── -->
+<div class="status-bar">
+  <div class="status-chip"><span class="dot dot-green"></span> Server running on :8080</div>
+  <div class="status-chip"><span class="dot dot-blue"></span> poll() I/O multiplexing</div>
+  <div class="status-chip"><span class="dot dot-purple"></span> CGI &amp; Sessions enabled</div>
+</div>
+
+<hr class="divider" />
+
+<!-- ── FEATURES ───────────────────────────────────────────────────────── -->
+<section id="features">
+  <div class="section-header">
+    <h2>Server Features</h2>
+    <p>Everything implemented from scratch, RFC-compliant and stress-tested</p>
+  </div>
+  <div class="features">
+
+    <div class="feature-card">
+      <div class="feat-icon blue">&#9889;</div>
+      <h3>Non-Blocking I/O</h3>
+      <p>Single <code>poll()</code> loop handles thousands of concurrent connections.
+         No thread per connection — all state machines driven by events.</p>
     </div>
-</body>
-<script>
-    // First try client-side stored username (set on login), fallback to server
-    (function () {
-        const stored = localStorage.getItem('username');
-        if (stored) {
-            document.getElementById('username').textContent += stored;
-            return;
+
+    <div class="feature-card">
+      <div class="feat-icon purple">&#128273;</div>
+      <h3>Session Management</h3>
+      <p>Cookie-based sessions with cryptographically random IDs from
+         <code>/dev/urandom</code>. Automatic expiry &amp; periodic cleanup.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feat-icon green">&#128196;</div>
+      <h3>CGI Support</h3>
+      <p>Execute Python, PHP or any interpreter via <code>cgi_pass</code>.
+         Full environment variables, <code>PATH_INFO</code>, body streaming
+         and chunked decoding to CGI stdin.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feat-icon orange">&#128229;</div>
+      <h3>File Uploads</h3>
+      <p>Multipart <code>form-data</code> and raw-binary POST uploads.
+         Filename sanitisation, configurable <code>client_max_body_size</code>
+         per location, auto-creates upload directories.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feat-icon pink">&#128193;</div>
+      <h3>Directory Listing</h3>
+      <p>Beautiful auto-index pages with file icons, sizes and last-modified
+         dates. Toggle per location with <code>autoindex on/off</code>.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feat-icon teal">&#128257;</div>
+      <h3>HTTP Redirects</h3>
+      <p>Permanent (301) and temporary (302) redirects configured with the
+         <code>return</code> directive, identical to NGINX syntax.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feat-icon blue">&#128222;</div>
+      <h3>Virtual Hosts</h3>
+      <p>Multiple <code>server {}</code> blocks sharing the same port.
+         Request routing by <code>Host:</code> header with sensible default
+         fallback.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feat-icon purple">&#128462;</div>
+      <h3>Chunked Transfer</h3>
+      <p>Full RFC 7230 chunked request decoding — hex chunk sizes, optional
+         extensions, and trailer field support — before handing body to CGI
+         or upload handler.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feat-icon green">&#127745;</div>
+      <h3>Custom Error Pages</h3>
+      <p>Per-server or per-location <code>error_page</code> directive.
+         Stunning animated built-in fallback pages for all 4xx/5xx codes.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feat-icon orange">&#128683;</div>
+      <h3>Method Control</h3>
+      <p>Whitelist allowed methods per location — GET, POST, DELETE, HEAD.
+         Returns <code>405 Method Not Allowed</code> with proper
+         <code>Allow:</code> header.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feat-icon pink">&#128200;</div>
+      <h3>Keep-Alive</h3>
+      <p>HTTP/1.1 persistent connections. Per-request state is reset
+         after each response so the same socket can serve hundreds of
+         sequential requests.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feat-icon teal">&#9203;</div>
+      <h3>Timeout Handling</h3>
+      <p>Idle client &amp; CGI process timeouts (configurable). Timed-out
+         CGIs receive <code>SIGTERM</code> then <code>SIGKILL</code> and the
+         client gets a <code>504 Gateway Timeout</code>.</p>
+    </div>
+
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── LIVE DEMO ───────────────────────────────────────────────────────── -->
+<section id="demo">
+  <div class="section-header">
+    <h2>Live Demo</h2>
+    <p>Click any endpoint to try it — responses from this very server</p>
+  </div>
+  <div class="demo-grid">
+
+    <div class="demo-card">
+      <h3>Static Files</h3>
+      <a class="demo-btn" href="/">
+        / (root)&nbsp;<span class="tag tag-get">GET</span>
+      </a>
+      <a class="demo-btn" href="/subdir/">
+        /subdir/ listing&nbsp;<span class="tag tag-get">GET</span>
+      </a>
+      <a class="demo-btn" href="/login/login.html">
+        /login page&nbsp;<span class="tag tag-get">GET</span>
+      </a>
+    </div>
+
+    <div class="demo-card">
+      <h3>CGI (Python)</h3>
+      <a class="demo-btn" href="/cgi-bin/database.py">
+        database.py&nbsp;<span class="tag tag-cgi">CGI</span>
+      </a>
+      <a class="demo-btn" href="/cgi-bin/database.py?action=list">
+        ?action=list&nbsp;<span class="tag tag-cgi">CGI</span>
+      </a>
+    </div>
+
+    <div class="demo-card">
+      <h3>Redirects</h3>
+      <a class="demo-btn" href="/old-page">
+        /old-page → /&nbsp;<span class="tag tag-redir">301</span>
+      </a>
+    </div>
+
+    <div class="demo-card">
+      <h3>Upload</h3>
+      <a class="demo-btn" href="#upload">
+        Try file upload&nbsp;<span class="tag tag-post">POST</span>
+      </a>
+      <a class="demo-btn" href="/delete/">
+        Browse uploads&nbsp;<span class="tag tag-get">GET</span>
+      </a>
+    </div>
+
+    <div class="demo-card">
+      <h3>Error Pages</h3>
+      <a class="demo-btn" href="/this-does-not-exist">
+        404 Not Found&nbsp;<span class="tag tag-delete">4xx</span>
+      </a>
+      <a class="demo-btn" href="/private/secret.html">
+        403 Forbidden&nbsp;<span class="tag tag-delete">4xx</span>
+      </a>
+    </div>
+
+    <div class="demo-card">
+      <h3>Methods</h3>
+      <a class="demo-btn" href="/delete/" id="del-demo">
+        DELETE demo&nbsp;<span class="tag tag-delete">DELETE</span>
+      </a>
+    </div>
+
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── CONFIG REFERENCE ────────────────────────────────────────────────── -->
+<section id="config">
+  <div class="section-header">
+    <h2>Configuration Reference</h2>
+    <p>NGINX-style syntax — place your config file anywhere and pass it as the first argument</p>
+  </div>
+
+  <!-- Directives table -->
+  <div class="table-wrap" style="margin-bottom:2rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>Directive</th>
+          <th>Scope</th>
+          <th>Description</th>
+          <th>Example</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>listen</code></td><td>server</td><td>Interface and port to bind</td><td><code>0.0.0.0:8080</code></td></tr>
+        <tr><td><code>server_name</code></td><td>server</td><td>Virtual-host names (Host: header matching)</td><td><code>example.com www.example.com</code></td></tr>
+        <tr><td><code>root</code></td><td>server / location</td><td>Filesystem root for requests</td><td><code>./www</code></td></tr>
+        <tr><td><code>index</code></td><td>server / location</td><td>Default file(s) when path is a directory</td><td><code>index.html index.htm</code></td></tr>
+        <tr><td><code>client_max_body_size</code></td><td>http / server / location</td><td>Maximum request body (K/M/G suffixes)</td><td><code>10M</code></td></tr>
+        <tr><td><code>error_page</code></td><td>server / location</td><td>Custom page for an HTTP status code</td><td><code>404 /errors/404.html</code></td></tr>
+        <tr><td><code>methods</code></td><td>location</td><td>Allowed HTTP verbs for this route</td><td><code>GET POST DELETE</code></td></tr>
+        <tr><td><code>autoindex</code></td><td>location</td><td>Enable/disable directory listing</td><td><code>on</code></td></tr>
+        <tr><td><code>return</code></td><td>location</td><td>HTTP redirect with status code</td><td><code>301 https://new.example.com/</code></td></tr>
+        <tr><td><code>upload_dir</code></td><td>location</td><td>Directory where uploaded files are saved</td><td><code>./uploads</code></td></tr>
+        <tr><td><code>cgi_pass</code></td><td>location</td><td>Map a file extension to a CGI interpreter</td><td><code>.py /usr/bin/python3</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Full config example -->
+  <div class="config-wrap">
+    <div class="config-header">
+      <span>webserv.conf — annotated example</span>
+      <div class="config-dots">
+        <span style="background:#ff5f57"></span>
+        <span style="background:#febc2e"></span>
+        <span style="background:#28c840"></span>
+      </div>
+    </div>
+    <pre class="config">
+<span class="kw">http</span> {
+    <span class="cmt"># Global body-size limit (overridable per server/location)</span>
+    <span class="kw">client_max_body_size</span> <span class="num">5M</span>;
+
+    <span class="kw">server</span> {
+        <span class="kw">listen</span>       <span class="val">0.0.0.0:8080</span>;
+        <span class="kw">server_name</span>  <span class="val">localhost</span>;
+        <span class="kw">root</span>         <span class="val">./www</span>;
+        <span class="kw">index</span>        <span class="val">welcome.html</span>;
+
+        <span class="cmt"># Custom error pages (optional)</span>
+        <span class="kw">error_page</span>   <span class="num">404</span>  <span class="val">./www/errors/404.html</span>;
+        <span class="kw">error_page</span>   <span class="num">500</span>  <span class="val">./www/errors/50x.html</span>;
+
+        <span class="cmt"># Root static location</span>
+        <span class="kw">location</span> <span class="val">/</span> {
+            <span class="kw">root</span>                <span class="val">./www</span>;
+            <span class="kw">methods</span>             <span class="val">GET POST DELETE</span>;
+            <span class="kw">autoindex</span>           <span class="val">on</span>;
+            <span class="kw">client_max_body_size</span> <span class="num">5M</span>;
         }
-        // Fallback: attempt to fetch from server-side endpoint
-        fetch('/user-details')
-            .then(response => {
-                if (!response.ok) throw new Error('not ok');
-                return response.json();
-            })
-            .then(data => {
-                if (data.username)
-                    document.getElementById('username').textContent += data.username;
-                if (data.email)
-                    document.getElementById('email').textContent += data.email;
-            })
-            .catch(error => console.error('Error fetching user details:', error));
-    })();
+
+        <span class="cmt"># File-upload endpoint</span>
+        <span class="kw">location</span> <span class="val">/upload</span> {
+            <span class="kw">root</span>                <span class="val">./www</span>;
+            <span class="kw">methods</span>             <span class="val">GET POST</span>;
+            <span class="kw">upload_dir</span>          <span class="val">./uploads</span>;
+            <span class="kw">client_max_body_size</span> <span class="num">10M</span>;
+        }
+
+        <span class="cmt"># Python CGI</span>
+        <span class="kw">location</span> <span class="val">/cgi-bin</span> {
+            <span class="kw">root</span>    <span class="val">./www/cgi-bin</span>;
+            <span class="kw">methods</span> <span class="val">GET POST</span>;
+            <span class="kw">cgi_pass</span> <span class="val">.py  /usr/bin/python3</span>;
+        }
+
+        <span class="cmt"># HTTP redirect</span>
+        <span class="kw">location</span> <span class="val">/old-page</span> {
+            <span class="kw">return</span> <span class="num">301</span> <span class="val">/</span>;
+        }
+
+        <span class="cmt"># DELETE demo (browse + delete uploaded files)</span>
+        <span class="kw">location</span> <span class="val">/delete</span> {
+            <span class="kw">root</span>      <span class="val">./uploads</span>;
+            <span class="kw">methods</span>   <span class="val">GET DELETE</span>;
+            <span class="kw">autoindex</span> <span class="val">on</span>;
+        }
+    }
+
+    <span class="cmt"># Second virtual host on a different port</span>
+    <span class="kw">server</span> {
+        <span class="kw">listen</span>      <span class="val">0.0.0.0:8081</span>;
+        <span class="kw">server_name</span> <span class="val">second.localhost</span>;
+        <span class="kw">root</span>        <span class="val">./www</span>;
+        <span class="kw">index</span>       <span class="val">welcome.html</span>;
+        <span class="kw">client_max_body_size</span> <span class="num">1M</span>;
+
+        <span class="kw">location</span> <span class="val">/</span> {
+            <span class="kw">root</span>    <span class="val">./www</span>;
+            <span class="kw">methods</span> <span class="val">GET</span>;
+        }
+    }
+}
+    </pre>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── QUICK START ─────────────────────────────────────────────────────── -->
+<section id="quickstart">
+  <div class="section-header">
+    <h2>Quick Start</h2>
+    <p>From clone to running server in under a minute</p>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h4>Clone &amp; Build</h4>
+        <p><code>git clone &lt;repo&gt; &amp;&amp; cd webserv &amp;&amp; make</code></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h4>Create or edit a config file</h4>
+        <p>Copy <code>webserv.conf</code> as a starting point and adjust paths, ports and CGI interpreters.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h4>Run the server</h4>
+        <p><code>./webserv webserv.conf</code> &nbsp;—&nbsp; defaults to <code>default.conf</code> if no argument is given.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h4>Open in your browser</h4>
+        <p>Navigate to <code>http://localhost:8080/</code> and explore every feature from this page.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <h4>Stop gracefully</h4>
+        <p>Press <code>Ctrl-C</code> — the server handles <code>SIGINT</code> / <code>SIGTERM</code> and cleans up all connections.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- ── UPLOAD DEMO ─────────────────────────────────────────────────────── -->
+<section id="upload">
+  <div class="section-header">
+    <h2>File Upload Demo</h2>
+    <p>POST multipart form-data directly to the server — try any file type</p>
+  </div>
+  <label class="upload-zone" for="file-input">
+    <div class="upload-icon">&#128228;</div>
+    <p style="font-weight:600; margin-bottom:.4rem;">Drop a file or click to choose</p>
+    <p style="font-size:.85rem; color:var(--muted);">Uploads go to <code>/upload</code> — max 10 MB</p>
+    <input type="file" id="file-input" />
+  </label>
+  <div id="upload-status"></div>
+</section>
+
+<!-- ── FOOTER ──────────────────────────────────────────────────────────── -->
+<footer>
+  <p>
+    Built with &#10084; as part of the <a href="https://42.fr" target="_blank" rel="noopener">42 School</a> curriculum.
+    &nbsp;·&nbsp; HTTP/1.1 &nbsp;·&nbsp; C++98 &nbsp;·&nbsp; poll()
+  </p>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ── File upload ──────────────────────────────────────────────────── */
+  var inp    = document.getElementById('file-input');
+  var status = document.getElementById('upload-status');
+  var zone   = document.querySelector('.upload-zone');
+
+  function upload(file) {
+    if (!file) return;
+    status.className = '';
+    status.textContent = 'Uploading ' + file.name + ' …';
+
+    var fd = new FormData();
+    fd.append('file', file, file.name);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/upload', true);
+    xhr.onload = function () {
+      if (xhr.status === 201 || xhr.status === 200) {
+        status.className = 'ok';
+        status.textContent = '✓ ' + file.name + ' uploaded successfully!';
+      } else {
+        status.className = 'err';
+        status.textContent = '✗ Server returned ' + xhr.status;
+      }
+    };
+    xhr.onerror = function () {
+      status.className = 'err';
+      status.textContent = '✗ Network error — is the server running?';
+    };
+    xhr.send(fd);
+  }
+
+  inp.addEventListener('change', function () { upload(this.files[0]); });
+
+  zone.addEventListener('dragover',  function (e) { e.preventDefault(); zone.style.borderColor = 'var(--accent)'; });
+  zone.addEventListener('dragleave', function ()  { zone.style.borderColor = 'var(--border)'; });
+  zone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    zone.style.borderColor = 'var(--border)';
+    if (e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]);
+  });
+})();
 </script>
 
+</body>
 </html>

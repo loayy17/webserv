@@ -106,7 +106,7 @@ bool CgiProcess::writeBody(int fd) {
     while (_writeOffset < _writeBuffer.size()) {
         const char* data      = _writeBuffer.c_str() + _writeOffset;
         size_t      remaining = _writeBuffer.size() - _writeOffset;
-        ssize_t w = write(fd, data, remaining);
+        ssize_t     w         = write(fd, data, remaining);
         if (w > 0) {
             _writeOffset += w;
             madeProgress = true;
@@ -116,12 +116,11 @@ bool CgiProcess::writeBody(int fd) {
     }
     if (madeProgress)
         _startTime = getCurrentTime();
-
-    if (_writeOffset >= _writeBuffer.size() && !_writeBuffer.empty()) {
-        _writeBuffer.clear();
+    // Compact buffer after writes
+    if (_writeOffset > 0) {
+        _writeBuffer.erase(0, _writeOffset);
         _writeOffset = 0;
     }
-
     return isWriteDone();
 }
 
@@ -162,9 +161,7 @@ bool CgiProcess::finish() {
         }
     }
     _active = false;
-    if (ret < 0)
-        return true;
-    if (ret == 0)
+    if (ret <= 0)
         return false;
     return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }

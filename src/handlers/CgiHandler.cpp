@@ -5,6 +5,10 @@
 #include "../utils/Logger.hpp"
 #include "../utils/Utils.hpp"
 
+#ifndef F_SETPIPE_SZ
+#define F_SETPIPE_SZ 1031
+#endif
+
 CgiHandler::CgiHandler() : _cgi(NULL) {}
 CgiHandler::CgiHandler(CgiProcess& cgi) : _cgi(&cgi) {}
 CgiHandler::CgiHandler(const CgiHandler& other) : IHandler(), _cgi(other._cgi) {}
@@ -95,6 +99,8 @@ bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response,
     close(childToParent[1]);
     setNonBlocking(parentToChild[1]);
     setNonBlocking(childToParent[0]);
+    fcntl(parentToChild[1], F_SETPIPE_SZ, 1048576);
+    fcntl(childToParent[0], F_SETPIPE_SZ, 1048576);
     _cgi->init(pid, parentToChild[1], childToParent[0]);
     return true;
 }

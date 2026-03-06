@@ -14,7 +14,6 @@ ResponseBuilder::~ResponseBuilder() {}
 HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess* cgi, const VectorInt& openFds) {
     HttpResponse response;
 
-    // Handle redirect
     if (resultRouter.getIsRedirect()) {
         response.setStatus(resultRouter.getStatusCode(), getHttpStatusMessage(resultRouter.getStatusCode()));
         response.addHeader("Location", resultRouter.getRedirectUrl());
@@ -22,50 +21,31 @@ HttpResponse ResponseBuilder::build(const RouteResult& resultRouter, CgiProcess*
         return response;
     }
 
-    // Error or path not found
     if (resultRouter.getStatusCode() != HTTP_OK) {
         handleError(response, resultRouter);
         return response;
     }
 
-    // Dispatch based on handler type set by Router
-    HandlerType handleType = resultRouter.getHandlerType();
-    switch (handleType) {
-        case DIRECTORY_LISTING:
-            if (handleDirectory(response, resultRouter))
-                return response;
-            break;
-        case UPLOAD:
-            if (handleUpload(response, resultRouter))
-                return response;
-            break;
-        case CGI:
-            if (cgi && handleCgi(response, resultRouter, cgi, openFds))
-                return response;
-            break;
-        case STATIC:
-            if (handleStatic(response, resultRouter))
-                return response;
-            break;
-        case DELETE_FILE:
-            if (handleDelete(response, resultRouter))
-                return response;
-            break;
-        default:
-            break;
+    bool handled = false;
+    switch (resultRouter.getHandlerType()) {
+        case DIRECTORY_LISTING: handled = handleDirectory(response, resultRouter); break;
+        case UPLOAD:            handled = handleUpload(response, resultRouter);    break;
+        case CGI:               handled = cgi && handleCgi(response, resultRouter, cgi, openFds); break;
+        case STATIC:            handled = handleStatic(response, resultRouter);   break;
+        case DELETE_FILE:       handled = handleDelete(response, resultRouter);   break;
+        default:                break;
     }
 
-    // Fallback: handler failed or type was NOT_FOUND
-    RouteResult errResult = resultRouter;
-    if (resultRouter.getStatusCode() == HTTP_OK) {
-        String method = resultRouter.getRequest().getMethod();
-        if (handleType == NOT_FOUND && isMethodWithBody(method)) {
-            errResult.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED, getHttpStatusMessage(HTTP_METHOD_NOT_ALLOWED));
-        } else {
-            errResult.setCodeAndMessage(HTTP_INTERNAL_SERVER_ERROR, "Internal Server Error");
+    if (!handled) {
+        RouteResult errResult = resultRouter;
+        if (resultRouter.getStatusCode() == HTTP_OK) {
+            if (resultRouter.getHandlerType() == NOT_FOUND && isMethodWithBody(resultRouter.getRequest().getMethod()))
+                errResult.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED, getHttpStatusMessage(HTTP_METHOD_NOT_ALLOWED));
+            else
+                errResult.setCodeAndMessage(HTTP_INTERNAL_SERVER_ERROR, "Internal Server Error");
         }
+        handleError(response, errResult);
     }
-    handleError(response, errResult);
     return response;
 }
 

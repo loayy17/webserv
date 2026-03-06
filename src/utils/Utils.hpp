@@ -64,7 +64,9 @@ String getHttpStatusMessage(int code);
 String extractFilenameFromHeader(const String& contentDisposition);
 String extractBoundaryFromContentType(const String& contentType);
 bool   parseMultipartFormData(const String& body, const String& boundary, String& filename, String& fileContent);
+bool   parseHexChunkSize(const String& sizeLine, unsigned long& chunkSize);
 bool   decodeChunkedBody(const String& chunkedBody, String& decodedBody);
+bool   decodeChunkedIncremental(const String& buffer, String& decoded, bool& done, size_t& consumed);
 size_t findChunkedBodyEnd(const String& data);
 bool   requireSingleValue(const VectorString& v, const String& directive);
 

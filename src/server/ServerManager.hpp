@@ -62,6 +62,8 @@ class ServerManager {
     bool    isCgiPipe(int fd) const;
     void    processRequest(Client* client, Server* server);
     bool    parseAndRouteHeaders(Client* client, Server* server);
+    void    parseConnectionHeader(Client* client);
+    void    drainBodyAndSendError(Client* client, const RouteResult& res);
     bool    validateRequestBody(Client* client, const RouteResult& res, bool hasContentLength, bool isChunked);
     void    handleCgiBodyStreaming(Client* client);
     bool    handleRegularBody(Client* client);

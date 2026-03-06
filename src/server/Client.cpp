@@ -66,7 +66,7 @@ ssize_t Client::sendData() {
         storeSendData.erase(0, sent);
         updateTime(lastActivity);
     } else if (sent < 0) {
-       return 0;
+       return -1;
     }
     return sent;
 }

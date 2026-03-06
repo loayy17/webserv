@@ -106,7 +106,6 @@ bool CgiProcess::writeBody(int fd) {
     while (_writeOffset < _writeBuffer.size()) {
         const char* data      = _writeBuffer.c_str() + _writeOffset;
         size_t      remaining = _writeBuffer.size() - _writeOffset;
-        //
         ssize_t w = write(fd, data, remaining);
         if (w > 0) {
             _writeOffset += w;

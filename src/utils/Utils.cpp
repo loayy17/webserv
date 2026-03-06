@@ -1,9 +1,5 @@
 #include "Utils.hpp"
 
-// ============================================================================
-// Time Methods
-// ============================================================================
-
 time_t getCurrentTime() {
     return time(NULL);
 }
@@ -30,8 +26,6 @@ String formatDateTime(time_t t) {
     int  weekday        = (4 + daysSinceEpoch) % 7;
     if (weekday < 0)
         weekday += 7;
-
-    // Year calculation
     int  year          = 1970;
     long remainingDays = daysSinceEpoch;
     while (true) {
@@ -43,13 +37,9 @@ String formatDateTime(time_t t) {
             break;
         }
     }
-
-    // Month and day calculation
-
     int month = 0;
     while (month < 12) {
         int daysInMonth = MONTH_DAYS[month];
-        // Adjust February for leap year
         if (month == 1 && isLeapYear(year))
             daysInMonth = 29;
         if (remainingDays >= daysInMonth) {
@@ -59,8 +49,6 @@ String formatDateTime(time_t t) {
             break;
     }
     int day = static_cast<int>(remainingDays) + 1;
-
-    // Time of day
     int hour   = static_cast<int>(secsToday / SECONDS_PER_HOUR);
     int minute = static_cast<int>((secsToday % SECONDS_PER_HOUR) / SECONDS_PER_MIN);
     int second = static_cast<int>(secsToday % SECONDS_PER_MIN);
@@ -69,7 +57,6 @@ String formatDateTime(time_t t) {
     String minStr  = minute < 10 ? "0" + typeToString(minute) : typeToString(minute);
     String secStr  = second < 10 ? "0" + typeToString(second) : typeToString(second);
     String dayStr  = day < 10 ? "0" + typeToString(day) : typeToString(day);
-    // Build the HTTP date string
     String date = WEEKDAYS[weekday];
     date += ", " + dayStr;
     date += " " + String(MONTHS[month]);
@@ -78,10 +65,6 @@ String formatDateTime(time_t t) {
     date += " GMT";
     return date;
 }
-
-// ============================================================================
-// String Methods
-// ============================================================================
 
 String toUpperWords(const String& str) {
     String result = str;
@@ -300,7 +283,7 @@ struct stat getFileStat(const String& path) {
     if (stat(path.c_str(), &st) == 0)
         return st;
 
-    st.st_mode = 0; // Mark invalid
+    st.st_mode = 0;
     return st;
 }
 
@@ -722,8 +705,6 @@ bool parseMultipartFormData(const String& body, const String& boundary, String& 
         return false;
 
     String startBoundary = "--" + boundary;
-    // String endBoundary   = "--" + boundary + "--"; // Not explicitly needed for first part
-
     // 1. Find Start
     size_t partStart = body.find(startBoundary);
     if (partStart == String::npos)

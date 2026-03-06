@@ -84,8 +84,6 @@ RouteResult Router::processRequest() {
 
     // 4. Method check — HEAD is implicitly allowed wherever GET is (HTTP/1.1 §9.4)
     String methodToCheck = _request.getMethod();
-    // if (methodToCheck == METHOD_HEAD)
-    //     methodToCheck = METHOD_GET;
     if (!isKeyInVector(methodToCheck, loc->getAllowedMethods()))
         return result.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED, getHttpStatusMessage(HTTP_METHOD_NOT_ALLOWED));
 

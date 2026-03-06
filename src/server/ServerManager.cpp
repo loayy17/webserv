@@ -147,9 +147,7 @@ bool ServerManager::acceptNewConnection(Server* server) {
     if (clients.size() >= MAX_CONNECTIONS) {
         Logger::error("Max connections reached (" + typeToString(MAX_CONNECTIONS) + "), rejecting new connection");
         String remoteAddress;
-        // i must accept the connection and immediately close it to prevent the client from hanging while trying to connect
-        // in keep in kernel's accept queue until it times out, since the client will not receive any response until the connection is accepted and closed
-        int tmpFd = server->acceptConnection(remoteAddress);
+       int tmpFd = server->acceptConnection(remoteAddress);
         if (tmpFd >= 0)
             close(tmpFd);
         return false;
@@ -228,34 +226,23 @@ void ServerManager::sendErrorResponse(Client* client, int statusCode, const Stri
     if (closeConnection) {
         response.addHeader("Connection", "close");
         client->setKeepAlive(false);
-        //     client->clearStoreReceiveData();
-        // } else {
-        //     response.addHeader("Connection", "keep-alive");
-        //     if (bytesToRemove > 0)
-        //         client->removeReceivedData(bytesToRemove);
+            client->clearStoreReceiveData();
+        } else {
+            response.addHeader("Connection", "keep-alive");
+            if (bytesToRemove > 0)
+                client->removeReceivedData(bytesToRemove);
     }
     client->setSendData(response.toString());
-    //
-    if (bytesToRemove > 0)
-        client->removeReceivedData(bytesToRemove);
-    else
-        client->clearStoreReceiveData();
-    //
     client->resetForNextRequest();
     clientRoutes.erase(client->getFd());
     pollManager.addFd(client->getFd(), POLLIN | POLLOUT);
 }
 
 void ServerManager::processRequest(Client* client, Server* server) {
-    // while loop to handle cases where we receive the full request including body in one go, so we can process it immediately without waiting for another read event
     while (true) {
         if (!client->isHeadersParsed())
             if (!parseAndRouteHeaders(client, server))
                 return;
-        //     if (!client->isHeadersParsed())
-        //         break;
-        // }
-
         if (client->isHeadersParsed()) {
             if (client->getCgi().isActive()) {
                 handleCgiBodyStreaming(client);
@@ -285,10 +272,6 @@ void ServerManager::finalizeResponse(Client* client, const HttpResponse& respons
     else
         resp.addHeader("Connection", "keep-alive");
     client->setSendData(resp.toString());
-    // if (bodyLen > 0)
-    //     client->removeReceivedData(bodyLen);
-    // else
-    //     client->clearStoreReceiveData();
     client->removeReceivedData(bodyLen);
     client->resetForNextRequest();
     clientRoutes.erase(client->getFd());
@@ -349,29 +332,28 @@ bool ServerManager::parseAndRouteHeaders(Client* client, Server* server) {
 
     if (res.getStatusCode() >= 400) {
         // Try to consume body data from the buffer to preserve keep-alive
-        // bool hasBody = !client->getRequest().getHeader(HEADER_CONTENT_LENGTH).empty() &&
-        //                client->getContentLength() > 0;
-        // bool isChunkedReq = client->isChunkedEncoding();
-        // bool shouldClose = false;
-        // size_t bodyBytesToRemove = 0;
+        bool hasBody = !client->getRequest().getHeader(HEADER_CONTENT_LENGTH).empty() &&
+                       client->getContentLength() > 0;
+        bool isChunkedReq = client->isChunkedEncoding();
+        bool shouldClose = false;
+        size_t bodyBytesToRemove = 0;
 
-        // if (hasBody) {
-        //     size_t cl = client->getContentLength();
-        //     if (client->getStoreReceiveData().size() >= cl)
-        //         bodyBytesToRemove = cl;
-        //     else
-        //         shouldClose = true;
-        // } else if (isChunkedReq) {
-        //     size_t chunkedEnd = findChunkedBodyEnd(client->getStoreReceiveData());
-        //     if (chunkedEnd != String::npos)
-        //         bodyBytesToRemove = chunkedEnd;
-        //     else
-        //         shouldClose = true;
-        // }
+        if (hasBody) {
+            size_t cl = client->getContentLength();
+            if (client->getStoreReceiveData().size() >= cl)
+                bodyBytesToRemove = cl;
+            else
+                shouldClose = true;
+        } else if (isChunkedReq) {
+            size_t chunkedEnd = findChunkedBodyEnd(client->getStoreReceiveData());
+            if (chunkedEnd != String::npos)
+                bodyBytesToRemove = chunkedEnd;
+            else
+                shouldClose = true;
+        }
 
         sendErrorResponse(client, res.getStatusCode(),
-                          res.getErrorMessage().empty() ? getHttpStatusMessage(res.getStatusCode()) : res.getErrorMessage(), true, 0);
-        //                          res.getErrorMessage().empty() ? getHttpStatusMessage(res.getStatusCode()) : res.getErrorMessage(), shouldClose, bodyBytesToRemove);
+                                 res.getErrorMessage().empty() ? getHttpStatusMessage(res.getStatusCode()) : res.getErrorMessage(), shouldClose, bodyBytesToRemove);
 
         return false;
     }
@@ -479,7 +461,7 @@ bool ServerManager::handleRegularBody(Client* client) {
         if (cl > 0)
             client->getRequest().parseBody(client->getStoreReceiveData().substr(0, cl));
         RouteResult res = getValue(clientRoutes, client->getFd(), RouteResult());
-        // res.setRequest(client->getRequest());
+        res.setRequest(client->getRequest());
 
         if (res.getHandlerType() == CGI) {
             if (cl <= 0 && !isChunked)
@@ -507,7 +489,7 @@ bool ServerManager::handleRegularBody(Client* client) {
             }
 
             client->getRequest().parseBody(decoded);
-            // res.setRequest(client->getRequest());
+            res.setRequest(client->getRequest());
 
             if (res.getHandlerType() == CGI) {
                 client->getCgi().appendBuffer(decoded);
@@ -518,7 +500,7 @@ bool ServerManager::handleRegularBody(Client* client) {
                     return true;
                 }
             } else {
-                // client->clearStoreReceiveData();
+                client->clearStoreReceiveData();
                 HttpResponse response = responseBuilder.build(res, &client->getCgi(), getServerFds());
                 finalizeResponse(client, response, 0);
                 return true;

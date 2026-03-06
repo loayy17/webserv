@@ -137,16 +137,16 @@ RouteResult Router::processRequest() {
             }
             return result.setCodeAndMessage(HTTP_NOT_FOUND, getHttpStatusMessage(HTTP_NOT_FOUND));
         }
+    }
 
-        // If the resolved index file is a CGI script, serve it as CGI
-        if (loc->hasCgi() && isCgiRequest(fsPath, *loc)) {
-            result.setPathRootUri(fsPath);
-            result.setRemainingPath("");
-            result.setCgiRequest(true);
-            result.setHandlerType(CGI);
-            result.setStatusCode(HTTP_OK);
-            return result;
-        }
+    // Check if the resolved file is a CGI script
+    if (loc->hasCgi() && isCgiRequest(fsPath, *loc)) {
+        result.setPathRootUri(fsPath);
+        result.setRemainingPath("");
+        result.setCgiRequest(true);
+        result.setHandlerType(CGI);
+        result.setStatusCode(HTTP_OK);
+        return result;
     }
 
     if (!fileExists(fsPath))

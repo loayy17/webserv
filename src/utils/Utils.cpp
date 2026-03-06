@@ -16,6 +16,10 @@ bool isLeapYear(int year) {
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
 }
 
+static String padTwo(int n) {
+    return (n < 10 ? "0" : "") + typeToString(n);
+}
+
 String formatDateTime(time_t t) {
     static const int   MONTH_DAYS[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     static const char* WEEKDAYS[]   = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
@@ -48,22 +52,13 @@ String formatDateTime(time_t t) {
         } else
             break;
     }
-    int day = static_cast<int>(remainingDays) + 1;
+    int day    = static_cast<int>(remainingDays) + 1;
     int hour   = static_cast<int>(secsToday / SECONDS_PER_HOUR);
     int minute = static_cast<int>((secsToday % SECONDS_PER_HOUR) / SECONDS_PER_MIN);
     int second = static_cast<int>(secsToday % SECONDS_PER_MIN);
 
-    String hourStr = hour < 10 ? "0" + typeToString(hour) : typeToString(hour);
-    String minStr  = minute < 10 ? "0" + typeToString(minute) : typeToString(minute);
-    String secStr  = second < 10 ? "0" + typeToString(second) : typeToString(second);
-    String dayStr  = day < 10 ? "0" + typeToString(day) : typeToString(day);
-    String date = WEEKDAYS[weekday];
-    date += ", " + dayStr;
-    date += " " + String(MONTHS[month]);
-    date += " " + typeToString(year);
-    date += " " + hourStr + ":" + minStr + ":" + secStr;
-    date += " GMT";
-    return date;
+    return String(WEEKDAYS[weekday]) + ", " + padTwo(day) + " " + MONTHS[month] + " "
+         + typeToString(year) + " " + padTwo(hour) + ":" + padTwo(minute) + ":" + padTwo(second) + " GMT";
 }
 
 String toUpperWords(const String& str) {
@@ -751,6 +746,25 @@ bool parseMultipartFormData(const String& body, const String& boundary, String& 
     return !filename.empty();
 }
 
+bool parseHexChunkSize(const String& sizeLine, unsigned long& chunkSize) {
+    chunkSize = 0;
+    if (sizeLine.empty())
+        return false;
+    for (size_t i = 0; i < sizeLine.size(); i++) {
+        char c = sizeLine[i];
+        chunkSize *= 16;
+        if (c >= '0' && c <= '9')
+            chunkSize += c - '0';
+        else if (c >= 'a' && c <= 'f')
+            chunkSize += c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F')
+            chunkSize += c - 'A' + 10;
+        else
+            return false;
+    }
+    return true;
+}
+
 bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
     decodedBody.clear();
     size_t pos      = 0;
@@ -767,27 +781,14 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
             sizeLine = sizeLine.substr(0, semiPos);
 
         sizeLine = trimSpaces(sizeLine);
-        if (sizeLine.empty())
+
+        unsigned long chunkSize = 0;
+        if (!parseHexChunkSize(sizeLine, chunkSize))
             return false;
 
-        // 2. Parse hex chunk size manually
-        unsigned long chunkSize = 0;
-        for (size_t i = 0; i < sizeLine.size(); i++) {
-            char c = sizeLine[i];
-            chunkSize *= 16;
-            if (c >= '0' && c <= '9')
-                chunkSize += c - '0';
-            else if (c >= 'a' && c <= 'f')
-                chunkSize += c - 'a' + 10;
-            else if (c >= 'A' && c <= 'F')
-                chunkSize += c - 'A' + 10;
-            else
-                return false; // invalid hex digit
-        }
+        pos = lineEnd + 2;
 
-        pos = lineEnd + 2; // skip \r\n
-
-        // 3. Handle last chunk (0)
+        // Handle last chunk (0)
         if (chunkSize == 0) {
             while (pos < totalLen) {
                 size_t crlfPos = chunkedBody.find("\r\n", pos);
@@ -802,21 +803,64 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
             return pos <= totalLen;
         }
 
-        // 4. Validate chunk size fits remaining data
+        // Validate chunk size fits remaining data
         if (pos + chunkSize + 2 > totalLen)
             return false;
 
-        // 5. Append chunk data
+        // Append chunk data
         decodedBody.append(chunkedBody, pos, chunkSize);
         pos += chunkSize;
 
-        // 6. Check trailing CRLF after chunk
         if (chunkedBody.substr(pos, 2) != "\r\n")
             return false;
         pos += 2;
     }
 
-    return false; // should never reach here without a zero chunk
+    return false;
+}
+
+bool decodeChunkedIncremental(const String& buffer, String& decoded, bool& done, size_t& consumed) {
+    decoded.clear();
+    done       = false;
+    consumed   = 0;
+    size_t pos = 0;
+
+    while (pos < buffer.size()) {
+        size_t lineEnd = buffer.find("\r\n", pos);
+        if (lineEnd == String::npos)
+            break;
+
+        String sizeLine = buffer.substr(pos, lineEnd - pos);
+        size_t semiPos  = sizeLine.find(';');
+        if (semiPos != String::npos)
+            sizeLine = sizeLine.substr(0, semiPos);
+        sizeLine = trimSpaces(sizeLine);
+        if (sizeLine.empty())
+            break;
+
+        unsigned long chunkSize = 0;
+        if (!parseHexChunkSize(sizeLine, chunkSize))
+            return false;
+
+        size_t dataStart = lineEnd + 2;
+
+        if (chunkSize == 0) {
+            if (dataStart + 2 > buffer.size())
+                break;
+            consumed = dataStart + 2;
+            done     = true;
+            break;
+        }
+
+        if (dataStart + chunkSize + 2 > buffer.size())
+            break;
+
+        decoded.append(buffer, dataStart, chunkSize);
+        pos      = dataStart + chunkSize + 2;
+        consumed = pos;
+    }
+
+    return true;
 }
 
 size_t findChunkedBodyEnd(const String& data) {
@@ -838,18 +882,8 @@ size_t findChunkedBodyEnd(const String& data) {
             return String::npos;
 
         unsigned long chunkSize = 0;
-        for (size_t i = 0; i < sizeLine.size(); i++) {
-            char c = sizeLine[i];
-            chunkSize *= 16;
-            if (c >= '0' && c <= '9')
-                chunkSize += c - '0';
-            else if (c >= 'a' && c <= 'f')
-                chunkSize += c - 'a' + 10;
-            else if (c >= 'A' && c <= 'F')
-                chunkSize += c - 'A' + 10;
-            else
-                return String::npos;
-        }
+        if (!parseHexChunkSize(sizeLine, chunkSize))
+            return String::npos;
 
         pos = lineEnd + 2;
 

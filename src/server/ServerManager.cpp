@@ -297,31 +297,25 @@ bool ServerManager::parseAndRouteHeaders(Client* client, Server* server) {
         headerEnd    = buffer.find("\n\n");
         headerEndLen = 2;
     }
-    if (headerEnd == String::npos)
+    if (headerEnd == String::npos) {
+        if (buffer.size() > MAX_HEADER_SIZE) {
+            sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, 0);
+            return false;
+        }
         return false;
+    }
+    if (headerEnd > MAX_HEADER_SIZE) {
+        sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, headerEnd + headerEndLen);
+        return false;
+    }
 
     if (!client->getRequest().parseHeaders(buffer.substr(0, headerEnd))) {
         sendErrorResponse(client, client->getErrorCode(), getHttpStatusMessage(client->getErrorCode()), true, headerEnd + headerEndLen);
         return false;
     }
     client->getRequest().setPort(server->getPort());
-    bool   keepAlive = (client->getRequest().getHttpVersion() == HTTP_VERSION_1_1);
-    String conn      = toLowerWords(client->getRequest().getHeader(HEADER_CONNECTION));
 
-    VectorString connValues;
-    if (!splitByString(conn, connValues, ",")) {
-        sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, headerEnd + headerEndLen);
-        return false;
-    }
-    for (size_t i = 0; i < connValues.size(); i++) {
-        String val = trimSpaces(connValues[i]);
-        if (val == CLOSE) {
-            keepAlive = false;
-            break;
-        } else if (val == KEEP_ALIVE)
-            keepAlive = true;
-    }
-    client->setKeepAlive(keepAlive);
+    parseConnectionHeader(client);
     client->setHeadersParsed(true);
     client->removeReceivedData(headerEnd + headerEndLen);
 
@@ -331,30 +325,7 @@ bool ServerManager::parseAndRouteHeaders(Client* client, Server* server) {
     clientRoutes[client->getFd()] = res;
 
     if (res.getStatusCode() >= 400) {
-        // Try to consume body data from the buffer to preserve keep-alive
-        bool hasBody = !client->getRequest().getHeader(HEADER_CONTENT_LENGTH).empty() &&
-                       client->getContentLength() > 0;
-        bool isChunkedReq = client->isChunkedEncoding();
-        bool shouldClose = false;
-        size_t bodyBytesToRemove = 0;
-
-        if (hasBody) {
-            size_t cl = client->getContentLength();
-            if (client->getStoreReceiveData().size() >= cl)
-                bodyBytesToRemove = cl;
-            else
-                shouldClose = true;
-        } else if (isChunkedReq) {
-            size_t chunkedEnd = findChunkedBodyEnd(client->getStoreReceiveData());
-            if (chunkedEnd != String::npos)
-                bodyBytesToRemove = chunkedEnd;
-            else
-                shouldClose = true;
-        }
-
-        sendErrorResponse(client, res.getStatusCode(),
-                                 res.getErrorMessage().empty() ? getHttpStatusMessage(res.getStatusCode()) : res.getErrorMessage(), shouldClose, bodyBytesToRemove);
-
+        drainBodyAndSendError(client, res);
         return false;
     }
 
@@ -373,6 +344,50 @@ bool ServerManager::parseAndRouteHeaders(Client* client, Server* server) {
             registerCgiPipes(client);
     }
     return true;
+}
+
+void ServerManager::parseConnectionHeader(Client* client) {
+    bool   keepAlive = (client->getRequest().getHttpVersion() == HTTP_VERSION_1_1);
+    String conn      = toLowerWords(client->getRequest().getHeader(HEADER_CONNECTION));
+
+    VectorString connValues;
+    if (splitByString(conn, connValues, ",")) {
+        for (size_t i = 0; i < connValues.size(); i++) {
+            String val = trimSpaces(connValues[i]);
+            if (val == CLOSE) {
+                keepAlive = false;
+                break;
+            } else if (val == KEEP_ALIVE)
+                keepAlive = true;
+        }
+    }
+    client->setKeepAlive(keepAlive);
+}
+
+void ServerManager::drainBodyAndSendError(Client* client, const RouteResult& res) {
+    bool hasBody = !client->getRequest().getHeader(HEADER_CONTENT_LENGTH).empty() &&
+                   client->getContentLength() > 0;
+    bool   isChunkedReq      = client->isChunkedEncoding();
+    bool   shouldClose       = false;
+    size_t bodyBytesToRemove = 0;
+
+    if (hasBody) {
+        size_t cl = client->getContentLength();
+        if (client->getStoreReceiveData().size() >= cl)
+            bodyBytesToRemove = cl;
+        else
+            shouldClose = true;
+    } else if (isChunkedReq) {
+        size_t chunkedEnd = findChunkedBodyEnd(client->getStoreReceiveData());
+        if (chunkedEnd != String::npos)
+            bodyBytesToRemove = chunkedEnd;
+        else
+            shouldClose = true;
+    }
+
+    sendErrorResponse(client, res.getStatusCode(),
+                      res.getErrorMessage().empty() ? getHttpStatusMessage(res.getStatusCode()) : res.getErrorMessage(),
+                      shouldClose, bodyBytesToRemove);
 }
 
 bool ServerManager::validateRequestBody(Client* client, const RouteResult& res, bool hasContentLength, bool isChunked) {
@@ -402,10 +417,6 @@ bool ServerManager::validateRequestBody(Client* client, const RouteResult& res, 
         }
     }
 
-    if (maxBody >= 0 && client->getStoreReceiveData().size() > (size_t)maxBody) {
-        sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, 0);
-        return false;
-    }
     return true;
 }
 
@@ -413,45 +424,56 @@ void ServerManager::handleCgiBodyStreaming(Client* client) {
     bool        isChunked = client->isChunkedEncoding();
     RouteResult boundRes  = getValue(clientRoutes, client->getFd(), RouteResult());
     ssize_t     maxBody   = getMaxBodySize(boundRes);
+    CgiProcess& cgi       = client->getCgi();
 
     if (isChunked) {
-        if (maxBody >= 0 && client->getStoreReceiveData().size() > (size_t)maxBody) {
-            sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, 0);
+        String decoded;
+        bool   chunkedDone = false;
+        size_t consumed    = 0;
+        if (!decodeChunkedIncremental(client->getStoreReceiveData(), decoded, chunkedDone, consumed)) {
+            sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
             return;
         }
-        String decoded;
-        if (decodeChunkedBody(client->getStoreReceiveData(), decoded)) {
-            if (maxBody >= 0 && decoded.size() > (size_t)maxBody) {
+        if (consumed > 0)
+            client->removeReceivedData(consumed);
+        if (!decoded.empty()) {
+            if (maxBody >= 0 && (ssize_t)(cgi.getTotalReceived() + decoded.size()) > maxBody) {
                 sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, 0);
                 return;
             }
-            client->getCgi().appendBuffer(decoded);
-            client->getCgi().setWriteDone(true);
-            client->clearStoreReceiveData();
-            pollManager.addFd(client->getCgi().getWriteFd(), POLLOUT);
+            cgi.appendBuffer(decoded);
+            if (cgi.getWriteFd() != -1)
+                pollManager.addFd(cgi.getWriteFd(), POLLOUT);
         }
+        if (chunkedDone)
+            cgi.setWriteDone(true);
     } else {
         size_t cl            = client->getContentLength();
-        size_t totalReceived = client->getCgi().getTotalReceived();
+        size_t totalReceived = cgi.getTotalReceived();
         if (cl < totalReceived) {
             sendErrorResponse(client, HTTP_BAD_REQUEST, getHttpStatusMessage(HTTP_BAD_REQUEST), true, 0);
             return;
         }
-        size_t toWrite = minValue(client->getStoreReceiveData().size(), cl - totalReceived);
-        if (toWrite > 0) {
-            String part = client->getStoreReceiveData().substr(0, toWrite);
-            if (maxBody >= 0 && (ssize_t)(totalReceived + part.size()) > maxBody) {
+        size_t remaining = cl - totalReceived;
+        size_t available = minValue(client->getStoreReceiveData().size(), remaining);
+        if (available > 0) {
+            if (maxBody >= 0 && (ssize_t)(totalReceived + available) > maxBody) {
                 sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, 0);
                 return;
             }
-            client->getCgi().appendBuffer(part);
-            client->removeReceivedData(toWrite);
-            if (client->getCgi().getWriteFd() != -1)
-                pollManager.addFd(client->getCgi().getWriteFd(), POLLOUT);
+            cgi.appendBuffer(client->getStoreReceiveData().substr(0, available));
+            client->removeReceivedData(available);
+            if (cgi.getWriteFd() != -1)
+                pollManager.addFd(cgi.getWriteFd(), POLLOUT);
         }
-        if (client->getCgi().getTotalReceived() >= cl)
-            client->getCgi().setWriteDone(true);
+        if (cgi.getTotalReceived() >= cl)
+            cgi.setWriteDone(true);
     }
+    // Backpressure: pause/resume client reads based on CGI write buffer
+    if (cgi.getBufferSize() > BUFFER_SIZE * 16)
+        pollManager.addFd(client->getFd(), 0);
+    else
+        pollManager.addFd(client->getFd(), POLLIN);
 }
 
 bool ServerManager::handleRegularBody(Client* client) {
@@ -484,7 +506,6 @@ bool ServerManager::handleRegularBody(Client* client) {
 
             if (maxBody >= 0 && decoded.size() > (size_t)maxBody) {
                 sendErrorResponse(client, HTTP_PAYLOAD_TOO_LARGE, getHttpStatusMessage(HTTP_PAYLOAD_TOO_LARGE), true, 0);
-
                 return false;
             }
 
@@ -556,13 +577,18 @@ void ServerManager::handleCgiWrite(int pipeFd) {
         removeCgiPipe(pipeFd);
         return;
     }
-    if (client->getCgi().writeBody(pipeFd)) {
+    CgiProcess& cgi = client->getCgi();
+    cgi.writeBody(pipeFd);
+    if (cgi.isWriteDone() && cgi.getBufferSize() == 0) {
         removeCgiPipe(pipeFd);
-        if (client->getCgi().getWriteFd() != -1) {
-            close(client->getCgi().getWriteFd());
-            client->getCgi().setWriteFd(-1);
+        if (cgi.getWriteFd() != -1) {
+            close(cgi.getWriteFd());
+            cgi.setWriteFd(-1);
         }
     }
+    // Resume client reads if buffer has been drained enough
+    if (cgi.getBufferSize() <= BUFFER_SIZE * 8 && !cgi.isWriteDone())
+        pollManager.addFd(client->getFd(), POLLIN);
 }
 
 void ServerManager::handleCgiRead(int pipeFd) {
@@ -572,18 +598,19 @@ void ServerManager::handleCgiRead(int pipeFd) {
         return;
     }
     if (!client->getCgi().handleRead()) {
+        CgiProcess& cgi = client->getCgi();
         removeCgiPipe(pipeFd);
-        if (client->getCgi().getWriteFd() != -1) {
-            removeCgiPipe(client->getCgi().getWriteFd());
-            close(client->getCgi().getWriteFd());
-            client->getCgi().setWriteFd(-1);
+        if (cgi.getWriteFd() != -1) {
+            removeCgiPipe(cgi.getWriteFd());
+            close(cgi.getWriteFd());
+            cgi.setWriteFd(-1);
         }
-        if (client->getCgi().getReadFd() != -1) {
-            close(client->getCgi().getReadFd());
-            client->getCgi().setReadFd(-1);
+        if (cgi.getReadFd() != -1) {
+            close(cgi.getReadFd());
+            cgi.setReadFd(-1);
         }
-        client->getCgi().finish();
-        HttpResponse cgiResponse = responseBuilder.buildCgiResponse(client->getCgi());
+        cgi.finish();
+        HttpResponse cgiResponse = responseBuilder.buildCgiResponse(cgi);
         if (!client->isKeepAlive())
             cgiResponse.addHeader("Connection", "close");
         else

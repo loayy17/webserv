@@ -138,8 +138,6 @@ void ResponseBuilder::handleError(HttpResponse& response, const RouteResult& res
                 allow += ", ";
             allow += methods[i];
         }
-        // if (isKeyInVector(String(METHOD_GET), methods) && !isKeyInVector(String(METHOD_HEAD), methods))
-        //     allow += ", HEAD";
         response.addHeader("Allow", allow);
     }
 }

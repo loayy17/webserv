@@ -46,11 +46,9 @@ class ServerConfig {
     bool                        listenExists(const ListenAddress& addr) const;
 
    private:
-    // required server parameters
     VectorListenAddress  listenAddresses;
     VectorLocationConfig locations;
 
-    // optional server parameters
     VectorString serverNames;       // default: empty, can have multiple names
     String       root;              // default: use for location if not set(be required)
     VectorString indexes;           // default: "index.html"

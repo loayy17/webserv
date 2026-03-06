@@ -1,4 +1,3 @@
-// Lightweight typedefs used across the project
 #ifndef TYPES_HPP
 #define TYPES_HPP
 

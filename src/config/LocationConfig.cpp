@@ -1,8 +1,5 @@
 #include "LocationConfig.hpp"
 
-// -----------------------------------------------------------------------------
-// Constructors / Destructor
-// -----------------------------------------------------------------------------
 LocationConfig::LocationConfig()
     : path(),
       root(),
@@ -69,9 +66,6 @@ LocationConfig& LocationConfig::operator=(const LocationConfig& other) {
 
 LocationConfig::~LocationConfig() {}
 
-// -----------------------------------------------------------------------------
-// Setters
-// -----------------------------------------------------------------------------
 bool LocationConfig::setRoot(const VectorString& r) {
     if (!root.empty())
         return Logger::error("duplicate root");

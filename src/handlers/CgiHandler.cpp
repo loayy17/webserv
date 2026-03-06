@@ -15,8 +15,6 @@ CgiHandler& CgiHandler::operator=(const CgiHandler& other) {
 }
 CgiHandler::~CgiHandler() {}
 
-// ─── IHandler interface ──────────────────────────────────────────────────────
-
 bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response) const {
     return handle(resultRouter, response, VectorInt());
 }
@@ -129,7 +127,7 @@ bool CgiHandler::parseOutput(const String& raw, HttpResponse& response) {
         if (toLowerWords(key) == "status") {
             int               code = 0;
             if(!stringToType<int>(val, code))
-                code = HTTP_INTERNAL_SERVER_ERROR;
+                code = HTTP_OK;
             String msg   = getHttpStatusMessage(code);
             size_t space = val.find(' ');
             if (space != String::npos)
@@ -155,7 +153,7 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     if (!loc)
         return env;
     // --- Server info ---
-    env.push_back("GATEWAY_INTERFACE=" + String(CGI_INTERFACE)); // CGI/1.1
+    env.push_back("GATEWAY_INTERFACE=" + String(CGI_INTERFACE));
     env.push_back("SERVER_NAME=" + resultRouter.getServer()->getServerName());
     env.push_back("SERVER_SOFTWARE=Webserv/1.0");
     env.push_back("SERVER_PORT=" + typeToString<int>(req.getPort()));
@@ -194,16 +192,12 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     for (MapString::const_iterator it = headers.begin(); it != headers.end(); ++it) {
         String key = it->first;
         String val = it->second;
-
-        // sanitize header name
         for (size_t i = 0; i < key.size(); i++) {
             if (key[i] == '-')
                 key[i] = '_';
             else if (!std::isalnum(static_cast<unsigned char>(key[i])) && key[i] != '_')
                 key[i] = '_';
         }
-
-        // sanitize header value
         String sanitizedVal;
         for (size_t i = 0; i < val.size(); i++) {
             if (val[i] >= 0x20 && val[i] <= 0x7E)

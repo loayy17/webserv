@@ -159,8 +159,6 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
             lineEnd    = headerSection.find("\n", pos);
             lineEndLen = 1;
         }
-
-        // If no more line endings found, process remaining content as last header
         if (lineEnd == String::npos) {
             lineEnd    = headerSection.size();
             lineEndLen = 0;

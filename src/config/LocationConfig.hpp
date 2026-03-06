@@ -46,9 +46,7 @@ class LocationConfig {
     String           getRedirectValue() const;
 
    private:
-    // required location parameters
     String path;
-    // optional location parameters
     String       root;           // default root of server if not set (be required)
     bool         autoIndex;      // default: false
     bool         autoIndexSet;   // tracks if autoindex directive was used

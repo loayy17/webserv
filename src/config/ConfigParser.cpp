@@ -29,7 +29,9 @@ ConfigParser::ConfigParser(const ConfigParser& other)
     _current(other._current),
     _haveHttp(other._haveHttp),
     _servers(other._servers),
-    _httpClientMaxBody(other._httpClientMaxBody)
+    _httpClientMaxBody(other._httpClientMaxBody),
+    _serverDirectives(other._serverDirectives),
+    _locationDirectives(other._locationDirectives)
 {}
 
 ConfigParser& ConfigParser::operator=(const ConfigParser& other) {
@@ -39,6 +41,8 @@ ConfigParser& ConfigParser::operator=(const ConfigParser& other) {
         _haveHttp = other._haveHttp;
         _servers = other._servers;
         _httpClientMaxBody = other._httpClientMaxBody;
+        _serverDirectives = other._serverDirectives;
+        _locationDirectives = other._locationDirectives;
     }
     return *this;
 }

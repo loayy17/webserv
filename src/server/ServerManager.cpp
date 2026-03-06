@@ -226,11 +226,11 @@ void ServerManager::sendErrorResponse(Client* client, int statusCode, const Stri
     if (closeConnection) {
         response.addHeader("Connection", "close");
         client->setKeepAlive(false);
-            client->clearStoreReceiveData();
-        } else {
-            response.addHeader("Connection", "keep-alive");
-            if (bytesToRemove > 0)
-                client->removeReceivedData(bytesToRemove);
+        client->clearStoreReceiveData();
+    } else {
+        response.addHeader("Connection", "keep-alive");
+        if (bytesToRemove > 0)
+            client->removeReceivedData(bytesToRemove);
     }
     client->setSendData(response.toString());
     client->resetForNextRequest();

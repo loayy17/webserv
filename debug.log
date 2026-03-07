@@ -1,0 +1,34 @@
+DEBUG handleClientRead: fd=5 keepAlive=0 before receiveData
+DEBUG handleClientRead: fd=5 received=96 keepAlive=0
+DEBUG parseAndRouteHeaders: setKeepAlive=1 for fd=5
+DEBUG pre-build keepAlive=1 fd=5
+DEBUG post-build keepAlive=1 fd=5 cgiActive=1
+DEBUG post-register keepAlive=1 fd=5
+DEBUG processRequest: after parse keepAlive=1 cgiActive=1 fd=5
+DEBUG processRequest: after cgiBodyStreaming keepAlive=1 fd=5
+DEBUG handleCgiRead: CGI done for fd=5 keepAlive=1
+DEBUG handleClientWrite: keepAlive fd=5
+DEBUG handleClientRead: fd=5 keepAlive=1 before receiveData
+DEBUG handleClientRead: fd=5 received=77 keepAlive=1
+DEBUG parseAndRouteHeaders: setKeepAlive=1 for fd=5
+DEBUG processRequest: after parse keepAlive=1 cgiActive=0 fd=5
+DEBUG handleClientWrite: keepAlive fd=5
+DEBUG handleClientRead: fd=5 keepAlive=1 before receiveData
+DEBUG handleClientRead: fd=5 received=0, closing (EOF)
+DEBUG handleClientRead: fd=5 keepAlive=0 before receiveData
+DEBUG handleClientRead: fd=5 received=96 keepAlive=0
+DEBUG parseAndRouteHeaders: setKeepAlive=1 for fd=5
+DEBUG pre-build keepAlive=1 fd=5
+DEBUG post-build keepAlive=1 fd=5 cgiActive=1
+DEBUG post-register keepAlive=1 fd=5
+DEBUG processRequest: after parse keepAlive=1 cgiActive=1 fd=5
+DEBUG processRequest: after cgiBodyStreaming keepAlive=1 fd=5
+DEBUG handleCgiRead: CGI done for fd=5 keepAlive=1
+DEBUG handleClientWrite: keepAlive fd=5
+DEBUG handleClientRead: fd=5 keepAlive=1 before receiveData
+DEBUG handleClientRead: fd=5 received=77 keepAlive=1
+DEBUG parseAndRouteHeaders: setKeepAlive=1 for fd=5
+DEBUG processRequest: after parse keepAlive=1 cgiActive=0 fd=5
+DEBUG handleClientWrite: keepAlive fd=5
+DEBUG handleClientRead: fd=5 keepAlive=1 before receiveData
+DEBUG handleClientRead: fd=5 received=0, closing (EOF)

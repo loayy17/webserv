@@ -1,9 +1,5 @@
 #include "Utils.hpp"
 
-// ============================================================================
-// Time Methods
-// ============================================================================
-
 time_t getCurrentTime() {
     return time(NULL);
 }
@@ -20,6 +16,10 @@ bool isLeapYear(int year) {
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
 }
 
+static String padTwo(int n) {
+    return (n < 10 ? "0" : "") + typeToString(n);
+}
+
 String formatDateTime(time_t t) {
     static const int   MONTH_DAYS[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     static const char* WEEKDAYS[]   = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
@@ -30,8 +30,6 @@ String formatDateTime(time_t t) {
     int  weekday        = (4 + daysSinceEpoch) % 7;
     if (weekday < 0)
         weekday += 7;
-
-    // Year calculation
     int  year          = 1970;
     long remainingDays = daysSinceEpoch;
     while (true) {
@@ -43,13 +41,9 @@ String formatDateTime(time_t t) {
             break;
         }
     }
-
-    // Month and day calculation
-
     int month = 0;
     while (month < 12) {
         int daysInMonth = MONTH_DAYS[month];
-        // Adjust February for leap year
         if (month == 1 && isLeapYear(year))
             daysInMonth = 29;
         if (remainingDays >= daysInMonth) {
@@ -58,30 +52,14 @@ String formatDateTime(time_t t) {
         } else
             break;
     }
-    int day = static_cast<int>(remainingDays) + 1;
-
-    // Time of day
+    int day    = static_cast<int>(remainingDays) + 1;
     int hour   = static_cast<int>(secsToday / SECONDS_PER_HOUR);
     int minute = static_cast<int>((secsToday % SECONDS_PER_HOUR) / SECONDS_PER_MIN);
     int second = static_cast<int>(secsToday % SECONDS_PER_MIN);
 
-    String hourStr = hour < 10 ? "0" + typeToString(hour) : typeToString(hour);
-    String minStr  = minute < 10 ? "0" + typeToString(minute) : typeToString(minute);
-    String secStr  = second < 10 ? "0" + typeToString(second) : typeToString(second);
-    String dayStr  = day < 10 ? "0" + typeToString(day) : typeToString(day);
-    // Build the HTTP date string
-    String date = WEEKDAYS[weekday];
-    date += ", " + dayStr;
-    date += " " + String(MONTHS[month]);
-    date += " " + typeToString(year);
-    date += " " + hourStr + ":" + minStr + ":" + secStr;
-    date += " GMT";
-    return date;
+    return String(WEEKDAYS[weekday]) + ", " + padTwo(day) + " " + MONTHS[month] + " "
+         + typeToString(year) + " " + padTwo(hour) + ":" + padTwo(minute) + ":" + padTwo(second) + " GMT";
 }
-
-// ============================================================================
-// String Methods
-// ============================================================================
 
 String toUpperWords(const String& str) {
     String result = str;
@@ -172,13 +150,21 @@ String generateGUID() {
     int fd = open("/dev/urandom", O_RDONLY);
     if (fd < 0) {
         Logger::error("CRITICAL: /dev/urandom unavailable");
-        throw std::runtime_error("Secure random source unavailable");
-    }
-
-    ssize_t n = read(fd, bytes, numBytes);
-    close(fd);
-    if (n != numBytes) {
-        throw std::runtime_error("Failed to read from /dev/urandom");
+        // Fallback: use time-based seed
+        srand(static_cast<unsigned int>(time(NULL)));
+        for (int i = 0; i < numBytes; ++i) {
+            bytes[i] = static_cast<unsigned char>(rand() % 256);
+        }
+    } else {
+        ssize_t n = read(fd, bytes, numBytes);
+        close(fd);
+        if (n != numBytes) {
+            Logger::error("Failed to read from /dev/urandom");
+            srand(static_cast<unsigned int>(time(NULL)));
+            for (int i = 0; i < numBytes; ++i) {
+                bytes[i] = static_cast<unsigned char>(rand() % 256);
+            }
+        }
     }
 
     for (int i = 0; i < numBytes; ++i) {
@@ -230,8 +216,6 @@ bool parseKeyValue(const String& line, String& key, VectorString& values) {
     }
     return !values.empty();
 }
-
-
 
 // ============================================================================
 // File System Methods
@@ -294,7 +278,7 @@ struct stat getFileStat(const String& path) {
     if (stat(path.c_str(), &st) == 0)
         return st;
 
-    st.st_mode = 0; // Mark invalid
+    st.st_mode = 0;
     return st;
 }
 
@@ -318,7 +302,7 @@ String sanitizeFilename(const String& filename) {
     safe.reserve(filename.size());
     for (size_t i = 0; i < filename.size(); ++i) {
         char c = filename[i];
-        if (std::isalnum(c) || c == '.' || c == '-' || c == '_')
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_')
             safe += c;
         else
             safe += '_';
@@ -328,10 +312,10 @@ String sanitizeFilename(const String& filename) {
 
 bool ensureDirectoryExists(const String& dirPath) {
     struct stat st;
-    if (stat(dirPath.c_str(), &st) == -1) {
-        if (mkdir(dirPath.c_str(), DIR_PERMISSIONS) == -1)
-            return false;
-    }
+    if (stat(dirPath.c_str(), &st) == -1)
+        return false;
+    if (!S_ISDIR(st.st_mode))
+        return false;
     return true;
 }
 
@@ -476,7 +460,10 @@ bool isMethodWithBody(const String& m) {
 }
 
 bool setNonBlocking(int fd) {
-    if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1)
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1)
+        return Logger::error("Failed to get fd flags");
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
         return Logger::error("Failed to set non-blocking mode");
     return true;
 }
@@ -713,8 +700,6 @@ bool parseMultipartFormData(const String& body, const String& boundary, String& 
         return false;
 
     String startBoundary = "--" + boundary;
-    // String endBoundary   = "--" + boundary + "--"; // Not explicitly needed for first part
-
     // 1. Find Start
     size_t partStart = body.find(startBoundary);
     if (partStart == String::npos)
@@ -761,7 +746,24 @@ bool parseMultipartFormData(const String& body, const String& boundary, String& 
     return !filename.empty();
 }
 
-
+bool parseHexChunkSize(const String& sizeLine, unsigned long& chunkSize) {
+    chunkSize = 0;
+    if (sizeLine.empty())
+        return false;
+    for (size_t i = 0; i < sizeLine.size(); i++) {
+        char c = sizeLine[i];
+        chunkSize *= 16;
+        if (c >= '0' && c <= '9')
+            chunkSize += c - '0';
+        else if (c >= 'a' && c <= 'f')
+            chunkSize += c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F')
+            chunkSize += c - 'A' + 10;
+        else
+            return false;
+    }
+    return true;
+}
 
 bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
     decodedBody.clear();
@@ -779,52 +781,138 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
             sizeLine = sizeLine.substr(0, semiPos);
 
         sizeLine = trimSpaces(sizeLine);
-        if (sizeLine.empty())
+
+        unsigned long chunkSize = 0;
+        if (!parseHexChunkSize(sizeLine, chunkSize))
             return false;
 
-        // 2. Parse hex chunk size manually
-        unsigned long chunkSize = 0;
-        for (size_t i = 0; i < sizeLine.size(); i++) {
-            char c = sizeLine[i];
-            chunkSize *= 16;
-            if (c >= '0' && c <= '9')
-                chunkSize += c - '0';
-            else if (c >= 'a' && c <= 'f')
-                chunkSize += c - 'a' + 10;
-            else if (c >= 'A' && c <= 'F')
-                chunkSize += c - 'A' + 10;
-            else
-                return false; // invalid hex digit
-        }
+        pos = lineEnd + 2;
 
-        pos = lineEnd + 2; // skip \r\n
-
-        // 3. Handle last chunk (0)
+        // Handle last chunk (0)
         if (chunkSize == 0) {
-            // Expect a final CRLF (or optional trailer headers + CRLF)
-            if (pos + 2 <= totalLen && chunkedBody.substr(pos, 2) == "\r\n")
-                pos += 2;
-            return pos == totalLen; // ensure all input consumed
+            while (pos < totalLen) {
+                size_t crlfPos = chunkedBody.find("\r\n", pos);
+                if (crlfPos == String::npos)
+                    return false;
+                if (crlfPos == pos) {
+                    pos += 2;
+                    break;
+                }
+                pos = crlfPos + 2;
+            }
+            return pos <= totalLen;
         }
 
-        // 4. Validate chunk size fits remaining data
+        // Validate chunk size fits remaining data
         if (pos + chunkSize + 2 > totalLen)
             return false;
 
-        // 5. Append chunk data
+        // Append chunk data
         decodedBody.append(chunkedBody, pos, chunkSize);
         pos += chunkSize;
 
-        // 6. Check trailing CRLF after chunk
         if (chunkedBody.substr(pos, 2) != "\r\n")
             return false;
         pos += 2;
     }
 
-    return false; // should never reach here without a zero chunk
+    return false;
 }
 
+bool decodeChunkedIncremental(const String& buffer, String& decoded, bool& done, size_t& consumed) {
+    decoded.clear();
+    done       = false;
+    consumed   = 0;
+    size_t pos = 0;
 
+    while (pos < buffer.size()) {
+        size_t lineEnd = buffer.find("\r\n", pos);
+        if (lineEnd == String::npos)
+            break;
+
+        String sizeLine = buffer.substr(pos, lineEnd - pos);
+        size_t semiPos  = sizeLine.find(';');
+        if (semiPos != String::npos)
+            sizeLine = sizeLine.substr(0, semiPos);
+        sizeLine = trimSpaces(sizeLine);
+        if (sizeLine.empty())
+            break;
+
+        unsigned long chunkSize = 0;
+        if (!parseHexChunkSize(sizeLine, chunkSize))
+            return false;
+
+        size_t dataStart = lineEnd + 2;
+
+        if (chunkSize == 0) {
+            if (dataStart + 2 > buffer.size())
+                break;
+            consumed = dataStart + 2;
+            done     = true;
+            break;
+        }
+
+        if (dataStart + chunkSize + 2 > buffer.size())
+            break;
+
+        decoded.append(buffer, dataStart, chunkSize);
+        pos      = dataStart + chunkSize + 2;
+        consumed = pos;
+    }
+
+    return true;
+}
+
+size_t findChunkedBodyEnd(const String& data) {
+    size_t pos      = 0;
+    size_t totalLen = data.size();
+
+    while (pos < totalLen) {
+        size_t lineEnd = data.find("\r\n", pos);
+        if (lineEnd == String::npos)
+            return String::npos;
+
+        String sizeLine = data.substr(pos, lineEnd - pos);
+        size_t semiPos  = sizeLine.find(';');
+        if (semiPos != String::npos)
+            sizeLine = sizeLine.substr(0, semiPos);
+
+        sizeLine = trimSpaces(sizeLine);
+        if (sizeLine.empty())
+            return String::npos;
+
+        unsigned long chunkSize = 0;
+        if (!parseHexChunkSize(sizeLine, chunkSize))
+            return String::npos;
+
+        pos = lineEnd + 2;
+
+        if (chunkSize == 0) {
+            while (pos < totalLen) {
+                size_t crlfPos = data.find("\r\n", pos);
+                if (crlfPos == String::npos)
+                    return String::npos;
+                if (crlfPos == pos) {
+                    pos += 2;
+                    break;
+                }
+                pos = crlfPos + 2;
+            }
+            return pos;
+        }
+
+        if (pos + chunkSize + 2 > totalLen)
+            return String::npos;
+
+        pos += chunkSize;
+
+        if (data.substr(pos, 2) != "\r\n")
+            return String::npos;
+        pos += 2;
+    }
+
+    return String::npos;
+}
 
 String urlDecode(const String& input) {
     String result;

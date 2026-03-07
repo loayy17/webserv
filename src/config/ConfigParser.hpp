@@ -25,7 +25,6 @@ class ConfigParser {
     VectorServerConfig _servers;
     ssize_t            _httpClientMaxBody;
 
-    // Directive maps – initialised in constructor
     ServerDirectiveMap   _serverDirectives;
     LocationDirectiveMap _locationDirectives;
 

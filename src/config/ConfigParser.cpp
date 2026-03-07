@@ -2,8 +2,6 @@
 
 ConfigParser::ConfigParser(const String& filename) : _lexer(filename), _haveHttp(false), _httpClientMaxBody(-1) {
     nextToken();
-
-    // ---- Server directives ----
     _serverDirectives["listen"]               = &ServerConfig::setListen;
     _serverDirectives["server_name"]          = &ServerConfig::setServerName;
     _serverDirectives["root"]                 = &ServerConfig::setRoot;
@@ -11,7 +9,7 @@ ConfigParser::ConfigParser(const String& filename) : _lexer(filename), _haveHttp
     _serverDirectives["client_max_body_size"] = &ServerConfig::setClientMaxBody;
     _serverDirectives["error_page"]           = &ServerConfig::setErrorPage;
 
-    // ---- Location directives ----
+
     _locationDirectives["root"]                 = &LocationConfig::setRoot;
     _locationDirectives["autoindex"]            = &LocationConfig::setAutoIndex;
     _locationDirectives["index"]                = &LocationConfig::setIndexes;
@@ -31,7 +29,9 @@ ConfigParser::ConfigParser(const ConfigParser& other)
     _current(other._current),
     _haveHttp(other._haveHttp),
     _servers(other._servers),
-    _httpClientMaxBody(other._httpClientMaxBody)
+    _httpClientMaxBody(other._httpClientMaxBody),
+    _serverDirectives(other._serverDirectives),
+    _locationDirectives(other._locationDirectives)
 {}
 
 ConfigParser& ConfigParser::operator=(const ConfigParser& other) {
@@ -41,6 +41,8 @@ ConfigParser& ConfigParser::operator=(const ConfigParser& other) {
         _haveHttp = other._haveHttp;
         _servers = other._servers;
         _httpClientMaxBody = other._httpClientMaxBody;
+        _serverDirectives = other._serverDirectives;
+        _locationDirectives = other._locationDirectives;
     }
     return *this;
 }
@@ -48,7 +50,6 @@ ConfigParser& ConfigParser::operator=(const ConfigParser& other) {
 ConfigParser::~ConfigParser() {}
 
 void ConfigParser::nextToken() {
-    //_current is (type, value, line)
     _current = _lexer.nextToken();
 }
 
@@ -116,7 +117,7 @@ bool ConfigParser::parseHttp() {
 }
 
 bool ConfigParser::parseServer() {
-    nextToken(); // consume "server"
+    nextToken();
     if (!expect(TOKEN_LBRACE, "'{' after server"))
         return false;
 

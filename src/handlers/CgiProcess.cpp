@@ -1,7 +1,8 @@
 #include "CgiProcess.hpp"
 #include "../utils/Utils.hpp"
 
-CgiProcess::CgiProcess() : _pid(-1), _writeFd(-1), _readFd(-1), _writeOffset(0), _writeDone(true), _startTime(0), _active(false) {}
+CgiProcess::CgiProcess()
+    : _pid(-1), _writeFd(-1), _readFd(-1), _writeOffset(0), _writeDone(true), _startTime(0), _active(false), _totalBytesReceived(0) {}
 
 CgiProcess::CgiProcess(const CgiProcess& other)
     : _pid(other._pid),
@@ -12,19 +13,21 @@ CgiProcess::CgiProcess(const CgiProcess& other)
       _writeDone(other._writeDone),
       _output(other._output),
       _startTime(other._startTime),
-      _active(other._active) {}
+      _active(other._active),
+      _totalBytesReceived(other._totalBytesReceived) {}
 
 CgiProcess& CgiProcess::operator=(const CgiProcess& other) {
     if (this != &other) {
-        _pid         = other._pid;
-        _writeFd     = other._writeFd;
-        _readFd      = other._readFd;
-        _writeBuffer = other._writeBuffer;
-        _writeOffset = other._writeOffset;
-        _writeDone   = other._writeDone;
-        _output      = other._output;
-        _startTime   = other._startTime;
-        _active      = other._active;
+        _pid                = other._pid;
+        _writeFd            = other._writeFd;
+        _readFd             = other._readFd;
+        _writeBuffer        = other._writeBuffer;
+        _writeOffset        = other._writeOffset;
+        _writeDone          = other._writeDone;
+        _output             = other._output;
+        _startTime          = other._startTime;
+        _active             = other._active;
+        _totalBytesReceived = other._totalBytesReceived;
     }
     return *this;
 }
@@ -36,8 +39,9 @@ void CgiProcess::init(pid_t pid, int writeFd, int readFd) {
     _writeFd = writeFd;
     _readFd  = readFd;
     _writeBuffer.clear();
-    _writeOffset = 0;
-    _writeDone   = false;
+    _writeOffset        = 0;
+    _writeDone          = false;
+    _totalBytesReceived = 0;
     _output.clear();
     _startTime = getCurrentTime();
     _active    = true;
@@ -45,6 +49,7 @@ void CgiProcess::init(pid_t pid, int writeFd, int readFd) {
 
 void CgiProcess::appendBuffer(const String& data) {
     _writeBuffer.append(data);
+    _totalBytesReceived += data.size();
 }
 
 void CgiProcess::reset() {
@@ -55,8 +60,9 @@ void CgiProcess::reset() {
     _writeOffset = 0;
     _writeDone   = false;
     _output.clear();
-    _startTime = 0;
-    _active    = false;
+    _startTime          = 0;
+    _active             = false;
+    _totalBytesReceived = 0;
 }
 
 bool CgiProcess::isActive() const {
@@ -96,13 +102,16 @@ void CgiProcess::setWriteDone(bool done) {
 bool CgiProcess::writeBody(int fd) {
     if (isWriteDone())
         return true;
-    bool madeProgress = false;
-    while (_writeOffset < _writeBuffer.size()) {
+    bool   madeProgress = false;
+    size_t maxWrite     = BUFFER_SIZE * 256;
+    size_t totalWritten = 0;
+    while (_writeOffset < _writeBuffer.size() && totalWritten < maxWrite) {
         const char* data      = _writeBuffer.c_str() + _writeOffset;
         size_t      remaining = _writeBuffer.size() - _writeOffset;
         ssize_t     w         = write(fd, data, remaining);
         if (w > 0) {
             _writeOffset += w;
+            totalWritten += w;
             madeProgress = true;
         } else {
             break;
@@ -110,12 +119,11 @@ bool CgiProcess::writeBody(int fd) {
     }
     if (madeProgress)
         _startTime = getCurrentTime();
-
-    if (_writeOffset >= _writeBuffer.size() && !_writeBuffer.empty()) {
-        _writeBuffer.clear();
+    // Compact buffer after writes
+    if (_writeOffset > 0) {
+        _writeBuffer.erase(0, _writeOffset);
         _writeOffset = 0;
     }
-
     return isWriteDone();
 }
 
@@ -129,16 +137,13 @@ bool CgiProcess::handleRead() {
     }
     if (gotData)
         _startTime = getCurrentTime();
-
-    // Subject rule: never check errno.
-    // If read returns 0, it means EOF. Return false to indicate we are done.
     if (n == 0)
         return false;
-    return true; // Keep monitoring if we got data or if read returned -1 (non-blocking)
+    return true;
 }
 
 bool CgiProcess::finish() {
-    if (_pid <= 0) 
+    if (_pid <= 0)
         return false;
     if (_writeFd != INVALID_FD) {
         close(_writeFd);
@@ -180,4 +185,12 @@ void CgiProcess::cleanup() {
         _readFd = INVALID_FD;
     }
     reset();
+}
+
+size_t CgiProcess::getBufferSize() const {
+    return _writeBuffer.size();
+}
+
+size_t CgiProcess::getTotalReceived() const {
+    return _totalBytesReceived;
 }

@@ -159,8 +159,6 @@ bool HttpRequest::parseHeaders(const String& headerSection) {
             lineEnd    = headerSection.find("\n", pos);
             lineEndLen = 1;
         }
-
-        // If no more line endings found, process remaining content as last header
         if (lineEnd == String::npos) {
             lineEnd    = headerSection.size();
             lineEndLen = 0;
@@ -266,7 +264,7 @@ bool HttpRequest::validateContentLength() {
     }
     const String& clValue = it->second;
     for (size_t i = 0; i < clValue.length(); ++i) {
-        if (!std::isdigit(clValue[i])) {
+        if (!std::isdigit(static_cast<unsigned char>(clValue[i]))) {
             errorCode = HTTP_BAD_REQUEST;
             return false;
         }

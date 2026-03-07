@@ -40,9 +40,8 @@ bool ServerConfig::setClientMaxBody(const VectorString& c) {
         return Logger::error("Duplicate client_max_body_size");
     if (!requireSingleValue(c, "client_max_body_size"))
         return false;
-    //split M K G m k g from c[0]
     char   unit       = c[0][c[0].size() - 1];
-    String numberPart = std::isdigit(unit) ? c[0] : c[0].substr(0, c[0].size() - 1);
+    String numberPart = std::isdigit(static_cast<unsigned char>(unit)) ? c[0] : c[0].substr(0, c[0].size() - 1);
     size_t parsed;
     if (!stringToType<size_t>(numberPart, parsed))
         return Logger::error("invalid client_max_body_size: " + c[0]);

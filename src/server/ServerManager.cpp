@@ -147,7 +147,7 @@ bool ServerManager::acceptNewConnection(Server* server) {
     if (clients.size() >= MAX_CONNECTIONS) {
         Logger::error("Max connections reached (" + typeToString(MAX_CONNECTIONS) + "), rejecting new connection");
         String remoteAddress;
-       int tmpFd = server->acceptConnection(remoteAddress);
+        int    tmpFd = server->acceptConnection(remoteAddress);
         if (tmpFd >= 0)
             close(tmpFd);
         return false;
@@ -305,7 +305,8 @@ bool ServerManager::parseAndRouteHeaders(Client* client, Server* server) {
         return false;
     }
     if (headerEnd > MAX_HEADER_SIZE) {
-        sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true, headerEnd + headerEndLen);
+        sendErrorResponse(client, HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE, getHttpStatusMessage(HTTP_REQUEST_HEADER_FIELDS_TOO_LARGE), true,
+                          headerEnd + headerEndLen);
         return false;
     }
 
@@ -365,8 +366,7 @@ void ServerManager::parseConnectionHeader(Client* client) {
 }
 
 void ServerManager::drainBodyAndSendError(Client* client, const RouteResult& res) {
-    bool hasBody = !client->getRequest().getHeader(HEADER_CONTENT_LENGTH).empty() &&
-                   client->getContentLength() > 0;
+    bool   hasBody           = !client->getRequest().getHeader(HEADER_CONTENT_LENGTH).empty() && client->getContentLength() > 0;
     bool   isChunkedReq      = client->isChunkedEncoding();
     bool   shouldClose       = false;
     size_t bodyBytesToRemove = 0;
@@ -385,8 +385,7 @@ void ServerManager::drainBodyAndSendError(Client* client, const RouteResult& res
             shouldClose = true;
     }
 
-    sendErrorResponse(client, res.getStatusCode(),
-                      res.getErrorMessage().empty() ? getHttpStatusMessage(res.getStatusCode()) : res.getErrorMessage(),
+    sendErrorResponse(client, res.getStatusCode(), res.getErrorMessage().empty() ? getHttpStatusMessage(res.getStatusCode()) : res.getErrorMessage(),
                       shouldClose, bodyBytesToRemove);
 }
 
@@ -585,6 +584,9 @@ void ServerManager::handleCgiWrite(int pipeFd) {
             close(cgi.getWriteFd());
             cgi.setWriteFd(-1);
         }
+    } else if (cgi.getBufferSize() == 0) {
+        // Nothing to write yet; stop POLLOUT to avoid busy-loop
+        pollManager.addFd(pipeFd, 0);
     }
     // Resume client reads if buffer has been drained enough
     if (cgi.getBufferSize() <= BUFFER_SIZE * 8 && !cgi.isWriteDone())

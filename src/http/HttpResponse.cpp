@@ -60,16 +60,18 @@ const String& HttpResponse::getBody() const {
 }
 
 String HttpResponse::toString() const {
-    String ss;
-    ss += httpVersion + " " + typeToString<int>(statusCode) + " " + statusMessage + "\r\n";
-    ss += String(HEADER_DATE) + ": " + formatDateTime() + "\r\n";
-    ss += String(HEADER_SERVER) + ": Webserv/1.0\r\n";
+    String hdr;
+    hdr += httpVersion + " " + typeToString<int>(statusCode) + " " + statusMessage + "\r\n";
+    hdr += String(HEADER_DATE) + ": " + formatDateTime() + "\r\n";
+    hdr += String(HEADER_SERVER) + ": Webserv/1.0\r\n";
     for (MapString::const_iterator it = headers.begin(); it != headers.end(); ++it)
-        ss += it->first + ": " + it->second + "\r\n";
+        hdr += it->first + ": " + it->second + "\r\n";
     for (size_t i = 0; i < setCookies.size(); ++i)
-        ss += String(HEADER_SET_COOKIE) + ": " + setCookies[i] + "\r\n";
-
-    ss += "\r\n";
-    ss += body;
-    return ss;
+        hdr += String(HEADER_SET_COOKIE) + ": " + setCookies[i] + "\r\n";
+    hdr += "\r\n";
+    String result;
+    result.reserve(hdr.size() + body.size());
+    result.append(hdr);
+    result.append(body);
+    return result;
 }

@@ -102,13 +102,16 @@ void CgiProcess::setWriteDone(bool done) {
 bool CgiProcess::writeBody(int fd) {
     if (isWriteDone())
         return true;
-    bool madeProgress = false;
-    while (_writeOffset < _writeBuffer.size()) {
+    bool   madeProgress = false;
+    size_t maxWrite     = BUFFER_SIZE * 256;
+    size_t totalWritten = 0;
+    while (_writeOffset < _writeBuffer.size() && totalWritten < maxWrite) {
         const char* data      = _writeBuffer.c_str() + _writeOffset;
         size_t      remaining = _writeBuffer.size() - _writeOffset;
         ssize_t     w         = write(fd, data, remaining);
         if (w > 0) {
             _writeOffset += w;
+            totalWritten += w;
             madeProgress = true;
         } else {
             break;

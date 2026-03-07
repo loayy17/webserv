@@ -5,9 +5,6 @@
 #include "../utils/Logger.hpp"
 #include "../utils/Utils.hpp"
 
-#ifndef F_SETPIPE_SZ
-#define F_SETPIPE_SZ 1031
-#endif
 
 CgiHandler::CgiHandler() : _cgi(NULL) {}
 CgiHandler::CgiHandler(CgiProcess& cgi) : _cgi(&cgi) {}
@@ -99,8 +96,6 @@ bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response,
     close(childToParent[1]);
     setNonBlocking(parentToChild[1]);
     setNonBlocking(childToParent[0]);
-    fcntl(parentToChild[1], F_SETPIPE_SZ, 1048576);
-    fcntl(childToParent[0], F_SETPIPE_SZ, 1048576);
     _cgi->init(pid, parentToChild[1], childToParent[0]);
     return true;
 }
@@ -117,7 +112,6 @@ bool CgiHandler::parseOutput(const String& raw, HttpResponse& response) {
         return false;
 
     String            headerPart = raw.substr(0, headerEnd);
-    String            bodyPart   = raw.substr(headerEnd + headerEndLen);
     std::stringstream ss(headerPart);
     String            line;
     bool              statusSet = false;
@@ -148,7 +142,8 @@ bool CgiHandler::parseOutput(const String& raw, HttpResponse& response) {
     }
     if (!statusSet)
         response.setStatus(HTTP_OK, "OK");
-    response.setBody(bodyPart);
+    String bodyData = raw.substr(headerEnd + headerEndLen);
+    response.setBody(bodyData);
     return true;
 }
 VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {

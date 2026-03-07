@@ -13,6 +13,7 @@ class Client {
     int         client_fd;
     String      storeReceiveData;
     String      storeSendData;
+    size_t      _sendOffset;
     time_t      lastActivity;
     CgiProcess  _cgi;
     bool        _keepAlive;

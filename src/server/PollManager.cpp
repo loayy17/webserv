@@ -79,6 +79,17 @@ int PollManager::getFd(size_t index) const {
     return fds[index].fd;
 }
 
+int PollManager::getEvents(int fd) const {
+    std::map<int, size_t>::const_iterator it = _fdIndex.find(fd);
+    if (it != _fdIndex.end())
+        return fds[it->second].events;
+    return 0;
+}
+
+bool PollManager::isFdRegistered(int fd) const {
+    return _fdIndex.count(fd) > 0;
+}
+
 size_t PollManager::size() const {
     return fds.size();
 }

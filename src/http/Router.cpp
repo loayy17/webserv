@@ -1,6 +1,5 @@
 #include "Router.hpp"
 
-// Constructors / Destructor
 Router::Router() : _servers(NULL), _request() {}
 Router::Router(const VectorServerConfig& servers, const HttpRequest& request) : _servers(&servers), _request(request) {}
 Router::Router(const Router& other) : _servers(other._servers), _request(other._request) {}
@@ -47,11 +46,8 @@ void Router::resolveCgiScriptAndPathInfo(const LocationConfig* loc, String& scri
             scriptPath = candidate;
             if (rest.size() > accumulated.size()) {
                 pathInfo = rest.substr(accumulated.size());
-                if (pathInfo.empty() || pathInfo[0] != '/') {
+                if (pathInfo[0] != '/')
                     pathInfo = "/" + pathInfo;
-                }
-            } else if (rest.size() == accumulated.size()) {
-                pathInfo.clear();
             }
             return;
         }
@@ -82,8 +78,10 @@ RouteResult Router::processRequest() {
     if (loc->getIsRedirect())
         return result.setRedirect(loc->getRedirectValue(), loc->getRedirectCode());
 
-    // 4. Method check — HEAD is implicitly allowed wherever GET is (HTTP/1.1 §9.4)
+    // 4. HEAD is implicitly allowed wherever GET is (HTTP/1.1 §9.4)
     String methodToCheck = _request.getMethod();
+    // if (methodToCheck == METHOD_HEAD)
+    //     methodToCheck = METHOD_GET;
     if (!isKeyInVector(methodToCheck, loc->getAllowedMethods()))
         return result.setCodeAndMessage(HTTP_METHOD_NOT_ALLOWED, getHttpStatusMessage(HTTP_METHOD_NOT_ALLOWED));
 
@@ -172,7 +170,6 @@ RouteResult Router::processRequest() {
     return result;
 }
 
-// Server lookup
 const ServerConfig* Router::findServer() const {
     if (!_servers)
         return NULL;
@@ -195,7 +192,6 @@ const ServerConfig* Router::getDefaultServer(int port) const {
     return NULL;
 }
 
-// Best matching location
 const LocationConfig* Router::bestMatchLocation(const VectorLocationConfig& locations) const {
     String                uri     = normalizePath(_request.getUri());
     const LocationConfig* best    = NULL;
@@ -211,7 +207,6 @@ const LocationConfig* Router::bestMatchLocation(const VectorLocationConfig& loca
     return best;
 }
 
-// Resolve filesystem path
 String Router::resolveFilesystemPath(const LocationConfig* loc) const {
     if (!loc)
         return "";
@@ -223,7 +218,6 @@ String Router::resolveFilesystemPath(const LocationConfig* loc) const {
     return joinPaths(root, rest);
 }
 
-// Check CGI request
 bool Router::isCgiRequest(const String& path, const LocationConfig& loc) const {
     if (!loc.hasCgi())
         return false;

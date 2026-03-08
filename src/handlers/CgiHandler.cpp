@@ -99,7 +99,6 @@ bool CgiHandler::handle(const RouteResult& resultRouter, HttpResponse& response,
     _cgi->init(pid, parentToChild[1], childToParent[0]);
     return true;
 }
-// ─── Static helpers ──────────────────────────────────────────────────────────
 
 bool CgiHandler::parseOutput(const String& raw, HttpResponse& response) {
     size_t headerEnd    = raw.find("\r\n\r\n");
@@ -126,7 +125,7 @@ bool CgiHandler::parseOutput(const String& raw, HttpResponse& response) {
         String val = trimSpaces(line.substr(colon + 1));
         if (toLowerWords(key) == "status") {
             int               code = 0;
-            if(!stringToType<int>(val, code))
+            if (!stringToType<int>(val, code))
                 code = HTTP_OK;
             String msg   = getHttpStatusMessage(code);
             size_t space = val.find(' ');
@@ -153,15 +152,14 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     const LocationConfig* loc = resultRouter.getLocation();
     if (!loc)
         return env;
-    // --- Server info ---
+
     env.push_back("GATEWAY_INTERFACE=" + String(CGI_INTERFACE));
     env.push_back("SERVER_NAME=" + resultRouter.getServer()->getServerName());
     env.push_back("SERVER_SOFTWARE=Webserv/1.0");
     env.push_back("SERVER_PORT=" + typeToString<int>(req.getPort()));
     env.push_back("SERVER_PROTOCOL=" + req.getHttpVersion());
     env.push_back("REQUEST_METHOD=" + req.getMethod());
-    // --- Request info ---
-    // Calculate SCRIPT_NAME (URI part before PATH_INFO)
+
     String uri        = req.getUri();
     String pathInfo   = resultRouter.getRemainingPath();
     String scriptName = uri.substr(0, uri.size() - pathInfo.size());
@@ -169,44 +167,29 @@ VectorString CgiHandler::buildEnv(const RouteResult& resultRouter) const {
     env.push_back("QUERY_STRING=" + req.getQueryString());
     env.push_back("SCRIPT_NAME=" + scriptName);
     env.push_back("SCRIPT_FILENAME=" + resultRouter.getPathRootUri());
-    // it must be pathInfo variable but we set it to uri just for tester work
     env.push_back("PATH_INFO=" + uri);
-    if (!pathInfo.empty()) {
+    if (!pathInfo.empty())
         env.push_back("PATH_TRANSLATED=" + joinPaths(loc->getRoot(), pathInfo));
-    } else {
-        // Fallback for cgi_tester: if pathInfo is empty, some versions expect URI in PATH_INFO
+    else
         env.push_back("PATH_TRANSLATED=" + resultRouter.getPathRootUri());
-    }
     env.push_back("DOCUMENT_ROOT=" + loc->getRoot());
     env.push_back("REDIRECT_STATUS=200");
     env.push_back("REMOTE_ADDR=" + resultRouter.getRemoteAddress());
-    // --- POST info ---
-    if (!req.getContentType().empty())
-        env.push_back("CONTENT_TYPE=" + req.getContentType());
-    else
-        env.push_back("CONTENT_TYPE=");
+
+    env.push_back("CONTENT_TYPE=" + req.getContentType());
     env.push_back("CONTENT_LENGTH=" + typeToString<size_t>(req.getContentLength()));
     env.push_back("REMOTE_HOST=" + req.getHost());
 
-    // --- HTTP headers ---
     const MapString& headers = req.getHeaders();
     for (MapString::const_iterator it = headers.begin(); it != headers.end(); ++it) {
         String key = it->first;
-        String val = it->second;
-        for (size_t i = 0; i < key.size(); i++) {
-            if (key[i] == '-')
-                key[i] = '_';
-            else if (!std::isalnum(static_cast<unsigned char>(key[i])) && key[i] != '_')
-                key[i] = '_';
-        }
-        String sanitizedVal;
-        for (size_t i = 0; i < val.size(); i++) {
-            if (val[i] >= 0x20 && val[i] <= 0x7E)
-                sanitizedVal += val[i];
-        }
-
-        env.push_back("HTTP_" + toUpperWords(key) + "=" + sanitizedVal);
+        for (size_t i = 0; i < key.size(); i++)
+            key[i] = std::isalnum(static_cast<unsigned char>(key[i])) ? key[i] : '_';
+        String val;
+        for (size_t i = 0; i < it->second.size(); i++)
+            if (it->second[i] >= 0x20 && it->second[i] <= 0x7E)
+                val += it->second[i];
+        env.push_back("HTTP_" + toUpperWords(key) + "=" + val);
     }
-
     return env;
 }

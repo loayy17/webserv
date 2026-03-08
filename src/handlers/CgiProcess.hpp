@@ -28,7 +28,7 @@ class CgiProcess {
     ~CgiProcess();
 
     void          init(pid_t pid, int writeFd, int readFd);
-    void          appendBuffer(const String& data);
+    void          appendBuffer(const char* data, size_t len);
     void          reset();
     bool          isActive() const;
     pid_t         getPid() const;
@@ -39,6 +39,8 @@ class CgiProcess {
 
     void   setWriteFd(int fd);
     void   setReadFd(int fd);
+    void   closeWriteFd();
+    void   closeReadFd();
     bool   isWriteDone() const;
     void   setWriteDone(bool done);
     bool   writeBody(int fd);

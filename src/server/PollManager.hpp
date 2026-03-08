@@ -23,6 +23,8 @@ class PollManager {
     int       pollConnections(int timeout);
     bool      hasEvent(size_t index, int event) const;
     int       getFd(size_t index) const;
+    int       getEvents(int fd) const;
+    bool      isFdRegistered(int fd) const;
     size_t    size() const;
 };
 

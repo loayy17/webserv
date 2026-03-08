@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webserv — Feature Showcase &amp; Evaluation Guide</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
+        }
+
+        :root {
+            --bg: #0a0e1a;
+            --card: #0f1629;
+            --border: #1e2d4a;
+            --accent: #3b82f6;
+            --acc2: #8b5cf6;
+            --acc3: #10b981;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --code: #1e293b;
+            --red: #ef4444;
+            --yellow: #eab308
+        }
+
+        html {
+            scroll-behavior: smooth
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.7
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image: linear-gradient(rgba(59, 130, 246, .04) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, .04) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 0
+        }
+
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+            background: rgba(10, 14, 26, .88);
+            border-bottom: 1px solid var(--border);
+            padding: .75rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between
+        }
+
+        .logo {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 1px
+        }
+
+        .logo span {
+            color: var(--acc2)
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.2rem;
+            flex-wrap: wrap
+        }
+
+        .nav-links a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: .85rem;
+            transition: color .2s
+        }
+
+        .nav-links a:hover {
+            color: var(--text)
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem
+        }
+
+        h1 {
+            font-size: 2.4rem;
+            font-weight: 800;
+            text-align: center;
+            margin: 2.5rem 0 .5rem;
+            background: linear-gradient(135deg, var(--accent), var(--acc2));
+            -webkit-text-fill-color: transparent
+        }
+
+        .subtitle {
+            text-align: center;
+            color: var(--muted);
+            margin-bottom: 3rem;
+            font-size: 1rem
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 2.5rem 0 1rem;
+            color: var(--accent);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: .5rem
+        }
+
+        h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin: 1.5rem 0 .5rem;
+            color: var(--acc3)
+        }
+
+        p,
+        li {
+            color: var(--text);
+            font-size: .95rem
+        }
+
+        ul,
+        ol {
+            padding-left: 1.5rem;
+            margin: .5rem 0 1rem
+        }
+
+        li {
+            margin: .3rem 0
+        }
+
+        pre {
+            background: var(--code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.2rem;
+            overflow-x: auto;
+            font-size: .85rem;
+            line-height: 1.5;
+            margin: .8rem 0 1.2rem;
+            color: #c9d1d9
+        }
+
+        code {
+            font-family: 'Fira Code', Consolas, monospace;
+            font-size: .85rem
+        }
+
+        .inline-code {
+            background: var(--code);
+            padding: .15rem .4rem;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            color: var(--acc3)
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0
+        }
+
+        .tag {
+            display: inline-block;
+            padding: .15rem .5rem;
+            border-radius: 4px;
+            font-size: .75rem;
+            font-weight: 600;
+            margin-right: .3rem
+        }
+
+        .tag-get {
+            background: #10b98120;
+            color: #10b981;
+            border: 1px solid #10b98140
+        }
+
+        .tag-post {
+            background: #3b82f620;
+            color: #3b82f6;
+            border: 1px solid #3b82f640
+        }
+
+        .tag-delete {
+            background: #ef444420;
+            color: #ef4444;
+            border: 1px solid #ef444440
+        }
+
+        .tag-put {
+            background: #eab30820;
+            color: #eab308;
+            border: 1px solid #eab30840
+        }
+
+        .tag-bonus {
+            background: #8b5cf620;
+            color: #8b5cf6;
+            border: 1px solid #8b5cf640
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: .6rem .8rem;
+            border: 1px solid var(--border);
+            font-size: .88rem
+        }
+
+        th {
+            background: var(--code);
+            color: var(--accent);
+            font-weight: 600
+        }
+
+        td code {
+            color: var(--acc3)
+        }
+
+        .toc {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem 2rem;
+            margin: 1.5rem 0
+        }
+
+        .toc h3 {
+            margin-top: 0;
+            color: var(--accent)
+        }
+
+        .toc ol {
+            counter-reset: toc
+        }
+
+        .toc li {
+            margin: .2rem 0
+        }
+
+        .toc a {
+            color: var(--text);
+            text-decoration: none;
+            transition: color .2s
+        }
+
+        .toc a:hover {
+            color: var(--accent)
+        }
+
+        .demo-btn {
+            display: inline-block;
+            padding: .5rem 1.2rem;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: .85rem;
+            font-weight: 600;
+            margin: .3rem .3rem .3rem 0;
+            transition: background .2s
+        }
+
+        .demo-btn:hover {
+            background: #2563eb
+        }
+
+        .demo-btn.secondary {
+            background: var(--acc2)
+        }
+
+        .demo-btn.secondary:hover {
+            background: #7c3aed
+        }
+
+        .demo-btn.green {
+            background: var(--acc3)
+        }
+
+        .demo-btn.green:hover {
+            background: #059669
+        }
+
+        .demo-btn.red {
+            background: var(--red)
+        }
+
+        .demo-btn.red:hover {
+            background: #dc2626
+        }
+
+        #upload-result,
+        #delete-result,
+        #session-result,
+        #cgi-result {
+            background: var(--code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: .8rem;
+            margin: .5rem 0;
+            min-height: 2rem;
+            font-family: monospace;
+            font-size: .85rem;
+            white-space: pre-wrap;
+            display: none
+        }
+
+        .test-area {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: .8rem 0
+        }
+
+        input[type="file"],
+        input[type="text"],
+        select {
+            background: var(--code);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: .5rem;
+            border-radius: 6px;
+            font-size: .85rem;
+            margin: .3rem 0
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 2rem 0
+        }
+
+        @media(max-width:640px) {
+            .container {
+                padding: 1rem
+            }
+
+            .nav-links {
+                gap: .6rem
+            }
+
+            h1 {
+                font-size: 1.6rem
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <nav>
+        <div class="logo">Web<span>serv</span> Features</div>
+        <div class="nav-links">
+            <a href="#config">Config</a>
+            <a href="#methods">Methods</a>
+            <a href="#upload">Upload</a>
+            <a href="#cgi">CGI</a>
+            <a href="#sessions">Sessions</a>
+            <a href="#errors">Errors</a>
+            <a href="#tests">Tests</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>Webserv Feature Showcase</h1>
+        <p class="subtitle">Complete HTTP/1.1 Server — C++98 &bull; poll() &bull; Non-blocking I/O &bull; CGI &bull;
+            Sessions</p>
+
+        <!-- TABLE OF CONTENTS -->
+        <div class="toc">
+            <h3>Table of Contents</h3>
+            <ol>
+                <li><a href="#overview">Overview &amp; Architecture</a></li>
+                <li><a href="#config">Configuration File Guide</a></li>
+                <li><a href="#directives">All Directives Reference</a></li>
+                <li><a href="#methods">HTTP Methods (GET, POST, DELETE)</a></li>
+                <li><a href="#static">Static File Serving</a></li>
+                <li><a href="#dirlist">Directory Listing (autoindex)</a></li>
+                <li><a href="#upload">File Upload</a></li>
+                <li><a href="#delete-sec">File Deletion</a></li>
+                <li><a href="#redirect">HTTP Redirections</a></li>
+                <li><a href="#errors">Error Pages</a></li>
+                <li><a href="#cgi">CGI Execution</a></li>
+                <li><a href="#sessions">Cookies &amp; Sessions (Bonus)</a></li>
+                <li><a href="#multi-cgi">Multiple CGI Types (Bonus)</a></li>
+                <li><a href="#multiple-ports">Multiple Ports / Virtual Hosts</a></li>
+                <li><a href="#limits">Body Size Limits</a></li>
+                <li><a href="#chunked">Chunked Transfer Encoding</a></li>
+                <li><a href="#resilience">Non-blocking &amp; Resilience</a></li>
+                <li><a href="#tests">Testing Commands</a></li>
+            </ol>
+        </div>
+
+        <!-- 1. OVERVIEW -->
+        <h2 id="overview">1. Overview &amp; Architecture</h2>
+        <div class="card">
+            <ul>
+                <li><strong>Language:</strong> C++98 (<code class="inline-code">-std=c++98 -Wall -Wextra -Werror</code>)
+                </li>
+                <li><strong>I/O Multiplexing:</strong> Single <code class="inline-code">poll()</code> for ALL I/O
+                    (sockets, pipes, listen)</li>
+                <li><strong>Non-blocking:</strong> All sockets &amp; CGI pipes set to <code
+                        class="inline-code">O_NONBLOCK</code> via <code class="inline-code">fcntl()</code></li>
+                <li><strong>No read/write without poll():</strong> Every I/O goes through poll readiness check first
+                </li>
+                <li><strong>No errno checking after read/write:</strong> Behavior based on return values only</li>
+                <li><strong>CGI:</strong> Only uses <code class="inline-code">fork()</code> for CGI; the rest is
+                    event-driven</li>
+                <li><strong>Keep-Alive:</strong> HTTP/1.1 persistent connections with proper pipelining</li>
+                <li><strong>Timeouts:</strong> Client timeout (60s) and CGI timeout (60s)</li>
+            </ul>
+        </div>
+
+        <!-- 2. CONFIGURATION FILE -->
+        <h2 id="config">2. Configuration File Guide</h2>
+        <p>The configuration follows an <strong>NGINX-like syntax</strong>. Provide it as argument: <code
+                class="inline-code">./webserv webserv.conf</code></p>
+
+        <h3>Minimal Configuration</h3>
+        <pre><code>server {
+    listen 0.0.0.0:8080;
+    server_name localhost;
+    root ./www;
+    index index.html;
+}</code></pre>
+
+        <h3>Full Configuration Example</h3>
+        <pre><code>http {
+    client_max_body_size 5M;       # Global body size limit
+
+    server {
+        listen 0.0.0.0:8080;        # IP:port to bind
+        server_name localhost;       # Server name (virtual host matching)
+        root ./www;                  # Default document root
+        index welcome.html;         # Default index file
+
+        # Custom error pages
+        error_page 404 ./www/errors/404.html;
+        error_page 500 ./www/errors/50x.html;
+
+        # Static files
+        location / {
+            root ./www;
+            index welcome.html;
+            methods GET POST DELETE;
+            autoindex on;              # Enable directory listing
+            client_max_body_size 5M;   # Per-location body limit
+        }
+
+        # File uploads
+        location /upload {
+            root ./www;
+            methods GET POST;
+            upload_dir ./uploads;      # Where uploaded files are stored
+            client_max_body_size 10M;
+        }
+
+        # Directory listing
+        location /subdir {
+            root ./www/subdir;
+            methods GET;
+            autoindex on;
+        }
+
+        # CGI — Python
+        location /cgi-bin {
+            root ./www/cgi-bin;
+            methods GET POST;
+            cgi_pass .py /usr/bin/python3;   # extension → interpreter
+        }
+
+        # HTTP redirect
+        location /old-page {
+            return 301 /;             # 301 redirect to /
+        }
+
+        # DELETE files
+        location /delete {
+            root ./uploads;
+            methods GET DELETE;
+            autoindex on;
+        }
+    }
+
+    # Second server on different port
+    server {
+        listen 0.0.0.0:8081;
+        server_name second.localhost;
+        root ./www;
+        index welcome.html;
+        client_max_body_size 1M;
+
+        location / {
+            root ./www;
+            index welcome.html;
+            methods GET;
+        }
+    }
+}</code></pre>
+
+        <!-- 3. DIRECTIVES -->
+        <h2 id="directives">3. All Directives Reference</h2>
+        <table>
+            <tr>
+                <th>Directive</th>
+                <th>Context</th>
+                <th>Description</th>
+                <th>Example</th>
+            </tr>
+            <tr>
+                <td><code>listen</code></td>
+                <td>server</td>
+                <td>IP:port to bind to</td>
+                <td><code>listen 0.0.0.0:8080;</code></td>
+            </tr>
+            <tr>
+                <td><code>server_name</code></td>
+                <td>server</td>
+                <td>Hostname for virtual host matching</td>
+                <td><code>server_name example.com;</code></td>
+            </tr>
+            <tr>
+                <td><code>root</code></td>
+                <td>server, location</td>
+                <td>Document root directory</td>
+                <td><code>root ./www;</code></td>
+            </tr>
+            <tr>
+                <td><code>index</code></td>
+                <td>server, location</td>
+                <td>Default file(s) for directory requests</td>
+                <td><code>index index.html index.htm;</code></td>
+            </tr>
+            <tr>
+                <td><code>error_page</code></td>
+                <td>server</td>
+                <td>Custom error page path</td>
+                <td><code>error_page 404 ./www/errors/404.html;</code></td>
+            </tr>
+            <tr>
+                <td><code>client_max_body_size</code></td>
+                <td>http, server, location</td>
+                <td>Max request body size (B/K/M/G)</td>
+                <td><code>client_max_body_size 10M;</code></td>
+            </tr>
+            <tr>
+                <td><code>methods</code></td>
+                <td>location</td>
+                <td>Allowed HTTP methods</td>
+                <td><code>methods GET POST DELETE;</code></td>
+            </tr>
+            <tr>
+                <td><code>autoindex</code></td>
+                <td>location</td>
+                <td>Enable/disable directory listing</td>
+                <td><code>autoindex on;</code></td>
+            </tr>
+            <tr>
+                <td><code>upload_dir</code></td>
+                <td>location</td>
+                <td>Directory for uploaded files</td>
+                <td><code>upload_dir ./uploads;</code></td>
+            </tr>
+            <tr>
+                <td><code>cgi_pass</code></td>
+                <td>location</td>
+                <td>Map file extension to CGI interpreter</td>
+                <td><code>cgi_pass .py /usr/bin/python3;</code></td>
+            </tr>
+            <tr>
+                <td><code>return</code></td>
+                <td>location</td>
+                <td>HTTP redirect</td>
+                <td><code>return 301 /new-page;</code></td>
+            </tr>
+        </table>
+
+        <h3>Size Suffixes</h3>
+        <table>
+            <tr>
+                <th>Suffix</th>
+                <th>Meaning</th>
+                <th>Example</th>
+            </tr>
+            <tr>
+                <td>(none)</td>
+                <td>Bytes</td>
+                <td><code>client_max_body_size 1024;</code> = 1024 bytes</td>
+            </tr>
+            <tr>
+                <td><code>K</code> / <code>k</code></td>
+                <td>Kilobytes</td>
+                <td><code>client_max_body_size 512K;</code> = 512 KB</td>
+            </tr>
+            <tr>
+                <td><code>M</code> / <code>m</code></td>
+                <td>Megabytes</td>
+                <td><code>client_max_body_size 10M;</code> = 10 MB</td>
+            </tr>
+            <tr>
+                <td><code>G</code> / <code>g</code></td>
+                <td>Gigabytes</td>
+                <td><code>client_max_body_size 1G;</code> = 1 GB</td>
+            </tr>
+        </table>
+
+        <!-- 4. HTTP METHODS -->
+        <h2 id="methods">4. HTTP Methods</h2>
+        <div class="card">
+            <p><span class="tag tag-get">GET</span> Retrieve resources (static files, directory listings, CGI output)
+            </p>
+            <p><span class="tag tag-post">POST</span> Submit data (file uploads, form data, CGI input)</p>
+            <p><span class="tag tag-delete">DELETE</span> Remove files from the server</p>
+            <p><span class="tag tag-put">PUT</span> Upload/replace resources (also supports file upload)</p>
+        </div>
+
+        <h3>Test with curl</h3>
+        <pre><code># GET request
+curl -v http://localhost:8080/
+
+# POST form data
+curl -X POST -d "key=value" http://localhost:8080/cgi-bin/database.py
+
+# DELETE a file
+curl -X DELETE http://localhost:8080/delete/myfile.txt
+
+# HEAD request (returns headers only, no body)
+curl -I http://localhost:8080/</code></pre>
+
+        <!-- 5. STATIC FILES -->
+        <h2 id="static">5. Static File Serving</h2>
+        <div class="card">
+            <p>The server resolves file paths by combining <code class="inline-code">root</code> + URI remainder after
+                location match:</p>
+            <pre><code>location /subdir {
+    root ./www/subdir;
+    index file.html;
+    methods GET;
+}</code></pre>
+            <p>Request <code class="inline-code">GET /subdir</code> → serves <code
+                    class="inline-code">./www/subdir/file.html</code></p>
+            <p>Request <code class="inline-code">GET /subdir/file.html</code> → serves <code
+                    class="inline-code">./www/subdir/file.html</code></p>
+            <p>MIME types are auto-detected from file extension (e.g. <code class="inline-code">.html</code> → <code
+                    class="inline-code">text/html</code>, <code class="inline-code">.css</code> → <code
+                    class="inline-code">text/css</code>).</p>
+        </div>
+        <a href="/subdir/file.html" class="demo-btn green">View Static File</a>
+
+        <!-- 6. DIRECTORY LISTING -->
+        <h2 id="dirlist">6. Directory Listing (autoindex)</h2>
+        <div class="card">
+            <p>When <code class="inline-code">autoindex on;</code> is set and no index file is found, the server
+                generates an HTML page listing all files/folders in the directory.</p>
+            <pre><code>location /subdir {
+    root ./www/subdir;
+    methods GET;
+    autoindex on;
+}</code></pre>
+        </div>
+        <a href="/subdir/" class="demo-btn green">View Directory Listing</a>
+        <a href="/" class="demo-btn secondary">Root Directory</a>
+
+        <!-- 7. FILE UPLOAD -->
+        <h2 id="upload">7. File Upload</h2>
+        <div class="card">
+            <h3>Configuration</h3>
+            <pre><code>location /upload {
+    root ./www;
+    methods GET POST;
+    upload_dir ./uploads;          # Files stored here
+    client_max_body_size 10M;      # Max upload size
+}</code></pre>
+            <h3>Supported formats:</h3>
+            <ul>
+                <li><strong>multipart/form-data</strong> — Standard HTML form upload (filename extracted from
+                    Content-Disposition)</li>
+                <li><strong>Raw body</strong> — Direct POST with Content-Disposition header or auto-generated filename
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-area">
+            <h3>Try Upload</h3>
+            <input type="file" id="upload-file" />
+            <br />
+            <button class="demo-btn" onclick="doUpload()">Upload File</button>
+            <div id="upload-result"></div>
+        </div>
+
+        <h3>curl examples</h3>
+        <pre><code># Upload with multipart/form-data
+curl -X POST -F "file=@photo.jpg" http://localhost:8080/upload
+
+# Upload with raw body
+curl -X POST --data-binary @document.pdf \
+  -H "Content-Type: application/octet-stream" \
+  -H "Content-Disposition: attachment; filename=\"document.pdf\"" \
+  http://localhost:8080/upload</code></pre>
+
+        <!-- 8. FILE DELETION -->
+        <h2 id="delete-sec">8. File Deletion</h2>
+        <div class="card">
+            <pre><code>location /delete {
+    root ./uploads;
+    methods GET DELETE;
+    autoindex on;
+}</code></pre>
+            <p>Send a <code class="inline-code">DELETE</code> request to remove a file. The file must exist in the
+                configured root.</p>
+        </div>
+        <div class="test-area">
+            <h3>Try Delete</h3>
+            <input type="text" id="delete-filename" placeholder="filename.txt" style="width:250px" />
+            <button class="demo-btn red" onclick="doDelete()">DELETE File</button>
+            <div id="delete-result"></div>
+        </div>
+        <pre><code># Delete a specific file
+curl -X DELETE http://localhost:8080/delete/uploaded_file.txt
+
+# Browse uploaded files (autoindex)
+curl http://localhost:8080/delete/</code></pre>
+        <a href="/delete/" class="demo-btn green">Browse Uploaded Files</a>
+
+        <!-- 9. REDIRECTIONS -->
+        <h2 id="redirect">9. HTTP Redirections</h2>
+        <div class="card">
+            <pre><code>location /old-page {
+    return 301 /;      # Permanent redirect to root
+}</code></pre>
+            <p>Supported codes: <code class="inline-code">301</code> (Moved Permanently), <code
+                    class="inline-code">302</code> (Found), <code class="inline-code">307</code> (Temporary Redirect)
+            </p>
+        </div>
+        <a href="/old-page" class="demo-btn">Test 301 Redirect</a>
+        <pre><code># Verify redirect with curl
+curl -v http://localhost:8080/old-page
+# Response: HTTP/1.1 301 Moved Permanently
+#           Location: /</code></pre>
+
+        <!-- 10. ERROR PAGES -->
+        <h2 id="errors">10. Error Pages</h2>
+        <div class="card">
+            <p>Custom error pages can be set per server block. If not configured, a styled default error page is
+                generated automatically.</p>
+            <pre><code>error_page 404 ./www/errors/404.html;
+error_page 500 ./www/errors/50x.html;</code></pre>
+            <h3>Features:</h3>
+            <ul>
+                <li>Animated styled default error pages for any HTTP status code</li>
+                <li>Custom error page files override defaults when configured</li>
+                <li>Correct HTTP status codes in responses</li>
+                <li><code class="inline-code">405 Method Not Allowed</code> includes <code
+                        class="inline-code">Allow</code> header with permitted methods</li>
+            </ul>
+        </div>
+        <a href="/nonexistent-page" class="demo-btn red">Trigger 404</a>
+        <a href="/private/secret.html" class="demo-btn red">Trigger 403</a>
+
+        <pre><code># 404 Not Found
+curl -v http://localhost:8080/this-does-not-exist
+
+# 405 Method Not Allowed (DELETE on GET-only location)
+curl -X DELETE http://localhost:8080/subdir/
+
+# 413 Payload Too Large
+curl -X POST -d "$(python3 -c "print('A'*20000000)")" http://localhost:8080/upload</code></pre>
+
+        <!-- 11. CGI -->
+        <h2 id="cgi">11. CGI Execution</h2>
+        <div class="card">
+            <pre><code>location /cgi-bin {
+    root ./www/cgi-bin;
+    methods GET POST;
+    cgi_pass .py /usr/bin/python3;    # Python CGI
+}</code></pre>
+            <h3>How it works:</h3>
+            <ol>
+                <li>Server receives request matching CGI location</li>
+                <li><code class="inline-code">fork()</code> creates child process</li>
+                <li>Child: <code class="inline-code">dup2()</code> pipes stdin/stdout → <code
+                        class="inline-code">execve()</code> interpreter with script</li>
+                <li>Parent: streams body to CGI via pipe (supports chunked + large bodies)</li>
+                <li>CGI output parsed: Status header, Content-Type, Set-Cookie, body</li>
+            </ol>
+            <h3>Environment variables passed to CGI:</h3>
+            <table>
+                <tr>
+                    <th>Variable</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>REQUEST_METHOD</code></td>
+                    <td>GET, POST, etc.</td>
+                </tr>
+                <tr>
+                    <td><code>QUERY_STRING</code></td>
+                    <td>URL query parameters</td>
+                </tr>
+                <tr>
+                    <td><code>CONTENT_TYPE</code></td>
+                    <td>Body content type</td>
+                </tr>
+                <tr>
+                    <td><code>CONTENT_LENGTH</code></td>
+                    <td>Body size in bytes</td>
+                </tr>
+                <tr>
+                    <td><code>SCRIPT_NAME</code></td>
+                    <td>CGI script URI path</td>
+                </tr>
+                <tr>
+                    <td><code>PATH_INFO</code></td>
+                    <td>Extra path after script</td>
+                </tr>
+                <tr>
+                    <td><code>SERVER_NAME</code></td>
+                    <td>Server hostname</td>
+                </tr>
+                <tr>
+                    <td><code>SERVER_PORT</code></td>
+                    <td>Server port number</td>
+                </tr>
+                <tr>
+                    <td><code>GATEWAY_INTERFACE</code></td>
+                    <td>CGI/1.1</td>
+                </tr>
+                <tr>
+                    <td><code>HTTP_*</code></td>
+                    <td>All HTTP request headers</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="test-area">
+            <h3>Try CGI — Database API</h3>
+            <button class="demo-btn green" onclick="cgiGet()">GET Users</button>
+            <button class="demo-btn" onclick="cgiPost()">POST New User</button>
+            <div id="cgi-result"></div>
+        </div>
+
+        <pre><code># GET — List all users
+curl http://localhost:8080/cgi-bin/database.py
+
+# POST — Create user (JSON)
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"secret"}' \
+  http://localhost:8080/cgi-bin/database.py
+
+# POST — Create user (form-urlencoded)
+curl -X POST -d "username=bob&amp;password=pass123" \
+  http://localhost:8080/cgi-bin/database.py</code></pre>
+
+        <!-- 12. COOKIES & SESSIONS (BONUS) -->
+        <h2 id="sessions">12. Cookies &amp; Session Management <span class="tag tag-bonus">BONUS</span></h2>
+        <div class="card">
+            <h3>How Sessions Work:</h3>
+            <ol>
+                <li>Client sends login request to CGI script</li>
+                <li>CGI returns <code class="inline-code">Set-Cookie: webserv_sid=&lt;32-char-hex&gt;</code></li>
+                <li>Server-side <code class="inline-code">SessionManager</code> stores session data (user ID, creation
+                    time)</li>
+                <li>On subsequent requests, cookie is sent automatically → session validated</li>
+                <li>Sessions expire after 30 minutes of inactivity</li>
+                <li>Expired sessions automatically cleaned up every 60 seconds</li>
+            </ol>
+            <h3>Implementation details:</h3>
+            <ul>
+                <li>Session IDs: 32-character hex string from <code class="inline-code">/dev/urandom</code></li>
+                <li>Cookie name: <code class="inline-code">webserv_sid</code></li>
+                <li>Cookie parsing: RFC-compliant, supports multiple cookies</li>
+                <li>Session timeout: 1800 seconds (30 minutes)</li>
+                <li>Cleanup interval: 60 seconds</li>
+            </ul>
+        </div>
+
+        <div class="test-area">
+            <h3>Try Session</h3>
+            <button class="demo-btn secondary" onclick="testSession()">Check Session Cookie</button>
+            <div id="session-result"></div>
+        </div>
+
+        <a href="/login/login.html" class="demo-btn secondary">Go to Login Page</a>
+        <a href="/login/signup.html" class="demo-btn secondary">Go to SignUp Page</a>
+
+        <pre><code># Login and receive session cookie
+curl -v -X POST -d "username=testuser&amp;password=pass" \
+  http://localhost:8080/cgi-bin/database.py
+# Response includes: Set-Cookie: webserv_sid=a1b2c3d4...
+
+# Use session cookie in subsequent requests
+curl -v -b "webserv_sid=a1b2c3d4..." http://localhost:8080/cgi-bin/database.py</code></pre>
+
+        <!-- 13. MULTIPLE CGI (BONUS) -->
+        <h2 id="multi-cgi">13. Multiple CGI Types <span class="tag tag-bonus">BONUS</span></h2>
+        <div class="card">
+            <p>The server supports <strong>multiple CGI interpreters</strong> per location, mapped by file extension:
+            </p>
+            <pre><code>location /cgi-bin {
+    root ./www/cgi-bin;
+    methods GET POST;
+    cgi_pass .py /usr/bin/python3;      # Python scripts
+    cgi_pass .sh /bin/bash;             # Bash scripts
+    cgi_pass .pl /usr/bin/perl;         # Perl scripts
+}</code></pre>
+            <p>Each extension is independently mapped to its interpreter. The server detects the extension from the
+                request URI and uses the correct interpreter.</p>
+            <p>The <code class="inline-code">cgi_tester</code> provided by the subject uses <code
+                    class="inline-code">.bla</code> extension:</p>
+            <pre><code>location / {
+    methods GET POST PUT;
+    cgi_pass .bla /root/webserv/cgi_tester;
+}</code></pre>
+        </div>
+
+        <!-- 14. MULTIPLE PORTS -->
+        <h2 id="multiple-ports">14. Multiple Ports / Virtual Hosts</h2>
+        <div class="card">
+            <p>Multiple <code class="inline-code">server</code> blocks can listen on different ports, each serving
+                different content:</p>
+            <pre><code>server {
+    listen 0.0.0.0:8080;
+    server_name main.localhost;
+    root ./www;
+    # ...full website...
+}
+
+server {
+    listen 0.0.0.0:8081;
+    server_name second.localhost;
+    root ./www;
+    client_max_body_size 1M;
+    # ...different config...
+}</code></pre>
+            <p>Server selection: matched by <code class="inline-code">Host</code> header + port. If no match, the first
+                server on that port is the default.</p>
+        </div>
+
+        <!-- 15. BODY SIZE LIMITS -->
+        <h2 id="limits">15. Body Size Limits</h2>
+        <div class="card">
+            <p>Body size limits can be set at three levels (most specific wins):</p>
+            <ol>
+                <li><code class="inline-code">http { client_max_body_size 5M; }</code> — Global default</li>
+                <li><code class="inline-code">server { client_max_body_size 10M; }</code> — Per-server override</li>
+                <li><code class="inline-code">location /upload { client_max_body_size 20M; }</code> — Per-location
+                    override</li>
+            </ol>
+            <p>When exceeded → <code class="inline-code">413 Payload Too Large</code></p>
+        </div>
+        <pre><code># Test body size limit (11MB to a 10M limit)
+dd if=/dev/urandom bs=1M count=11 2>/dev/null | \
+  curl -X POST --data-binary @- http://localhost:8080/upload
+# Response: 413 Payload Too Large</code></pre>
+
+        <!-- 16. CHUNKED TRANSFER -->
+        <h2 id="chunked">16. Chunked Transfer Encoding</h2>
+        <div class="card">
+            <p>Full support for <code class="inline-code">Transfer-Encoding: chunked</code> in both directions:</p>
+            <ul>
+                <li><strong>Incoming:</strong> Chunked requests are decoded incrementally and streamed to CGI or
+                    buffered for handlers</li>
+                <li><strong>CGI streaming:</strong> Large POST bodies are streamed chunk-by-chunk to CGI stdin via pipes
+                    (supports gigabyte-scale uploads)</li>
+                <li><strong>Flow control:</strong> Back-pressure when CGI buffer exceeds threshold, client read paused
+                    until CGI catches up</li>
+            </ul>
+        </div>
+        <pre><code># Send chunked request
+curl -X POST -H "Transfer-Encoding: chunked" \
+  -d "hello world" http://localhost:8080/cgi-bin/database.py
+
+# Large chunked upload to CGI
+python3 -c "
+import http.client
+conn = http.client.HTTPConnection('localhost', 8080)
+conn.request('POST', '/cgi-bin/database.py',
+  body='username=chunked_user&amp;password=test',
+  headers={'Transfer-Encoding': 'chunked', 'Content-Type': 'application/x-www-form-urlencoded'})
+print(conn.getresponse().read().decode())
+"</code></pre>
+
+        <!-- 17. RESILIENCE -->
+        <h2 id="resilience">17. Non-blocking &amp; Resilience</h2>
+        <div class="card">
+            <h3>Guaranteed behaviors:</h3>
+            <ul>
+                <li>Server <strong>never blocks</strong> — single <code class="inline-code">poll()</code> drives
+                    everything</li>
+                <li>Server <strong>never crashes</strong> — all exceptions caught, all memory managed</li>
+                <li>Client disconnections handled gracefully (POLLHUP/POLLERR)</li>
+                <li>CGI timeouts: kill SIGTERM → SIGKILL escalation</li>
+                <li>Client timeouts: 60-second inactivity → connection closed</li>
+                <li>No hanging requests — poll timeout ensures regular timeout checks</li>
+                <li>Stress tested: 128 concurrent workers × 50 requests each</li>
+            </ul>
+        </div>
+
+        <!-- 18. TESTING -->
+        <h2 id="tests">18. Testing Commands</h2>
+
+        <h3>Start the server</h3>
+        <pre><code>make re &amp;&amp; ./webserv webserv.conf</code></pre>
+
+        <h3>Basic curl tests</h3>
+        <pre><code># GET static page
+curl http://localhost:8080/
+
+# POST upload
+curl -X POST -F "file=@test.txt" http://localhost:8080/upload
+
+# DELETE file
+curl -X DELETE http://localhost:8080/delete/test.txt
+
+# GET directory listing
+curl http://localhost:8080/subdir/
+
+# Test redirect
+curl -v http://localhost:8080/old-page
+
+# HEAD request
+curl -I http://localhost:8080/
+
+# CGI GET
+curl http://localhost:8080/cgi-bin/database.py
+
+# CGI POST
+curl -X POST -d "username=test&password=123" http://localhost:8080/cgi-bin/database.py
+
+# 404 error
+curl http://localhost:8080/does-not-exist
+
+# 405 Method Not Allowed
+curl -X DELETE http://localhost:8080/subdir/
+
+# 413 Too Large
+curl -X POST -d "$(head -c 6000000 /dev/urandom | base64)" http://localhost:8080/upload
+
+# Multiple ports
+curl http://localhost:8081/</code></pre>
+
+        <h3>Run the provided tester</h3>
+        <pre><code># Start server with tester config
+./webserv default.conf &amp;
+
+# Run tester
+./tester http://localhost:1234</code></pre>
+
+        <h3>Stress test (siege)</h3>
+        <pre><code># Install siege if needed
+apt-get install siege
+
+# 50 concurrent users, 10 seconds
+siege -c 50 -t 10S http://localhost:8080/</code></pre>
+
+        <h3>Python stress test</h3>
+        <pre><code>python3 -c "
+import threading, urllib.request
+def fetch():
+    for _ in range(100):
+        urllib.request.urlopen('http://localhost:8080/')
+threads = [threading.Thread(target=fetch) for _ in range(20)]
+for t in threads: t.start()
+for t in threads: t.join()
+print('All 2000 requests completed')
+"</code></pre>
+
+        <hr />
+        <p style="text-align:center;color:var(--muted);font-size:.85rem">
+            Webserv — 42 Project &bull; C++98 &bull; HTTP/1.1 &bull; poll() &bull; CGI &bull; Cookies &amp; Sessions
+        </p>
+    </div>
+
+    <script>
+        function showResult(id, text, isError) {
+            var el = document.getElementById(id);
+            el.style.display = 'block';
+            el.style.color = isError ? '#ef4444' : '#10b981';
+            el.textContent = text;
+        }
+
+        function doUpload() {
+            var input = document.getElementById('upload-file');
+            if (!input.files.length) return showResult('upload-result', 'Please select a file first', true);
+            var form = new FormData();
+            form.append('file', input.files[0]);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload');
+            xhr.onload = function () {
+                showResult('upload-result', 'Status: ' + xhr.status + ' ' + xhr.statusText + '\n' + xhr.responseText, xhr.status >= 400);
+            };
+            xhr.onerror = function () { showResult('upload-result', 'Network error', true); };
+            xhr.send(form);
+        }
+
+        function doDelete() {
+            var name = document.getElementById('delete-filename').value.trim();
+            if (!name) return showResult('delete-result', 'Enter a filename', true);
+            var xhr = new XMLHttpRequest();
+            xhr.open('DELETE', '/delete/' + encodeURIComponent(name));
+            xhr.onload = function () {
+                showResult('delete-result', 'Status: ' + xhr.status + ' ' + xhr.statusText + '\n' + xhr.responseText, xhr.status >= 400);
+            };
+            xhr.onerror = function () { showResult('delete-result', 'Network error', true); };
+            xhr.send();
+        }
+
+        function cgiGet() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/cgi-bin/database.py');
+            xhr.onload = function () {
+                showResult('cgi-result', 'GET /cgi-bin/database.py\nStatus: ' + xhr.status + '\n' + xhr.responseText, xhr.status >= 400);
+            };
+            xhr.onerror = function () { showResult('cgi-result', 'Network error', true); };
+            xhr.send();
+        }
+
+        function cgiPost() {
+            var user = 'user_' + Math.floor(Math.random() * 10000);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/cgi-bin/database.py');
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onload = function () {
+                showResult('cgi-result', 'POST /cgi-bin/database.py\nCreated user: ' + user + '\nStatus: ' + xhr.status + '\n' + xhr.responseText, xhr.status >= 400);
+            };
+            xhr.onerror = function () { showResult('cgi-result', 'Network error', true); };
+            xhr.send(JSON.stringify({ username: user, password: 'demo123' }));
+        }
+
+        function testSession() {
+            var cookies = document.cookie;
+            var sid = '';
+            var parts = cookies.split(';');
+            for (var i = 0; i < parts.length; i++) {
+                var p = parts[i].trim();
+                if (p.indexOf('webserv_sid=') === 0) { sid = p.substring(12); break; }
+            }
+            if (sid) {
+                showResult('session-result', 'Session cookie found!\nwebserv_sid=' + sid + '\n\nThis cookie is sent with every request to maintain your session.', false);
+            } else {
+                showResult('session-result', 'No session cookie found.\nLogin via /login/login.html to create a session.\nThe server will set a Set-Cookie header with webserv_sid=<32-char-hex>', false);
+            }
+        }
+    </script>
+</body>
+
+</html>

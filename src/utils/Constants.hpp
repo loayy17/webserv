@@ -1,6 +1,10 @@
 #ifndef CONSTANTS_HPP
 #define CONSTANTS_HPP
 
+// ! SIZE UNITS
+#define KB 1024
+#define MB (1024 * KB)
+
 // ! HTTP STATUS CODES - 2xx Success
 #define HTTP_OK 200
 #define HTTP_CREATED 201
@@ -63,20 +67,19 @@
 #define SLASH '/'
 
 // ! MAX LIMITS
-#define MAX_URI_LENGTH 8192
-#define MAX_HEADER_SIZE 8192
-#define BUFFER_SIZE 4096
+#define MAX_URI_LENGTH (8 * KB)
+#define MAX_HEADER_SIZE (8 * KB)
+#define BUFFER_SIZE (64 * KB)
 #ifndef SIZE_MAX
 #define SIZE_MAX (18446744073709551615UL)
 #endif
 
 // ! CONNECTION LIMITS
 #define MAX_CONNECTIONS 1024
-#define MAX_RECEIVE_BUFFER_SIZE (10 * 1024 * 1024)
 
 // ! TIMEOUTS
 #define CLIENT_TIMEOUT 60
-#define CGI_TIMEOUT 30
+#define CGI_TIMEOUT 60
 #define POLL_TIMEOUT_MS 100
 #define SECONDS_PER_DAY 86400
 #define SECONDS_PER_HOUR 3600
@@ -84,7 +87,7 @@
 
 // ! DEFAULTS
 #define MAX_PORT 65535
-#define DEFAULT_MAX_BODY_SIZE (1024 * 1024)
+#define DEFAULT_MAX_BODY_SIZE (1 * MB)
 #define INVALID_FD -1
 
 // ! CGI

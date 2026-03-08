@@ -146,27 +146,19 @@ String generateGUID() {
 
     const int     numBytes = SESSION_ID_LENGTH / 2;
     unsigned char bytes[SESSION_ID_LENGTH / 2];
+    bool          ok = false;
 
     int fd = open("/dev/urandom", O_RDONLY);
-    if (fd < 0) {
-        Logger::error("CRITICAL: /dev/urandom unavailable");
-        // Fallback: use time-based seed
-        srand(static_cast<unsigned int>(time(NULL)));
-        for (int i = 0; i < numBytes; ++i) {
-            bytes[i] = static_cast<unsigned char>(rand() % 256);
-        }
-    } else {
-        ssize_t n = read(fd, bytes, numBytes);
+    if (fd >= 0) {
+        ok = (read(fd, bytes, numBytes) == numBytes);
         close(fd);
-        if (n != numBytes) {
-            Logger::error("Failed to read from /dev/urandom");
-            srand(static_cast<unsigned int>(time(NULL)));
-            for (int i = 0; i < numBytes; ++i) {
-                bytes[i] = static_cast<unsigned char>(rand() % 256);
-            }
-        }
     }
-
+    if (!ok) {
+        Logger::error("Failed to read /dev/urandom, using fallback");
+        srand(static_cast<unsigned int>(time(NULL)));
+        for (int i = 0; i < numBytes; ++i)
+            bytes[i] = static_cast<unsigned char>(rand() % 256);
+    }
     for (int i = 0; i < numBytes; ++i) {
         id += hex[(bytes[i] >> 4) & 0x0f];
         id += hex[bytes[i] & 0x0f];
@@ -216,10 +208,6 @@ bool parseKeyValue(const String& line, String& key, VectorString& values) {
     }
     return !values.empty();
 }
-
-// ============================================================================
-// File System Methods
-// ============================================================================
 
 bool convertFileToLines(const String& file, VectorString& lines) {
     std::ifstream ff(file.c_str());
@@ -335,10 +323,6 @@ String extractDirectoryFromPath(const String& path) {
     return path.substr(0, lastSlash);
 }
 
-// ============================================================================
-// Path Methods
-// ============================================================================
-
 String normalizePath(const String& path) {
     if (path.empty())
         return "/";
@@ -440,10 +424,6 @@ String getUriRemainder(const String& uri, const String& locPath) {
     return normalUri;
 }
 
-// ============================================================================
-// HTTP/Network Helpers
-// ============================================================================
-
 bool isValidHttpMethod(const String& m) {
     // Optimization: Avoid constructing vector on every call
     static const char* allowed[] = {METHOD_GET, METHOD_POST, METHOD_DELETE, METHOD_PUT, METHOD_PATCH, METHOD_HEAD, METHOD_OPTIONS, NULL};
@@ -520,140 +500,51 @@ String formatSize(double size) {
 }
 
 String getHttpStatusMessage(int code) {
-    String result = "Unknown Error";
     switch (code) {
-        case 100:
-            result = "Continue";
-            break;
-        case 101:
-            result = "Switching Protocols";
-            break;
-        case 200:
-            result = "OK";
-            break;
-        case 201:
-            result = "Created";
-            break;
-        case 202:
-            result = "Accepted";
-            break;
-        case 203:
-            result = "Non-Authoritative Information";
-            break;
-        case 204:
-            result = "No Content";
-            break;
-        case 205:
-            result = "Reset Content";
-            break;
-        case 206:
-            result = "Partial Content";
-            break;
-        case 300:
-            result = "Multiple Choices";
-            break;
-        case 301:
-            result = "Moved Permanently";
-            break;
-        case 302:
-            result = "Found";
-            break;
-        case 303:
-            result = "See Other";
-            break;
-        case 304:
-            result = "Not Modified";
-            break;
-        case 305:
-            result = "Use Proxy";
-            break;
-        case 307:
-            result = "Temporary Redirect";
-            break;
-        case 400:
-            result = "Bad Request";
-            break;
-        case 401:
-            result = "Unauthorized";
-            break;
-        case 402:
-            result = "Payment Required";
-            break;
-        case 403:
-            result = "Forbidden";
-            break;
-        case 404:
-            result = "Not Found";
-            break;
-        case 405:
-            result = "Method Not Allowed";
-            break;
-        case 406:
-            result = "Not Acceptable";
-            break;
-        case 407:
-            result = "Proxy Authentication Required";
-            break;
-        case 408:
-            result = "Request Timeout";
-            break;
-        case 409:
-            result = "Conflict";
-            break;
-        case 410:
-            result = "Gone";
-            break;
-        case 411:
-            result = "Length Required";
-            break;
-        case 412:
-            result = "Precondition Failed";
-            break;
-        case 413:
-            result = "Payload Too Large";
-            break;
-        case 414:
-            result = "URI Too Long";
-            break;
-        case 415:
-            result = "Unsupported Media Type";
-            break;
-        case 416:
-            result = "Range Not Satisfiable";
-            break;
-        case 417:
-            result = "Expectation Failed";
-            break;
-        case 431:
-            result = "Request Header Fields Too Large";
-            break;
-        case 500:
-            result = "Internal Server Error";
-            break;
-        case 501:
-            result = "Not Implemented";
-            break;
-        case 502:
-            result = "Bad Gateway";
-            break;
-        case 503:
-            result = "Service Unavailable";
-            break;
-        case 504:
-            result = "Gateway Timeout";
-            break;
-        case 505:
-            result = "HTTP Version Not Supported";
-            break;
-        default:
-            result = "Unknown Error";
+        case 100: return "Continue";
+        case 101: return "Switching Protocols";
+        case 200: return "OK";
+        case 201: return "Created";
+        case 202: return "Accepted";
+        case 203: return "Non-Authoritative Information";
+        case 204: return "No Content";
+        case 205: return "Reset Content";
+        case 206: return "Partial Content";
+        case 300: return "Multiple Choices";
+        case 301: return "Moved Permanently";
+        case 302: return "Found";
+        case 303: return "See Other";
+        case 304: return "Not Modified";
+        case 305: return "Use Proxy";
+        case 307: return "Temporary Redirect";
+        case 400: return "Bad Request";
+        case 401: return "Unauthorized";
+        case 402: return "Payment Required";
+        case 403: return "Forbidden";
+        case 404: return "Not Found";
+        case 405: return "Method Not Allowed";
+        case 406: return "Not Acceptable";
+        case 407: return "Proxy Authentication Required";
+        case 408: return "Request Timeout";
+        case 409: return "Conflict";
+        case 410: return "Gone";
+        case 411: return "Length Required";
+        case 412: return "Precondition Failed";
+        case 413: return "Payload Too Large";
+        case 414: return "URI Too Long";
+        case 415: return "Unsupported Media Type";
+        case 416: return "Range Not Satisfiable";
+        case 417: return "Expectation Failed";
+        case 431: return "Request Header Fields Too Large";
+        case 500: return "Internal Server Error";
+        case 501: return "Not Implemented";
+        case 502: return "Bad Gateway";
+        case 503: return "Service Unavailable";
+        case 504: return "Gateway Timeout";
+        case 505: return "HTTP Version Not Supported";
+        default:  return "Unknown Error";
     }
-    return result;
 }
-
-// ============================================================================
-// Header/Body Parsing
-// ============================================================================
 
 String extractFilenameFromHeader(const String& contentDisposition) {
     // Look for filename=
@@ -820,7 +711,6 @@ bool decodeChunkedBody(const String& chunkedBody, String& decodedBody) {
 }
 
 bool decodeChunkedIncremental(const String& buffer, String& decoded, bool& done, size_t& consumed) {
-    decoded.clear();
     done       = false;
     consumed   = 0;
     size_t pos = 0;
@@ -830,36 +720,37 @@ bool decodeChunkedIncremental(const String& buffer, String& decoded, bool& done,
         if (lineEnd == String::npos)
             break;
 
-        String sizeLine = buffer.substr(pos, lineEnd - pos);
-        size_t semiPos  = sizeLine.find(';');
-        if (semiPos != String::npos)
-            sizeLine = sizeLine.substr(0, semiPos);
-        sizeLine = trimSpaces(sizeLine);
-        if (sizeLine.empty())
-            break;
-
         unsigned long chunkSize = 0;
-        if (!parseHexChunkSize(sizeLine, chunkSize))
-            return false;
+        const char* sStart = buffer.c_str() + pos;
+        size_t sLen = lineEnd - pos;
+        // Parse hex manually to avoid substr
+        bool hexValid = false;
+        unsigned long val = 0;
+        for (size_t i = 0; i < sLen; ++i) {
+            char c = sStart[i];
+            if (c == ';') break; // Ignore extensions
+            if (c >= '0' && c <= '9') { val = val * 16 + (c - '0'); hexValid = true; }
+            else if (c >= 'a' && c <= 'f') { val = val * 16 + (c - 'a' + 10); hexValid = true; }
+            else if (c >= 'A' && c <= 'F') { val = val * 16 + (c - 'A' + 10); hexValid = true; }
+            else if (std::isspace(c)) { if (hexValid) break; continue; }
+            else return false;
+        }
+        if (!hexValid) break;
+        chunkSize = val;
 
         size_t dataStart = lineEnd + 2;
-
         if (chunkSize == 0) {
-            if (dataStart + 2 > buffer.size())
-                break;
+            if (dataStart + 2 > buffer.size()) break;
             consumed = dataStart + 2;
             done     = true;
             break;
         }
-
-        if (dataStart + chunkSize + 2 > buffer.size())
-            break;
+        if (dataStart + chunkSize + 2 > buffer.size()) break;
 
         decoded.append(buffer, dataStart, chunkSize);
         pos      = dataStart + chunkSize + 2;
         consumed = pos;
     }
-
     return true;
 }
 

@@ -78,32 +78,22 @@ bool ResponseBuilder::handleUpload(HttpResponse& response, const RouteResult& re
         return false;
 
     UploaderHandler uploader;
-
     String filename;
     String fileContent;
-
-    // Check if this is a multipart/form-data upload
     String contentType = resultRouter.getRequest().getContentType();
-    if (contentType.find("multipart/form-data") != String::npos) {
-        // Extract boundary from Content-Type
-        String boundary = extractBoundaryFromContentType(contentType);
 
-        // Parse multipart body to extract filename and content
+    if (contentType.find("multipart/form-data") != String::npos) {
+        String boundary = extractBoundaryFromContentType(contentType);
         if (boundary.empty() || !parseMultipartFormData(resultRouter.getRequest().getBody(), boundary, filename, fileContent)) {
-            // Fallback to timestamp-based filename
             filename    = "upload_" + typeToString<time_t>(getCurrentTime()) + ".dat";
             fileContent = resultRouter.getRequest().getBody();
         }
     } else {
-        // Not multipart, try to extract from Content-Disposition header or generate default
         filename = extractFilenameFromHeader(resultRouter.getRequest().getHeader(HEADER_CONTENT_DISPOSITION));
-        if (filename.empty()) {
-            // Generate timestamp-based filename
+        if (filename.empty())
             filename = "upload_" + typeToString<time_t>(getCurrentTime()) + ".dat";
-        }
         fileContent = resultRouter.getRequest().getBody();
     }
-
     return uploader.handle(loc->getUploadDir(), filename, fileContent, response);
 }
 

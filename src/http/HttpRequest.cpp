@@ -277,80 +277,40 @@ bool HttpRequest::validateContentLength() {
     }
     return true;
 }
-// ? example Cookie: "key1=value1; key2=value2; key3=value3" & "session=42; theme=dark; lang=en"
 void HttpRequest::parseCookies(const String& cookieHeader) {
     VectorString cookiePairs;
     splitByString(cookieHeader, cookiePairs, ";");
     for (size_t i = 0; i < cookiePairs.size(); ++i) {
         String key, value;
-        if (splitByChar(trimSpaces(cookiePairs[i]), key, value, EQUALS)) {
+        if (splitByChar(trimSpaces(cookiePairs[i]), key, value, EQUALS))
             cookies[trimSpaces(key)] = trimSpaces(value);
-        }
     }
 }
-// Getters
-const String& HttpRequest::getMethod() const {
-    return method;
-}
-const String& HttpRequest::getUri() const {
-    return uri;
-}
-const String& HttpRequest::getHttpVersion() const {
-    return httpVersion;
-}
+
+const String& HttpRequest::getMethod() const { return method; }
+const String& HttpRequest::getUri() const { return uri; }
+const String& HttpRequest::getHttpVersion() const { return httpVersion; }
+
 String HttpRequest::getHeader(const String& key) const {
-    String                    lowerKey = toLowerWords(key);
-    MapString::const_iterator it       = headers.find(lowerKey);
-    if (it != headers.end()) {
-        return it->second;
-    }
-    return "";
-}
-const MapString& HttpRequest::getHeaders() const {
-    return headers;
-}
-const String& HttpRequest::getBody() const {
-    return body;
-}
-size_t HttpRequest::getContentLength() const {
-    return contentLength;
-}
-const String& HttpRequest::getContentType() const {
-    return contentType;
+    MapString::const_iterator it = headers.find(toLowerWords(key));
+    return it != headers.end() ? it->second : "";
 }
 
-const String& HttpRequest::getHost() const {
-    return host;
-}
-int HttpRequest::getPort() const {
-    return port;
-}
+const MapString& HttpRequest::getHeaders() const { return headers; }
+const String& HttpRequest::getBody() const { return body; }
+size_t HttpRequest::getContentLength() const { return contentLength; }
+const String& HttpRequest::getContentType() const { return contentType; }
+const String& HttpRequest::getHost() const { return host; }
+int HttpRequest::getPort() const { return port; }
+void HttpRequest::setPort(int serverPort) { port = serverPort; }
+bool HttpRequest::isComplete() const { return !method.empty() && !uri.empty() && !httpVersion.empty(); }
+bool HttpRequest::hasBody() const { return !body.empty(); }
 
-void HttpRequest::setPort(int serverPort) {
-    port = serverPort;
-}
-
-// Validators
-bool HttpRequest::isComplete() const {
-    return !method.empty() && !uri.empty() && !httpVersion.empty();
-}
-bool HttpRequest::hasBody() const {
-    return !body.empty();
-}
 String HttpRequest::getCookie(const String& key) const {
-    const MapString::const_iterator it = cookies.find(key);
-    if (it == cookies.end()) {
-        return "";
-    }
-    return it->second;
-}
-const MapString& HttpRequest::getCookies() const {
-    return cookies;
-}
-int HttpRequest::getErrorCode() const {
-    return errorCode;
+    MapString::const_iterator it = cookies.find(key);
+    return it != cookies.end() ? it->second : "";
 }
 
-const String& HttpRequest::getQueryString() const {
-    return queryString;
-}
+const MapString& HttpRequest::getCookies() const { return cookies; }
+int HttpRequest::getErrorCode() const { return errorCode; }
+const String& HttpRequest::getQueryString() const { return queryString; }
